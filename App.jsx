@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
@@ -54,6 +54,26 @@ const elapsedSec = iso => Math.floor((Date.now()-new Date(iso).getTime())/1000);
 const fmt12h = t => { if(!t)return'--'; const [h,m]=t.split(':').map(Number); return `${h%12||12}:${m.toString().padStart(2,'0')}${h>=12?'pm':'am'}`; };
 // UTC offsets in minutes for current period (May - CDT/EDT/PDT active)
 const TZ_OFFSET = { Central:-300, Eastern:-240, Pacific:-420, SA:120, GMT:0, IST:330 };
+
+// ── CALL CENTRE HOURS (all times in SAST = UTC+2) ────────────────────
+function getCentreStatus() {
+  const now = new Date();
+  // Convert current time to SAST
+  const sastOffset = 120; // UTC+2 in minutes
+  const localOffset = -now.getTimezoneOffset();
+  const diffMin = sastOffset - localOffset;
+  const sast = new Date(now.getTime() + diffMin * 60000);
+  const day = sast.getDay(); // 0=Sun,1=Mon...6=Sat
+  const h = sast.getHours();
+  const m = sast.getMinutes();
+  const totalMin = h * 60 + m;
+  const isWeekday = day >= 1 && day <= 5;
+  const closeMin = isWeekday ? 3 * 60 : 23 * 60; // 3am or 11pm
+  const openMin  = 14 * 60; // 2pm
+  // Open if between 2pm and close time
+  const isOpen = totalMin >= openMin && totalMin < closeMin;
+  return { isOpen, sast, closeMin, openMin, totalMin };
+}
 
 function convertLunchTime(timeStr, fromTz, toTz) {
   if(!timeStr||!timeStr.includes(":")) return timeStr||"--";
@@ -1563,6 +1583,32 @@ export default function App() {
     const interval = setInterval(reload, 15000);
     return ()=>clearInterval(interval);
   },[reload]);
+
+  const [centreOpen, setCentreOpen] = useState(getCentreStatus().isOpen);
+
+  // Check centre status every minute
+  useEffect(()=>{
+    const check = () => {
+      const { isOpen } = getCentreStatus();
+      setCentreOpen(isOpen);
+    };
+    check();
+    const t = setInterval(check, 60000);
+    return () => clearInterval(t);
+  },[]);
+
+  // Auto-clear active breaks when centre closes; reset when centre opens
+  useEffect(()=>{
+    if(data.reps.length === 0) return;
+    if(!centreOpen) {
+      // Centre just closed — clear everyone on break
+      const onBreak = data.reps.filter(r=>["health","lunch"].includes(r.status));
+      onBreak.forEach(r => sbPatch("rep_status",r.id,{status:"available",updated_at:new Date().toISOString()}).catch(()=>{}));
+    } else {
+      // Centre just opened — reset daily health counters
+      data.reps.forEach(r => sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_banked:0,last_break_returned_at:null,updated_at:new Date().toISOString()}).catch(()=>{}));
+    }
+  },[centreOpen]);
 
   if(loading) return (
     <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
