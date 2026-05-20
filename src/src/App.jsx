@@ -156,7 +156,7 @@ function LoginScreen({ onSelect }) {
           <span style={{fontSize:28}}>🎛️</span>
           <div style={{textAlign:"left"}}>
             <p style={{margin:0,fontSize:15,fontWeight:700}}>Manager View</p>
-            <p style={{margin:0,fontSize:12,opacity:0.75}}>Full team oversight and controls</p>
+            <p style={{margin:0,fontSize:12,opacity:0.75}}>Full team oversight & controls</p>
           </div>
         </button>
         <button onClick={()=>setMode("rep-select")} style={{padding:"18px 24px",borderRadius:16,border:"2px solid #e8e8e8",background:"#fff",color:"#1a1a1a",cursor:"pointer",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",gap:12}}>
@@ -177,7 +177,7 @@ function LoginScreen({ onSelect }) {
         <div style={{fontSize:36,marginBottom:12,textAlign:"center"}}>🔐</div>
         <h2 style={{margin:"0 0 6px",fontSize:18,fontWeight:700,textAlign:"center",color:"#1a1a1a"}}>Manager PIN</h2>
         <p style={{margin:"0 0 20px",fontSize:13,color:"#aaa",textAlign:"center"}}>Enter your 4-digit PIN</p>
-        <input type="password" maxLength={4} value={pin} onChange={e=>{setPin(e.target.value);setPinErr(false);}} onKeyDown={e=>{if(e.key==="Enter"){if(pin===MANAGER_PIN){onSelect("manager");}else{setPinErr(true);setPin("");}}} } placeholder="• • • •" style={{width:"100%",boxSizing:"border-box",padding:"14px",borderRadius:12,border:`1.5px solid ${pinErr?"#e74c3c":"#ddd"}`,fontSize:22,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:8,background:"#fafafa"}} autoFocus />
+        <input type="password" maxLength={4} value={pin} onChange={e=>{setPin(e.target.value);setPinErr(false);}} onKeyDown={e=>{if(e.key==="Enter"){if(pin===MANAGER_PIN){onSelect("manager");}else{setPinErr(true);setPin("");}}}} placeholder="• • • •" style={{width:"100%",boxSizing:"border-box",padding:"14px",borderRadius:12,border:`1.5px solid ${pinErr?"#e74c3c":"#ddd"}`,fontSize:22,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:8,background:"#fafafa"}} autoFocus/>
         {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e74c3c",textAlign:"center"}}>Incorrect PIN. Try again.</p>}
         <button onClick={()=>{if(pin===MANAGER_PIN){onSelect("manager");}else{setPinErr(true);setPin("");}}} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700,marginTop:4}}>Sign In</button>
         <p style={{margin:"14px 0 0",fontSize:11,color:"#ccc",textAlign:"center"}}>Demo PIN: 1234</p>
@@ -201,26 +201,11 @@ function LoginScreen({ onSelect }) {
               <div style={{width:36,height:36,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{r.avatar}</div>
               <div>
                 <p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{r.name}</p>
-                <p style={{margin:0,fontSize:11,color:"#aaa"}}>{r.tz} · {r.lunch}</p>
+                <p style={{margin:0,fontSize:11,color:"#aaa"}}>{r.tz} · Lunch: {r.lunch}</p>
               </div>
             </button>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Meter({ icon, label, count, limit, color }) {
-  const full=count>=limit;
-  return (
-    <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 12px",border:`1px solid ${full?"rgba(231,76,60,0.5)":"rgba(255,255,255,0.1)"}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-        <span style={{fontSize:11,opacity:0.8}}>{icon} {label}</span>
-        <span style={{fontSize:15,fontWeight:700,color:full?"#e74c3c":"#fff"}}>{count}<span style={{fontSize:11,opacity:0.5}}>/{limit}</span></span>
-      </div>
-      <div style={{height:4,background:"rgba(255,255,255,0.15)",borderRadius:3}}>
-        <div style={{width:`${Math.min(count/limit,1)*100}%`,height:"100%",background:full?"#e74c3c":color,borderRadius:3,transition:"width .3s"}}/>
       </div>
     </div>
   );
@@ -232,16 +217,13 @@ function ManagerView({ reps, setReps, onLogout }) {
   const [toast,setToast]=useState(null);
   const [tab,setTab]=useState("active");
   const [search,setSearch]=useState("");
-
   const onLunch=reps.filter(r=>r.status==="lunch").length;
   const onHealth=reps.filter(r=>r.status==="health").length;
   const oooCount=reps.filter(r=>r.status==="pto"||r.status==="sick").length;
   const offCount=reps.filter(r=>r.status==="off").length;
   const active=reps.filter(r=>!["off","pto","sick"].includes(r.status));
   const out=reps.filter(r=>["off","pto","sick"].includes(r.status));
-
   const fire=(type,msg)=>setToast({type,msg,id:Date.now()});
-
   const handleConfirm=(breakType)=>{
     const left=breakType==="lunch"?LUNCH_LIMIT-onLunch:HEALTH_LIMIT-onHealth;
     if(left<=0){fire("declined",`${breakType==="lunch"?"Lunch":"Health break"} slots are full.`);setBreakModal(null);return;}
@@ -249,25 +231,21 @@ function ManagerView({ reps, setReps, onLogout }) {
     fire("approved",`${breakModal.name} started a ${breakType==="lunch"?"lunch 🥗":"health 🌿"} break.`);
     setBreakModal(null);
   };
-
   const handleReturn=(id)=>{
     const rep=reps.find(r=>r.id===id);
     setReps(p=>p.map(r=>r.id===id?{...r,status:"available"}:r));
     fire("approved",`${rep.name} is back on duty. 🎉`);
   };
-
   const handleConfirmOOO=(type,note)=>{
     setReps(p=>p.map(r=>r.id===oooModal.id?{...r,status:type,oooNote:note}:r));
     fire("ooo",`${oooModal.name} marked as ${type==="pto"?"PTO ✈️":"Sick Day 🤒"}`);
     setOooModal(null);setTab("out");
   };
-
   const handleClearOOO=(id)=>{
     const rep=reps.find(r=>r.id===id);
     setReps(p=>p.map(r=>r.id===id?{...r,status:"available",oooNote:""}:r));
     fire("info",`${rep.name} is back on duty.`);
   };
-
   function RepRow({rep}){
     const cfg=ST[rep.status]||ST.available;
     const onBreak=rep.status==="health"||rep.status==="lunch";
@@ -302,17 +280,12 @@ function ManagerView({ reps, setReps, onLogout }) {
       </div>
     );
   }
-
-  function Section({title,items,color}){
-    if(items.length===0) return null;
-    return (
-      <div style={{marginBottom:16}}>
-        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:color||"#bbb",margin:"0 0 7px",fontWeight:700}}>{title} ({items.length})</p>
-        {items.map(r=><RepRow key={r.id} rep={r}/>)}
-      </div>
-    );
-  }
-
+  const Section=({title,items,color})=>items.length===0?null:(
+    <div style={{marginBottom:16}}>
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:color||"#bbb",margin:"0 0 7px",fontWeight:700}}>{title} ({items.length})</p>
+      {items.map(r=><RepRow key={r.id} rep={r}/>)}
+    </div>
+  );
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
@@ -352,8 +325,20 @@ function ManagerView({ reps, setReps, onLogout }) {
           ))}
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          <Meter icon="🌿" label="Health" count={onHealth} limit={HEALTH_LIMIT} color="#2980b9"/>
-          <Meter icon="🥗" label="Lunch"  count={onLunch}  limit={LUNCH_LIMIT}  color="#e07b00"/>
+          {[
+            {icon:"🌿",label:"Health",count:onHealth,limit:HEALTH_LIMIT,color:"#2980b9"},
+            {icon:"🥗",label:"Lunch", count:onLunch, limit:LUNCH_LIMIT,  color:"#e07b00"},
+          ].map(m=>(
+            <div key={m.label} style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 12px",border:`1px solid ${m.count>=m.limit?"rgba(231,76,60,0.5)":"rgba(255,255,255,0.1)"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:11,opacity:0.8}}>{m.icon} {m.label}</span>
+                <span style={{fontSize:15,fontWeight:700,color:m.count>=m.limit?"#e74c3c":"#fff"}}>{m.count}<span style={{fontSize:11,opacity:0.5}}>/{m.limit}</span></span>
+              </div>
+              <div style={{height:4,background:"rgba(255,255,255,0.15)",borderRadius:3}}>
+                <div style={{width:`${Math.min(m.count/m.limit,1)*100}%`,height:"100%",background:m.count>=m.limit?"#e74c3c":m.color,borderRadius:3,transition:"width .3s"}}/>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb"}}>
@@ -378,7 +363,7 @@ function ManagerView({ reps, setReps, onLogout }) {
             {out.length===0?(
               <div style={{textAlign:"center",padding:"44px 0",color:"#bbb"}}>
                 <p style={{fontSize:32,margin:"0 0 8px"}}>🎉</p>
-                <p style={{fontWeight:600,fontSize:15,color:"#888",margin:0}}>Everyone is in!</p>
+                <p style={{fontWeight:600,fontSize:15,color:"#888",margin:0}}>Everyone's in!</p>
               </div>
             ):(
               <>
@@ -417,7 +402,6 @@ function RepView({ rep, reps, setReps, onLogout }) {
   const isOOO=myRep.status==="pto"||myRep.status==="sick";
   const isOff=myRep.status==="off";
   const fire=(type,msg)=>setToast({type,msg,id:Date.now()});
-
   const handleConfirm=(breakType)=>{
     const left=breakType==="lunch"?lunchLeft:healthLeft;
     if(left<=0){fire("declined",`Sorry, ${breakType==="lunch"?"lunch":"health break"} slots are full!`);setBreakModal(false);return;}
@@ -425,12 +409,17 @@ function RepView({ rep, reps, setReps, onLogout }) {
     fire("approved",`Enjoy your ${breakType==="lunch"?"lunch 🥗":"health break 🌿"}!`);
     setBreakModal(false);
   };
-
   const handleReturn=()=>{
     setReps(p=>p.map(r=>r.id===rep.id?{...r,status:"available"}:r));
-    fire("approved","Welcome back! You are on duty. 🎉");
+    fire("approved","Welcome back! You're on duty. 🎉");
   };
-
+  const SlotDot=({avail,total,color})=>(
+    <div style={{display:"flex",gap:5,justifyContent:"center",marginTop:6}}>
+      {Array.from({length:total}).map((_,i)=>(
+        <div key={i} style={{width:10,height:10,borderRadius:"50%",background:i<(total-(avail??total))?color:"rgba(255,255,255,0.25)",transition:"background .3s"}}/>
+      ))}
+    </div>
+  );
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
@@ -459,11 +448,7 @@ function RepView({ rep, reps, setReps, onLogout }) {
               </div>
               <p style={{margin:"8px 0 1px",fontSize:12,fontWeight:600,opacity:0.9}}>{m.label}</p>
               <p style={{margin:0,fontSize:10,opacity:0.55}}>{m.dur}</p>
-              <div style={{display:"flex",gap:5,marginTop:6}}>
-                {Array.from({length:m.total}).map((_,i)=>(
-                  <div key={i} style={{width:10,height:10,borderRadius:"50%",background:i<(m.total-m.avail)?m.color:"rgba(255,255,255,0.25)",transition:"background .3s"}}/>
-                ))}
-              </div>
+              <SlotDot avail={m.avail} total={m.total} color={m.color}/>
             </div>
           ))}
         </div>
@@ -485,22 +470,22 @@ function RepView({ rep, reps, setReps, onLogout }) {
           </div>
           {!isOOO&&!isOff&&(
             <div style={{borderTop:"1.5px solid rgba(0,0,0,0.06)",paddingTop:14}}>
-              <p style={{margin:"0 0 10px",fontSize:11,color:"#aaa"}}>Scheduled lunch: <strong style={{color:"#555"}}>{rep.lunch}</strong></p>
+              <p style={{margin:"0 0 6px",fontSize:11,color:"#aaa"}}>Scheduled lunch: <strong style={{color:"#555"}}>{rep.lunch}</strong></p>
               {onBreak?(
-                <button onClick={handleReturn} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I am back! 👋</button>
+                <button onClick={handleReturn} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
               ):(
                 <button onClick={()=>setBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
               )}
             </div>
           )}
-          {isOOO&&<p style={{margin:"14px 0 0",fontSize:13,color:"#888",textAlign:"center"}}>You are marked as out today. See your manager to update.</p>}
+          {isOOO&&<p style={{margin:"14px 0 0",fontSize:13,color:"#888",textAlign:"center"}}>You're marked as out today. See your manager to update.</p>}
           {isOff&&<p style={{margin:"14px 0 0",fontSize:13,color:"#bbb",textAlign:"center"}}>Today is your scheduled day off. Enjoy! 🎉</p>}
         </div>
         {!isOff&&!isOOO&&(
           <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"14px 16px",marginBottom:12}}>
-            <p style={{margin:"0 0 10px",fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>Who is on break right now</p>
+            <p style={{margin:"0 0 10px",fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>Who's on break right now</p>
             {reps.filter(r=>(r.status==="health"||r.status==="lunch")&&r.id!==rep.id).length===0?(
-              <p style={{margin:0,fontSize:13,color:"#bbb"}}>Nobody is on break — slots are wide open!</p>
+              <p style={{margin:0,fontSize:13,color:"#bbb"}}>Nobody's on break — slots are wide open!</p>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {reps.filter(r=>(r.status==="health"||r.status==="lunch")&&r.id!==rep.id).map(r=>{
