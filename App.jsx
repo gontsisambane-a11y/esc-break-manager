@@ -7,7 +7,7 @@ const TODAY_LABEL = TODAY.toLocaleDateString("en-US",{weekday:"long",year:"numer
 
 const LUNCH_LIMIT = 3;
 const HEALTH_LIMIT = 2;
-const MANAGER_PIN = "1234";
+const MANAGER_PIN = "2026";
 
 const REPS_DATA = [
   { id:1,  name:"Amanda",   avatar:"AM", tz:"Central", lunch:"12:30pm Sat (30 min)",                                    offDays:["Thu","Sun"] },
