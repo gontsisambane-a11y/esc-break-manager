@@ -464,7 +464,7 @@ function OOOModal({ rep, onClose, onMark }) {
 // ── MGR: REQUESTS ─────────────────────────────────────────────────────
 function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
   const handleAdHoc = async (req, approve) => {
-    await sbPatch("adhoc_lunch_requests",req.id,{status:approve?"approved":"declined",updated_at:new Date().toISOString()});
+    await sbPatch("adhoc_lunch_requests",req.id,{status:approve?"approved":"declined"});
     if(approve) {
       const rep = reps.find(r=>r.id===req.rep_id);
       if(rep) {
@@ -479,26 +479,29 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
   };
 
   const handleSwap = async (swap, approve) => {
-    await sbPatch("lunch_swaps",swap.id,{status:approve?"approved":"declined"});
-    if(approve) {
-      // swap lunch schedules for the day
-      const repA = reps.find(r=>r.id===swap.requester_id);
-      const repB = reps.find(r=>r.id===swap.target_id);
-      if(repA&&repB) {
-        const schA = repA.lunch_schedule||{};
-        const schB = repB.lunch_schedule||{};
-        const day = todayDay();
-        const tmpA = schA[day]; const tmpB = schB[day];
-        const newSchA = {...schA,[day]:tmpB};
-        const newSchB = {...schB,[day]:tmpA};
-        await sbPatch("rep_status",repA.id,{lunch_schedule:newSchA});
-        await sbPatch("rep_status",repB.id,{lunch_schedule:newSchB});
+    try {
+      await sb(`lunch_swaps?id=eq.${swap.id}`,{method:"PATCH",body:JSON.stringify({status:approve?"approved":"declined"})});
+      if(approve) {
+        const repA = reps.find(r=>r.id===swap.requester_id);
+        const repB = reps.find(r=>r.id===swap.target_id);
+        if(repA&&repB) {
+          const day = todayDay();
+          const schA = JSON.parse(JSON.stringify(repA.lunch_schedule||{}));
+          const schB = JSON.parse(JSON.stringify(repB.lunch_schedule||{}));
+          const tmpA = schA[day]||null;
+          schA[day] = schB[day]||null;
+          schB[day] = tmpA;
+          await sbPatch("rep_status",repA.id,{lunch_schedule:schA});
+          await sbPatch("rep_status",repB.id,{lunch_schedule:schB});
+        }
+        fire("approved",`Lunch swap approved ✓`);
+      } else {
+        fire("info","Swap declined");
       }
-      fire("approved",`Lunch swap between ${swap.requester_name} & ${swap.target_name} approved`);
-    } else {
-      fire("declined","Swap declined");
+      reload();
+    } catch(e) {
+      fire("declined",`Error: ${e.message}`);
     }
-    reload();
   };
 
   return (
@@ -1354,25 +1357,29 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
   };
 
   const acceptSwap = async (swap) => {
-    // directly approve since reps auto-approve
-    await sbPatch("lunch_swaps",swap.id,{status:"accepted"});
-    const repA=reps.find(r=>r.id===swap.requester_id);
-    const repB=reps.find(r=>r.id===swap.target_id);
-    if(repA&&repB){
-      const schA=repA.lunch_schedule||{};
-      const schB=repB.lunch_schedule||{};
-      const day=todayDay();
-      const newSchA={...schA,[day]:schB[day]};
-      const newSchB={...schB,[day]:schA[day]};
-      await sbPatch("rep_status",repA.id,{lunch_schedule:newSchA});
-      await sbPatch("rep_status",repB.id,{lunch_schedule:newSchB});
+    try {
+      await sb(`lunch_swaps?id=eq.${swap.id}`,{method:"PATCH",body:JSON.stringify({status:"accepted"})});
+      const repA=reps.find(r=>r.id===swap.requester_id);
+      const repB=reps.find(r=>r.id===swap.target_id);
+      if(repA&&repB){
+        const day=todayDay();
+        const schA=JSON.parse(JSON.stringify(repA.lunch_schedule||{}));
+        const schB=JSON.parse(JSON.stringify(repB.lunch_schedule||{}));
+        const tmpA=schA[day]||null;
+        schA[day]=schB[day]||null;
+        schB[day]=tmpA;
+        await sbPatch("rep_status",repA.id,{lunch_schedule:schA});
+        await sbPatch("rep_status",repB.id,{lunch_schedule:schB});
+      }
+      fire("approved","Lunch swap accepted! Schedules updated for today.");
+      reload();
+    } catch(e) {
+      fire("declined",`Error: ${e.message}`);
     }
-    fire("approved","Lunch swap accepted! Schedules updated for today.");
-    reload();
   };
 
   const declineSwap = async (swap) => {
-    await sbPatch("lunch_swaps",swap.id,{status:"declined"});
+    await sb(`lunch_swaps?id=eq.${swap.id}`,{method:"PATCH",body:JSON.stringify({status:"declined"})});
     fire("info","Swap declined");
     reload();
   };
