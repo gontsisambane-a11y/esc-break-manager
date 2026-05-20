@@ -667,9 +667,9 @@ function AddRepModal({ onClose, onAdd }) {
             {form.shift_days.map(d=>(
               <div key={d} style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,alignItems:"center",marginBottom:7}}>
                 <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
-                <input type="time" value={(form.lunch_schedule[d]||{}).start||"09:00"} onChange={e=>setDay(d,"start",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                <input type="time" value={(form.lunch_schedule[d]||{}).end||"17:00"} onChange={e=>setDay(d,"end",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                <input type="time" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <input type="text" value={(form.lunch_schedule[d]||{}).start||""} onChange={e=>setDay(d,"start",e.target.value)} placeholder="e.g. 09:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <input type="text" value={(form.lunch_schedule[d]||{}).end||""} onChange={e=>setDay(d,"end",e.target.value)} placeholder="e.g. 17:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <input type="text" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} placeholder="e.g. 12:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
                 <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
                   <option value={30}>30m</option><option value={60}>1hr</option>
                 </select>
@@ -749,9 +749,9 @@ function MgrSchedules({ reps, reload, fire }) {
                 {form.shift_days.map(d=>(
                   <div key={d} style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,alignItems:"center",marginBottom:7}}>
                     <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
-                    <input type="time" value={(form.lunch_schedule[d]||{}).start||"09:00"} onChange={e=>setDay(d,"start",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                    <input type="time" value={(form.lunch_schedule[d]||{}).end||"17:00"} onChange={e=>setDay(d,"end",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                    <input type="time" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <input type="text" value={(form.lunch_schedule[d]||{}).start||""} onChange={e=>setDay(d,"start",e.target.value)} placeholder="e.g. 09:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <input type="text" value={(form.lunch_schedule[d]||{}).end||""} onChange={e=>setDay(d,"end",e.target.value)} placeholder="e.g. 17:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <input type="text" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} placeholder="e.g. 12:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
                     <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
                       <option value={30}>30m</option><option value={60}>1hr</option>
                     </select>
