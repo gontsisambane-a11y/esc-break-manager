@@ -59,21 +59,64 @@ const TZ_OFFSET = { Central:-300, Eastern:-240, Pacific:-420, SA:120, GMT:0, IST
 // ── CALL CENTRE HOURS (all times in SAST = UTC+2) ────────────────────
 function getCentreStatus() {
   const now = new Date();
-  // Convert current time to SAST
   const sastOffset = 120; // UTC+2 in minutes
   const localOffset = -now.getTimezoneOffset();
-  const diffMin = sastOffset - localOffset;
-  const sast = new Date(now.getTime() + diffMin * 60000);
+  const sast = new Date(now.getTime() + (sastOffset - localOffset) * 60000);
   const day = sast.getDay(); // 0=Sun,1=Mon...6=Sat
   const h = sast.getHours();
-  const m = sast.getMinutes();
-  const totalMin = h * 60 + m;
-  const isWeekday = day >= 1 && day <= 5;
-  const closeMin = isWeekday ? 3 * 60 : 23 * 60; // 3am or 11pm
-  const openMin  = 14 * 60; // 2pm
-  // Open if between 2pm and close time
-  const isOpen = totalMin >= openMin && totalMin < closeMin;
-  return { isOpen, sast, closeMin, openMin, totalMin };
+  const totalMin = h * 60 + sast.getMinutes();
+  const openMin = 14 * 60; // 2:00pm SAST
+
+  // Centre crosses midnight: open 2pm, closes 3am next day (weekday) or 11pm same day (weekend)
+  // After midnight (0:00-2:59): still the previous day's shift — check previous day
+  // Treat 00:00-02:59 as belonging to the previous calendar day's shift
+  let isOpen = false;
+  if (totalMin < 3 * 60) {
+    // Past midnight — still open if yesterday was a weekday (Mon-Fri shift closes at 3am)
+    const prevDay = day === 0 ? 6 : day - 1;
+    const prevWasWeekday = prevDay >= 1 && prevDay <= 5;
+    isOpen = prevWasWeekday; // Sat/Sun shift closes at 11pm so never open past midnight
+  } else if (totalMin >= openMin) {
+    // After 2pm — open regardless of day
+    const isWeekday = day >= 1 && day <= 5;
+    const closeMin = isWeekday ? 24 * 60 + 3 * 60 : 23 * 60; // weekday closes at 3am next day, weekend 11pm
+    isOpen = totalMin < (isWeekday ? 24 * 60 : closeMin);
+    if (!isWeekday) isOpen = totalMin < closeMin;
+    else isOpen = true; // after 2pm on weekday, always open (closes past midnight handled above)
+  }
+  return { isOpen, sast };
+}
+
+function isRepOnShift(rep) {
+  // Get current time in rep's own timezone
+  const tzOffset = TZ_OFFSET[rep.timezone||"Central"] ?? -300;
+  const localOffset = -(new Date().getTimezoneOffset());
+  const repNow = new Date(Date.now() + (tzOffset - localOffset) * 60000);
+  const repDay = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][repNow.getDay()];
+  const repH = repNow.getHours();
+  const repM = repNow.getMinutes();
+  const nowMin = repH * 60 + repM;
+
+  // Check if today is a scheduled working day
+  const shiftDays = rep.shift_days||[];
+  if(shiftDays.length > 0 && !shiftDays.includes(repDay)) return false;
+
+  // Check shift start/end times for today
+  const sched = (rep.lunch_schedule||{})[repDay];
+  if(!sched?.start || !sched?.end) return true; // no times set, assume on shift if day matches
+
+  const [startH, startM] = sched.start.split(":").map(Number);
+  const [endH, endM]     = sched.end.split(":").map(Number);
+  const startMin = startH * 60 + startM;
+  const endMin   = endH   * 60 + endM;
+
+  if(endMin > startMin) {
+    // Normal shift — doesn't cross midnight
+    return nowMin >= startMin && nowMin < endMin;
+  } else {
+    // Crosses midnight (e.g. 14:00–03:00)
+    return nowMin >= startMin || nowMin < endMin;
+  }
 }
 
 function convertLunchTime(timeStr, fromTz, toTz) {
@@ -325,7 +368,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {!centreOpen&&<div style={{background:"rgba(255,200,0,.15)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#ffd700",fontWeight:600,textAlign:"center"}}>🌙 Centre closed — opens 2:00pm SAST · Showing next shift data</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
           {[
-            {n:centreOpen?reps.filter(r=>r.status==="available").length:0,l:"Available",c:"#27ae60"},
+            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)).length,l:"Available",c:"#27ae60"},
             {n:centreOpen?onHealth:0,l:`Health (/${hLimit})`,c:onHealth>=hLimit?"#e74c3c":"#2980b9"},
             {n:centreOpen?onLunch:0,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?"#e74c3c":"#e07b00"},
             {n:reps.filter(r=>["pto","sick","off"].includes(r.status)).length,l:"Out",c:"#8e44ad"},
@@ -421,12 +464,12 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   };
 
   const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch") : [];
-  const available = centreOpen ? reps.filter(r=>r.status==="available") : [];
-  const offShift = !centreOpen ? reps.filter(r=>r.status==="available") : [];
+  const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r));
+  const offShift = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)));
   const out = reps.filter(r=>["pto","sick","off"].includes(r.status));
 
   function RepRow({rep}) {
-    const effectiveStatus = (!centreOpen && rep.status==="available") ? "off_shift" : rep.status;
+    const effectiveStatus = (rep.status==="available" && (!centreOpen || !isRepOnShift(rep))) ? "off_shift" : rep.status;
     const cfg=ST[effectiveStatus]||ST.available;
     const isBreak=rep.status==="health"||rep.status==="lunch";
     const isOOO=rep.status==="pto"||rep.status==="sick";
