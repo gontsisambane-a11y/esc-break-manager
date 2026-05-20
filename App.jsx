@@ -31,12 +31,13 @@ const HARDCODED_PTO = [
   {rep_name:"Amanda",pto_date:"2026-06-09"},{rep_name:"Amanda",pto_date:"2026-06-10"},
 ];
 const ST = {
-  available:{ label:"On Duty",       dot:"#27ae60", bg:"#fff",    border:"#e8e8e8" },
-  health:   { label:"Health Break",  dot:"#2980b9", bg:"#eaf4fd", border:"#aed6f1" },
-  lunch:    { label:"Lunch Break",   dot:"#e07b00", bg:"#fff8ee", border:"#f0c080" },
-  pto:      { label:"PTO",           dot:"#8e44ad", bg:"#f5eefb", border:"#d7aef0" },
-  sick:     { label:"Sick Day",      dot:"#c0392b", bg:"#fdf0ee", border:"#f5b7b1" },
-  off:      { label:"Scheduled Off", dot:"#bbb",    bg:"#f7f7f7", border:"#e8e8e8" },
+  available: { label:"On Duty",       dot:"#27ae60", bg:"#fff",    border:"#e8e8e8" },
+  health:    { label:"Health Break",  dot:"#2980b9", bg:"#eaf4fd", border:"#aed6f1" },
+  lunch:     { label:"Lunch Break",   dot:"#e07b00", bg:"#fff8ee", border:"#f0c080" },
+  pto:       { label:"PTO",           dot:"#8e44ad", bg:"#f5eefb", border:"#d7aef0" },
+  sick:      { label:"Sick Day",      dot:"#c0392b", bg:"#fdf0ee", border:"#f5b7b1" },
+  off:       { label:"Scheduled Off", dot:"#bbb",    bg:"#f7f7f7", border:"#e8e8e8" },
+  off_shift: { label:"Off Shift",     dot:"#999",    bg:"#f2f2f2", border:"#e0e0e0" },
 };
 const TZ_C = {
   Central:{bg:"#e8f0fe",text:"#1a4a8a"}, Eastern:{bg:"#e6f4ea",text:"#1a5c35"},
@@ -47,7 +48,7 @@ const TZ_C = {
 // ── UTILS ─────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().split('T')[0];
 const todayDay = () => DAYS[new Date().getDay()];
-const todayLabel = () => new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+const todayLabel = () => { const now=new Date(); const tz=Intl.DateTimeFormat().resolvedOptions().timeZone; const city=tz.split('/').pop().replace(/_/g,' '); return now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' · '+city; };
 const fmtTime = s => { if(s<=0)return"0:00"; return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; };
 const fmtDur = s => { if(!s||s<=0)return"0m"; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; };
 const elapsedSec = iso => Math.floor((Date.now()-new Date(iso).getTime())/1000);
@@ -279,7 +280,7 @@ function LoginScreen({ onSelect, reps }) {
 }
 
 // ── MANAGER VIEW ──────────────────────────────────────────────────────
-function ManagerView({ data, reload, onLogout }) {
+function ManagerView({ data, reload, onLogout, centreOpen }) {
   const { reps, settings, adHoc, swaps, activeBreaks } = data;
   const [tab, setTab] = useState("overview");
   const [toast, setToast] = useState(null);
@@ -321,11 +322,12 @@ function ManagerView({ data, reload, onLogout }) {
             {settings.peak_mode&&<span style={{fontSize:10,background:"#e74c3c",padding:"3px 8px",borderRadius:5,fontWeight:700}}>⚡ PEAK MODE</span>}
           </div>
         </div>
+        {!centreOpen&&<div style={{background:"rgba(255,200,0,.15)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#ffd700",fontWeight:600,textAlign:"center"}}>🌙 Centre closed — opens 2:00pm SAST · Showing next shift data</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
           {[
-            {n:reps.filter(r=>r.status==="available").length,l:"Available",c:"#27ae60"},
-            {n:onHealth,l:`Health (/${hLimit})`,c:onHealth>=hLimit?"#e74c3c":"#2980b9"},
-            {n:onLunch,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?"#e74c3c":"#e07b00"},
+            {n:centreOpen?reps.filter(r=>r.status==="available").length:0,l:"Available",c:"#27ae60"},
+            {n:centreOpen?onHealth:0,l:`Health (/${hLimit})`,c:onHealth>=hLimit?"#e74c3c":"#2980b9"},
+            {n:centreOpen?onLunch:0,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?"#e74c3c":"#e07b00"},
             {n:reps.filter(r=>["pto","sick","off"].includes(r.status)).length,l:"Out",c:"#8e44ad"},
           ].map(s=>(
             <div key={s.l} style={{background:"rgba(255,255,255,.1)",borderRadius:10,padding:"7px 6px",textAlign:"center"}}>
@@ -363,7 +365,7 @@ function ManagerView({ data, reload, onLogout }) {
       </div>
 
       <div style={{padding:"0 14px",maxWidth:640,margin:"0 auto"}}>
-        {tab==="overview"  &&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={hLimit} maxOut={maxOut} reload={reload} fire={fire} settings={settings}/>}
+        {tab==="overview"  &&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={hLimit} maxOut={maxOut} reload={reload} fire={fire} settings={settings} centreOpen={centreOpen}/>}
         {tab==="requests"  &&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire}/>}
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
@@ -376,7 +378,7 @@ function ManagerView({ data, reload, onLogout }) {
 }
 
 // ── MGR: OVERVIEW ─────────────────────────────────────────────────────
-function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, settings }) {
+function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, settings, centreOpen }) {
   const [oooModal, setOooModal] = useState(null);
   const [peakOverride, setPeakOverride] = useState({});
 
@@ -418,15 +420,17 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     fire("info",`Peak limit ${peakOverride[rep.id]?"restored":"overridden"} for ${rep.name}`);
   };
 
-  const onBreak = reps.filter(r=>r.status==="health"||r.status==="lunch");
-  const available = reps.filter(r=>r.status==="available");
+  const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch") : [];
+  const available = centreOpen ? reps.filter(r=>r.status==="available") : [];
+  const offShift = !centreOpen ? reps.filter(r=>r.status==="available") : [];
   const out = reps.filter(r=>["pto","sick","off"].includes(r.status));
 
   function RepRow({rep}) {
-    const cfg=ST[rep.status]||ST.available;
+    const effectiveStatus = (!centreOpen && rep.status==="available") ? "off_shift" : rep.status;
+    const cfg=ST[effectiveStatus]||ST.available;
     const isBreak=rep.status==="health"||rep.status==="lunch";
     const isOOO=rep.status==="pto"||rep.status==="sick";
-    const isOff=rep.status==="off";
+    const isOff=rep.status==="off"||effectiveStatus==="off_shift";
     const tz=TZ_C[rep.timezone]||TZ_C.Central;
     const ab=activeBreaks.find(b=>b.rep_id===rep.id);
     return (
@@ -461,7 +465,8 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
         <OOOModal rep={oooModal} onClose={()=>setOooModal(null)} onMark={handleMarkOOO}/>
       )}
       {onBreak.length>0&&<Section title="🌿🥗 On Break" items={onBreak} Row={RepRow} color="#2980b9"/>}
-      <Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>
+      {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
+      {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
       {out.length>0&&<Section title="Out Today" items={out} Row={RepRow} color="#8e44ad"/>}
     </div>
   );
@@ -1200,7 +1205,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
 }
 
 // ── REP VIEW ──────────────────────────────────────────────────────────
-function RepView({ repInfo, data, reload, onLogout }) {
+function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const { reps, settings, swaps, activeBreaks } = data;
   const [tab, setTab] = useState("my");
   const [toast, setToast] = useState(null);
@@ -1302,6 +1307,7 @@ function RepView({ repInfo, data, reload, onLogout }) {
           ))}
         </div>
         {settings.peak_mode&&<div style={{marginTop:10,background:"rgba(231,76,60,.2)",borderRadius:8,padding:"6px 12px",fontSize:11,color:"#ffaaaa",fontWeight:600}}>⚡ Peak mode active — health breaks limited to 1 at a time</div>}
+
       </div>
 
       {/* Rep Tabs */}
@@ -1621,8 +1627,8 @@ export default function App() {
     <>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
       {view==="login"   && <LoginScreen onSelect={(role,rep)=>{if(role==="manager")setView("manager");else{setCurrentRep(rep);setView("rep");}}} reps={data.reps}/>}
-      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>setView("login")}/>}
-      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")}/>}
+      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen}/>}
+      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen}/>}
     </>
   );
 }
