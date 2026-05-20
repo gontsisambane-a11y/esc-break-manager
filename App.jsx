@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+
+const SUPABASE_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 
 const TODAY = new Date(2026, 4, 15);
 const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TODAY_DAY = DAY_NAMES[TODAY.getDay()];
 const TODAY_LABEL = TODAY.toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
-
 const LUNCH_LIMIT = 3;
 const HEALTH_LIMIT = 2;
-const MANAGER_PIN = "2026";
+const MANAGER_PIN = "1234";
 
 const REPS_DATA = [
   { id:1,  name:"Amanda",   avatar:"AM", tz:"Central", lunch:"12:30pm Sat (30 min)",                                    offDays:["Thu","Sun"] },
@@ -58,14 +60,69 @@ const ST = {
 
 function todayKey() { return `${TODAY.getFullYear()}-${TODAY.getMonth()+1}-${TODAY.getDate()}`; }
 
-function initReps() {
-  const todayPTO = PTO_DATA[todayKey()]||[];
-  return REPS_DATA.map(r=>({
-    ...r, oooNote:"",
-    status: r.offDays.includes(TODAY_DAY)?"off": todayPTO.includes(r.name)?"pto":"available",
-  }));
+// ── Supabase helpers ──────────────────────────────────────────────────
+async function sbFetch(path, options={}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+      ...(options.headers||{}),
+    },
+  });
+  if(!res.ok) { const e = await res.text(); throw new Error(e); }
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
 }
 
+async function loadStatuses() {
+  return sbFetch("rep_status?select=id,name,status,ooo_note&order=id");
+}
+
+async function updateStatus(id, status, oooNote="") {
+  return sbFetch(`rep_status?id=eq.${id}`, {
+    method:"PATCH",
+    body: JSON.stringify({ status, ooo_note: oooNote, updated_at: new Date().toISOString() }),
+  });
+}
+
+async function logBreakStart(repId, repName, breakType) {
+  return sbFetch("break_log", {
+    method:"POST",
+    body: JSON.stringify({ rep_id: repId, rep_name: repName, break_type: breakType }),
+  });
+}
+
+async function logBreakEnd(repId) {
+  const logs = await sbFetch(`break_log?rep_id=eq.${repId}&ended_at=is.null&order=started_at.desc&limit=1`);
+  if(logs && logs.length > 0) {
+    await sbFetch(`break_log?id=eq.${logs[0].id}`, {
+      method:"PATCH",
+      body: JSON.stringify({ ended_at: new Date().toISOString() }),
+    });
+  }
+}
+
+function mergeWithLocal(dbRows) {
+  const todayPTO = PTO_DATA[todayKey()]||[];
+  return REPS_DATA.map(rep => {
+    const row = dbRows.find(r => r.id === rep.id);
+    const dbStatus = row?.status || "available";
+    const dbNote = row?.ooo_note || "";
+    const defaultStatus = rep.offDays.includes(TODAY_DAY) ? "off"
+                        : todayPTO.includes(rep.name) ? "pto"
+                        : "available";
+    return {
+      ...rep,
+      oooNote: dbNote,
+      status: dbStatus === "available" ? defaultStatus : dbStatus,
+    };
+  });
+}
+
+// ── Shared components ─────────────────────────────────────────────────
 function Toast({ msg, type, onDone }) {
   useState(()=>{ const t=setTimeout(onDone,3200); return ()=>clearTimeout(t); });
   const bg={approved:"#1a5c35",declined:"#7a1a1a",info:"#1565a8",ooo:"#7a1a5c"};
@@ -211,12 +268,13 @@ function LoginScreen({ onSelect }) {
   );
 }
 
-function ManagerView({ reps, setReps, onLogout }) {
+function ManagerView({ reps, setReps, onLogout, loading }) {
   const [breakModal,setBreakModal]=useState(null);
   const [oooModal,setOooModal]=useState(null);
   const [toast,setToast]=useState(null);
   const [tab,setTab]=useState("active");
   const [search,setSearch]=useState("");
+
   const onLunch=reps.filter(r=>r.status==="lunch").length;
   const onHealth=reps.filter(r=>r.status==="health").length;
   const oooCount=reps.filter(r=>r.status==="pto"||r.status==="sick").length;
@@ -224,28 +282,39 @@ function ManagerView({ reps, setReps, onLogout }) {
   const active=reps.filter(r=>!["off","pto","sick"].includes(r.status));
   const out=reps.filter(r=>["off","pto","sick"].includes(r.status));
   const fire=(type,msg)=>setToast({type,msg,id:Date.now()});
-  const handleConfirm=(breakType)=>{
+
+  const handleConfirm=async(breakType)=>{
     const left=breakType==="lunch"?LUNCH_LIMIT-onLunch:HEALTH_LIMIT-onHealth;
     if(left<=0){fire("declined",`${breakType==="lunch"?"Lunch":"Health break"} slots are full.`);setBreakModal(null);return;}
+    await updateStatus(breakModal.id, breakType);
+    await logBreakStart(breakModal.id, breakModal.name, breakType);
     setReps(p=>p.map(r=>r.id===breakModal.id?{...r,status:breakType}:r));
     fire("approved",`${breakModal.name} started a ${breakType==="lunch"?"lunch 🥗":"health 🌿"} break.`);
     setBreakModal(null);
   };
-  const handleReturn=(id)=>{
+
+  const handleReturn=async(id)=>{
     const rep=reps.find(r=>r.id===id);
+    await updateStatus(id,"available");
+    await logBreakEnd(id);
     setReps(p=>p.map(r=>r.id===id?{...r,status:"available"}:r));
     fire("approved",`${rep.name} is back on duty. 🎉`);
   };
-  const handleConfirmOOO=(type,note)=>{
+
+  const handleConfirmOOO=async(type,note)=>{
+    await updateStatus(oooModal.id, type, note);
     setReps(p=>p.map(r=>r.id===oooModal.id?{...r,status:type,oooNote:note}:r));
     fire("ooo",`${oooModal.name} marked as ${type==="pto"?"PTO ✈️":"Sick Day 🤒"}`);
     setOooModal(null);setTab("out");
   };
-  const handleClearOOO=(id)=>{
+
+  const handleClearOOO=async(id)=>{
     const rep=reps.find(r=>r.id===id);
+    await updateStatus(id,"available","");
     setReps(p=>p.map(r=>r.id===id?{...r,status:"available",oooNote:""}:r));
     fire("info",`${rep.name} is back on duty.`);
   };
+
   function RepRow({rep}){
     const cfg=ST[rep.status]||ST.available;
     const onBreak=rep.status==="health"||rep.status==="lunch";
@@ -280,12 +349,14 @@ function ManagerView({ reps, setReps, onLogout }) {
       </div>
     );
   }
+
   const Section=({title,items,color})=>items.length===0?null:(
     <div style={{marginBottom:16}}>
       <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:color||"#bbb",margin:"0 0 7px",fontWeight:700}}>{title} ({items.length})</p>
       {items.map(r=><RepRow key={r.id} rep={r}/>)}
     </div>
   );
+
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
@@ -352,13 +423,14 @@ function ManagerView({ reps, setReps, onLogout }) {
         </div>
       </div>
       <div style={{padding:"0 14px",maxWidth:620,margin:"0 auto"}}>
-        {tab==="active"&&(
+        {loading&&<p style={{textAlign:"center",color:"#aaa",padding:"30px 0",fontSize:13}}>Loading team status…</p>}
+        {!loading&&tab==="active"&&(
           <div style={{marginTop:16}}>
             <Section title="🌿 On Break" items={active.filter(r=>r.status==="health"||r.status==="lunch")} color="#2980b9"/>
             <Section title="✅ Available" items={active.filter(r=>r.status==="available")} color="#1a5c35"/>
           </div>
         )}
-        {tab==="out"&&(
+        {!loading&&tab==="out"&&(
           <div style={{marginTop:16}}>
             {out.length===0?(
               <div style={{textAlign:"center",padding:"44px 0",color:"#bbb"}}>
@@ -389,10 +461,10 @@ function ManagerView({ reps, setReps, onLogout }) {
   );
 }
 
-function RepView({ rep, reps, setReps, onLogout }) {
+function RepView({ rep, reps, setReps, onLogout, loading }) {
   const [breakModal,setBreakModal]=useState(false);
   const [toast,setToast]=useState(null);
-  const myRep=reps.find(r=>r.id===rep.id);
+  const myRep=reps.find(r=>r.id===rep.id)||{...rep,status:"available",oooNote:""};
   const onLunch=reps.filter(r=>r.status==="lunch").length;
   const onHealth=reps.filter(r=>r.status==="health").length;
   const lunchLeft=LUNCH_LIMIT-onLunch;
@@ -402,17 +474,24 @@ function RepView({ rep, reps, setReps, onLogout }) {
   const isOOO=myRep.status==="pto"||myRep.status==="sick";
   const isOff=myRep.status==="off";
   const fire=(type,msg)=>setToast({type,msg,id:Date.now()});
-  const handleConfirm=(breakType)=>{
+
+  const handleConfirm=async(breakType)=>{
     const left=breakType==="lunch"?lunchLeft:healthLeft;
     if(left<=0){fire("declined",`Sorry, ${breakType==="lunch"?"lunch":"health break"} slots are full!`);setBreakModal(false);return;}
+    await updateStatus(rep.id, breakType);
+    await logBreakStart(rep.id, rep.name, breakType);
     setReps(p=>p.map(r=>r.id===rep.id?{...r,status:breakType}:r));
     fire("approved",`Enjoy your ${breakType==="lunch"?"lunch 🥗":"health break 🌿"}!`);
     setBreakModal(false);
   };
-  const handleReturn=()=>{
+
+  const handleReturn=async()=>{
+    await updateStatus(rep.id,"available");
+    await logBreakEnd(rep.id);
     setReps(p=>p.map(r=>r.id===rep.id?{...r,status:"available"}:r));
     fire("approved","Welcome back! You're on duty. 🎉");
   };
+
   const SlotDot=({avail,total,color})=>(
     <div style={{display:"flex",gap:5,justifyContent:"center",marginTop:6}}>
       {Array.from({length:total}).map((_,i)=>(
@@ -420,6 +499,7 @@ function RepView({ rep, reps, setReps, onLogout }) {
       ))}
     </div>
   );
+
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
@@ -454,92 +534,97 @@ function RepView({ rep, reps, setReps, onLogout }) {
         </div>
       </div>
       <div style={{padding:"20px 18px",maxWidth:480,margin:"0 auto"}}>
-        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>My Status</p>
-        <div style={{background:cfg.bg,border:`2px solid ${cfg.border}`,borderRadius:18,padding:"22px 20px",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:isOOO||isOff?0:16}}>
-            <div style={{width:52,height:52,borderRadius:"50%",background:isOff?"#eee":onBreak?(myRep.status==="health"?"#d6eaf8":"#fdebd0"):"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:isOff?"#bbb":onBreak?(myRep.status==="health"?"#1a6291":"#9c5a00"):"#1a5c35"}}>
-              {rep.avatar}
-            </div>
-            <div>
-              <p style={{margin:0,fontWeight:700,fontSize:17,color:"#1a1a1a"}}>{rep.name}</p>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:cfg.dot,display:"inline-block"}}/>
-                <span style={{fontSize:13,color:cfg.dot,fontWeight:600}}>{cfg.label}</span>
+        {loading&&<p style={{textAlign:"center",color:"#aaa",padding:"20px 0",fontSize:13}}>Loading…</p>}
+        {!loading&&(
+          <>
+            <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>My Status</p>
+            <div style={{background:cfg.bg,border:`2px solid ${cfg.border}`,borderRadius:18,padding:"22px 20px",marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:isOOO||isOff?0:16}}>
+                <div style={{width:52,height:52,borderRadius:"50%",background:isOff?"#eee":onBreak?(myRep.status==="health"?"#d6eaf8":"#fdebd0"):"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:isOff?"#bbb":onBreak?(myRep.status==="health"?"#1a6291":"#9c5a00"):"#1a5c35"}}>
+                  {rep.avatar}
+                </div>
+                <div>
+                  <p style={{margin:0,fontWeight:700,fontSize:17,color:"#1a1a1a"}}>{rep.name}</p>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:cfg.dot,display:"inline-block"}}/>
+                    <span style={{fontSize:13,color:cfg.dot,fontWeight:600}}>{cfg.label}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          {!isOOO&&!isOff&&(
-            <div style={{borderTop:"1.5px solid rgba(0,0,0,0.06)",paddingTop:14}}>
-              <p style={{margin:"0 0 6px",fontSize:11,color:"#aaa"}}>Scheduled lunch: <strong style={{color:"#555"}}>{rep.lunch}</strong></p>
-              {onBreak?(
-                <button onClick={handleReturn} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
-              ):(
-                <button onClick={()=>setBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
+              {!isOOO&&!isOff&&(
+                <div style={{borderTop:"1.5px solid rgba(0,0,0,0.06)",paddingTop:14}}>
+                  <p style={{margin:"0 0 6px",fontSize:11,color:"#aaa"}}>Scheduled lunch: <strong style={{color:"#555"}}>{rep.lunch}</strong></p>
+                  {onBreak?(
+                    <button onClick={handleReturn} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
+                  ):(
+                    <button onClick={()=>setBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
+                  )}
+                </div>
               )}
+              {isOOO&&<p style={{margin:"14px 0 0",fontSize:13,color:"#888",textAlign:"center"}}>You're marked as out today. See your manager to update.</p>}
+              {isOff&&<p style={{margin:"14px 0 0",fontSize:13,color:"#bbb",textAlign:"center"}}>Today is your scheduled day off. Enjoy! 🎉</p>}
             </div>
-          )}
-          {isOOO&&<p style={{margin:"14px 0 0",fontSize:13,color:"#888",textAlign:"center"}}>You're marked as out today. See your manager to update.</p>}
-          {isOff&&<p style={{margin:"14px 0 0",fontSize:13,color:"#bbb",textAlign:"center"}}>Today is your scheduled day off. Enjoy! 🎉</p>}
-        </div>
-        {!isOff&&!isOOO&&(
-          <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"14px 16px",marginBottom:12}}>
-            <p style={{margin:"0 0 10px",fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>Who's on break right now</p>
-            {reps.filter(r=>(r.status==="health"||r.status==="lunch")&&r.id!==rep.id).length===0?(
-              <p style={{margin:0,fontSize:13,color:"#bbb"}}>Nobody's on break — slots are wide open!</p>
-            ):(
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                {reps.filter(r=>(r.status==="health"||r.status==="lunch")&&r.id!==rep.id).map(r=>{
-                  const s=ST[r.status];
-                  return (
-                    <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:s.bg,borderRadius:10,border:`1px solid ${s.border}`}}>
-                      <div style={{width:30,height:30,borderRadius:"50%",background:r.status==="health"?"#d6eaf8":"#fdebd0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:r.status==="health"?"#1a6291":"#9c5a00"}}>{r.avatar}</div>
-                      <div>
-                        <p style={{margin:0,fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</p>
-                        <p style={{margin:0,fontSize:11,color:s.dot}}>{s.label}</p>
-                      </div>
-                      <span style={{marginLeft:"auto",fontSize:15}}>{r.status==="health"?"🌿":"🥗"}</span>
-                    </div>
-                  );
-                })}
+            {!isOff&&!isOOO&&(
+              <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"14px 16px",marginBottom:12}}>
+                <p style={{margin:"0 0 10px",fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>Who's on break right now</p>
+                {reps.filter(r=>(r.status==="health"||r.status==="lunch")&&r.id!==rep.id).length===0?(
+                  <p style={{margin:0,fontSize:13,color:"#bbb"}}>Nobody's on break — slots are wide open!</p>
+                ):(
+                  <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                    {reps.filter(r=>(r.status==="health"||r.status==="lunch")&&r.id!==rep.id).map(r=>{
+                      const s=ST[r.status];
+                      return (
+                        <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:s.bg,borderRadius:10,border:`1px solid ${s.border}`}}>
+                          <div style={{width:30,height:30,borderRadius:"50%",background:r.status==="health"?"#d6eaf8":"#fdebd0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:r.status==="health"?"#1a6291":"#9c5a00"}}>{r.avatar}</div>
+                          <div>
+                            <p style={{margin:0,fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</p>
+                            <p style={{margin:0,fontSize:11,color:s.dot}}>{s.label}</p>
+                          </div>
+                          <span style={{marginLeft:"auto",fontSize:15}}>{r.status==="health"?"🌿":"🥗"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-        {(()=>{
-          const oooToday=reps.filter(r=>(r.status==="pto"||r.status==="sick")&&r.id!==rep.id);
-          const offToday=reps.filter(r=>r.status==="off"&&r.id!==rep.id);
-          if(oooToday.length===0&&offToday.length===0) return null;
-          return (
-            <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"14px 16px"}}>
-              <p style={{margin:"0 0 10px",fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>Out today</p>
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                {oooToday.map(r=>{
-                  const s=ST[r.status];
-                  return (
-                    <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:s.bg,borderRadius:10,border:`1px solid ${s.border}`}}>
-                      <div style={{width:30,height:30,borderRadius:"50%",background:r.status==="pto"?"#ede0f5":"#fde8e4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:r.status==="pto"?"#7a1a5c":"#c0392b"}}>{r.avatar}</div>
-                      <div style={{flex:1}}>
-                        <p style={{margin:0,fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</p>
-                        <p style={{margin:0,fontSize:11,color:s.dot}}>{s.label}{r.oooNote?` · ${r.oooNote}`:""}</p>
+            {(()=>{
+              const oooToday=reps.filter(r=>(r.status==="pto"||r.status==="sick")&&r.id!==rep.id);
+              const offToday=reps.filter(r=>r.status==="off"&&r.id!==rep.id);
+              if(oooToday.length===0&&offToday.length===0) return null;
+              return (
+                <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"14px 16px"}}>
+                  <p style={{margin:"0 0 10px",fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>Out today</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                    {oooToday.map(r=>{
+                      const s=ST[r.status];
+                      return (
+                        <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:s.bg,borderRadius:10,border:`1px solid ${s.border}`}}>
+                          <div style={{width:30,height:30,borderRadius:"50%",background:r.status==="pto"?"#ede0f5":"#fde8e4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:r.status==="pto"?"#7a1a5c":"#c0392b"}}>{r.avatar}</div>
+                          <div style={{flex:1}}>
+                            <p style={{margin:0,fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</p>
+                            <p style={{margin:0,fontSize:11,color:s.dot}}>{s.label}{r.oooNote?` · ${r.oooNote}`:""}</p>
+                          </div>
+                          <span style={{fontSize:15}}>{r.status==="pto"?"✈️":"🤒"}</span>
+                        </div>
+                      );
+                    })}
+                    {offToday.map(r=>(
+                      <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"#f7f7f7",borderRadius:10,border:"1px solid #e8e8e8"}}>
+                        <div style={{width:30,height:30,borderRadius:"50%",background:"#eee",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#bbb"}}>{r.avatar}</div>
+                        <div style={{flex:1}}>
+                          <p style={{margin:0,fontWeight:600,fontSize:13,color:"#bbb"}}>{r.name}</p>
+                          <p style={{margin:0,fontSize:11,color:"#ccc"}}>Scheduled day off</p>
+                        </div>
+                        <span style={{fontSize:15}}>📅</span>
                       </div>
-                      <span style={{fontSize:15}}>{r.status==="pto"?"✈️":"🤒"}</span>
-                    </div>
-                  );
-                })}
-                {offToday.map(r=>(
-                  <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"#f7f7f7",borderRadius:10,border:"1px solid #e8e8e8"}}>
-                    <div style={{width:30,height:30,borderRadius:"50%",background:"#eee",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#bbb"}}>{r.avatar}</div>
-                    <div style={{flex:1}}>
-                      <p style={{margin:0,fontWeight:600,fontSize:13,color:"#bbb"}}>{r.name}</p>
-                      <p style={{margin:0,fontSize:11,color:"#ccc"}}>Scheduled day off</p>
-                    </div>
-                    <span style={{fontSize:15}}>📅</span>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
+                </div>
+              );
+            })()}
+          </>
+        )}
       </div>
     </div>
   );
@@ -548,17 +633,41 @@ function RepView({ rep, reps, setReps, onLogout }) {
 export default function App() {
   const [view,setView]=useState("login");
   const [currentRep,setCurrentRep]=useState(null);
-  const [reps,setReps]=useState(initReps);
+  const [reps,setReps]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  const fetchReps = useCallback(async()=>{
+    try {
+      const rows = await loadStatuses();
+      setReps(mergeWithLocal(rows));
+    } catch(e) {
+      console.error("Supabase load error:",e);
+      // fallback to local
+      const todayPTO=PTO_DATA[todayKey()]||[];
+      setReps(REPS_DATA.map(r=>({...r,oooNote:"",status:r.offDays.includes(TODAY_DAY)?"off":todayPTO.includes(r.name)?"pto":"available"})));
+    } finally {
+      setLoading(false);
+    }
+  },[]);
+
+  useEffect(()=>{
+    fetchReps();
+    // Poll every 15 seconds for live updates
+    const interval = setInterval(fetchReps, 15000);
+    return ()=>clearInterval(interval);
+  },[fetchReps]);
+
   const handleSelect=(role,rep=null)=>{
     if(role==="manager"){setView("manager");}
     else{setCurrentRep(rep);setView("rep");}
   };
+
   return (
     <>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
       {view==="login"&&<LoginScreen onSelect={handleSelect}/>}
-      {view==="manager"&&<ManagerView reps={reps} setReps={setReps} onLogout={()=>setView("login")}/>}
-      {view==="rep"&&<RepView rep={currentRep} reps={reps} setReps={setReps} onLogout={()=>setView("login")}/>}
+      {view==="manager"&&<ManagerView reps={reps} setReps={setReps} onLogout={()=>setView("login")} loading={loading}/>}
+      {view==="rep"&&<RepView rep={currentRep} reps={reps} setReps={setReps} onLogout={()=>setView("login")} loading={loading}/>}
     </>
   );
 }
