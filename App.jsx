@@ -12,6 +12,24 @@ const H_LIMIT_PEAK = 1;
 const COOLDOWN_SEC = 7200;
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TZLIST = ["Central","Eastern","Pacific","SA","GMT","IST"];
+const HARDCODED_PTO = [
+  {rep_name:"Andrea",pto_date:"2026-04-08"},{rep_name:"Andrea",pto_date:"2026-04-09"},
+  {rep_name:"Andrea",pto_date:"2026-04-10"},{rep_name:"Amanda",pto_date:"2026-04-10"},
+  {rep_name:"Amanda",pto_date:"2026-04-11"},{rep_name:"Marcel",pto_date:"2026-04-16"},
+  {rep_name:"Marcel",pto_date:"2026-04-17"},{rep_name:"Andrea",pto_date:"2026-04-23"},
+  {rep_name:"Andrea",pto_date:"2026-04-24"},{rep_name:"Andrea",pto_date:"2026-04-27"},
+  {rep_name:"Jordan",pto_date:"2026-04-28"},{rep_name:"Amanda",pto_date:"2026-05-09"},
+  {rep_name:"Amanda",pto_date:"2026-05-11"},{rep_name:"Heather",pto_date:"2026-05-16"},
+  {rep_name:"Heather",pto_date:"2026-05-17"},{rep_name:"Heather",pto_date:"2026-05-18"},
+  {rep_name:"Kelly",pto_date:"2026-05-18"},{rep_name:"Mike",pto_date:"2026-05-18"},
+  {rep_name:"Darryl",pto_date:"2026-05-18"},{rep_name:"Heather",pto_date:"2026-05-19"},
+  {rep_name:"Kelly",pto_date:"2026-05-19"},{rep_name:"Heather",pto_date:"2026-05-20"},
+  {rep_name:"Kelly",pto_date:"2026-05-20"},{rep_name:"Heather",pto_date:"2026-05-21"},
+  {rep_name:"Heather",pto_date:"2026-05-22"},{rep_name:"Rebecca",pto_date:"2026-05-22"},
+  {rep_name:"Heather",pto_date:"2026-05-23"},{rep_name:"Rebecca",pto_date:"2026-05-25"},
+  {rep_name:"Rebecca",pto_date:"2026-05-26"},{rep_name:"Amanda",pto_date:"2026-06-08"},
+  {rep_name:"Amanda",pto_date:"2026-06-09"},{rep_name:"Amanda",pto_date:"2026-06-10"},
+];
 const ST = {
   available:{ label:"On Duty",       dot:"#27ae60", bg:"#fff",    border:"#e8e8e8" },
   health:   { label:"Health Break",  dot:"#2980b9", bg:"#eaf4fd", border:"#aed6f1" },
@@ -33,6 +51,17 @@ const todayLabel = () => new Date().toLocaleDateString("en-US",{weekday:"long",y
 const fmtTime = s => { if(s<=0)return"0:00"; return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; };
 const fmtDur = s => { if(!s||s<=0)return"0m"; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; };
 const elapsedSec = iso => Math.floor((Date.now()-new Date(iso).getTime())/1000);
+const fmt12h = t => { if(!t)return'--'; const [h,m]=t.split(':').map(Number); return `${h%12||12}:${m.toString().padStart(2,'0')}${h>=12?'pm':'am'}`; };
+function inLunchWindow(rep) {
+  const day = DAYS[new Date().getDay()];
+  const sched = (rep.lunch_schedule||{})[day];
+  if(!sched?.time) return true;
+  const [h,m] = sched.time.split(':').map(Number);
+  const nowMin = new Date().getHours()*60+new Date().getMinutes();
+  const schedMin = h*60+m;
+  const durMin = sched.duration||60;
+  return nowMin >= schedMin-15 && nowMin <= schedMin+durMin+15;
+}
 const avatar = name => name.split(" ").map(p=>p[0]?.toUpperCase()||"").join("").slice(0,2)||"??";
 
 // ── SUPABASE ──────────────────────────────────────────────────────────
@@ -48,22 +77,40 @@ const sbPost  = (tbl,d)    => sb(tbl,{method:"POST",body:JSON.stringify(d)});
 const sbDel   = (tbl,id)   => sb(`${tbl}?id=eq.${id}`,{method:"DELETE"});
 
 async function loadAll() {
-  const [reps,settArr,adHoc,swaps,activeBreaks] = await Promise.all([
+  const [reps,settArr,adHoc,swaps,activeBreaks,todayPTO] = await Promise.all([
     sb("rep_status?select=*&order=id"),
     sb("app_settings?id=eq.1"),
     sb("adhoc_lunch_requests?status=eq.pending&order=created_at.desc"),
     sb("lunch_swaps?status=in.(pending)&order=created_at.desc"),
     sb("break_log?ended_at=is.null&select=*"),
+    sb(`calloffs?calloff_date=eq.${todayStr()}&reason=eq.pto&select=rep_name`),
   ]);
+  const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false};
+  // seed hardcoded PTO once
+  if(!settings.pto_seeded) {
+    try {
+      for(const p of HARDCODED_PTO) {
+        const rep = reps.find(r=>r.name===p.rep_name);
+        if(rep) await sbPost("calloffs",{rep_id:rep.id,rep_name:p.rep_name,calloff_date:p.pto_date,reason:"pto",note:"Pre-loaded",logged_by:"system"}).catch(()=>{});
+      }
+      await sbPatch("app_settings",1,{pto_seeded:true});
+    } catch(e) { console.warn("PTO seed error",e); }
+  }
   // daily reset
   const today = todayStr();
+  const todayPTONames = todayPTO.map(p=>p.rep_name);
   for(const r of reps) {
     if(r.updated_at && !r.updated_at.startsWith(today) && (r.health_breaks_today>0||r.health_time_banked>0)) {
       await sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_banked:0,last_break_returned_at:null});
       r.health_breaks_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
     }
+    // auto-apply today's PTO from DB
+    if(todayPTONames.includes(r.name) && r.status==="available") {
+      await sbPatch("rep_status",r.id,{status:"pto",ooo_note:"PTO"});
+      r.status="pto"; r.ooo_note="PTO";
+    }
   }
-  return { reps, settings:settArr[0]||{id:1,peak_mode:false,custom_limit:null}, adHoc, swaps, activeBreaks };
+  return { reps, settings, adHoc, swaps, activeBreaks };
 }
 
 async function loadReportData(start, end) {
@@ -216,6 +263,7 @@ function ManagerView({ data, reload, onLogout }) {
     {k:"requests",l:`Requests${notifCount>0?` (${notifCount})`:""}`,notif:notifCount>0},
     {k:"team",l:"Team"},
     {k:"schedules",l:"Schedules"},
+    {k:"pto",l:"PTO"},
     {k:"reports",l:"Reports"},
     {k:"settings",l:"Settings"},
   ];
@@ -286,6 +334,7 @@ function ManagerView({ data, reload, onLogout }) {
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
+        {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
       </div>
     </div>
   );
@@ -617,7 +666,7 @@ function AddRepModal({ onClose, onAdd }) {
                 <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
                 <input type="time" value={(form.lunch_schedule[d]||{}).start||"09:00"} onChange={e=>setDay(d,"start",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
                 <input type="time" value={(form.lunch_schedule[d]||{}).end||"17:00"} onChange={e=>setDay(d,"end",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                <input placeholder="12:00pm" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <input type="time" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
                 <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
                   <option value={30}>30m</option><option value={60}>1hr</option>
                 </select>
@@ -699,7 +748,7 @@ function MgrSchedules({ reps, reload, fire }) {
                     <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
                     <input type="time" value={(form.lunch_schedule[d]||{}).start||"09:00"} onChange={e=>setDay(d,"start",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
                     <input type="time" value={(form.lunch_schedule[d]||{}).end||"17:00"} onChange={e=>setDay(d,"end",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                    <input placeholder="12:00pm" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <input type="time" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
                     <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
                       <option value={30}>30m</option><option value={60}>1hr</option>
                     </select>
@@ -843,6 +892,140 @@ function MgrReports({ reps }) {
   );
 }
 
+// ── MGR: PTO ──────────────────────────────────────────────────────────
+function MgrPTO({ reps, reload, fire }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [ptoEntries, setPtoEntries] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [addForm, setAddForm] = useState({rep_id:"",pto_date:"",note:""});
+
+  const getWeekDays = (offset=0) => {
+    const today = new Date();
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - today.getDay() + 1 + offset*7);
+    return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
+  };
+
+  const weekDays = getWeekDays(weekOffset);
+  const weekStart = weekDays[0].toISOString().split('T')[0];
+  const weekEnd   = weekDays[6].toISOString().split('T')[0];
+
+  useEffect(()=>{
+    sb(`calloffs?calloff_date=gte.${weekStart}&calloff_date=lte.${weekEnd}&reason=eq.pto&select=*&order=calloff_date`)
+      .then(setPtoEntries).catch(()=>{});
+  },[weekOffset,weekStart,weekEnd]);
+
+  const addPTO = async () => {
+    const rep = reps.find(r=>r.id===parseInt(addForm.rep_id));
+    if(!rep||!addForm.pto_date){fire("declined","Select a rep and date");return;}
+    await sbPost("calloffs",{rep_id:rep.id,rep_name:rep.name,calloff_date:addForm.pto_date,reason:"pto",note:addForm.note||"",logged_by:"manager"});
+    fire("approved",`PTO added for ${rep.name}`);
+    setAdding(false); setAddForm({rep_id:"",pto_date:"",note:""});
+    const updated = await sb(`calloffs?calloff_date=gte.${weekStart}&calloff_date=lte.${weekEnd}&reason=eq.pto&select=*&order=calloff_date`);
+    setPtoEntries(updated);
+  };
+
+  const removePTO = async (id, name) => {
+    await sbDel("calloffs",id);
+    fire("info",`PTO removed for ${name}`);
+    setPtoEntries(p=>p.filter(e=>e.id!==id));
+  };
+
+  const dayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+  return (
+    <div style={{marginTop:16}}>
+      {adding&&(
+        <Modal title="Add PTO" sub="NEW ENTRY" onClose={()=>setAdding(false)}>
+          <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
+            <div>
+              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Rep</label>
+              <select value={addForm.rep_id} onChange={e=>setAddForm(p=>({...p,rep_id:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                <option value="">Select rep…</option>
+                {reps.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Date</label>
+              <input type="date" value={addForm.pto_date} onChange={e=>setAddForm(p=>({...p,pto_date:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Note (optional)</label>
+              <input value={addForm.note} onChange={e=>setAddForm(p=>({...p,note:e.target.value}))} placeholder="e.g. Annual leave" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn label="Cancel" onClick={()=>setAdding(false)} outline color="#888" small/>
+            <Btn label="Add PTO" onClick={addPTO} color="#8e44ad"/>
+          </div>
+        </Modal>
+      )}
+
+      {/* Week nav */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <button onClick={()=>setWeekOffset(p=>p-1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:13}}>← Prev</button>
+        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>
+          {weekOffset===0?"This Week":weekOffset===1?"Next Week":weekOffset===-1?"Last Week":`${weekDays[0].toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${weekDays[6].toLocaleDateString("en-US",{month:"short",day:"numeric"})}`}
+        </span>
+        <button onClick={()=>setWeekOffset(p=>p+1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:13}}>Next →</button>
+      </div>
+
+      {/* Weekly grid */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
+        <div style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f0f0f0"}}>
+          <div style={{padding:"8px 10px",background:"#f8f8f8"}}/>
+          {weekDays.map((d,i)=>{
+            const isToday=d.toISOString().split('T')[0]===todayStr();
+            return (
+              <div key={i} style={{padding:"6px 4px",background:isToday?"#f0faf4":"#f8f8f8",textAlign:"center",borderLeft:"1px solid #f0f0f0"}}>
+                <p style={{margin:0,fontSize:10,color:isToday?"#1a5c35":"#999",fontWeight:isToday?700:600}}>{dayNames[i]}</p>
+                <p style={{margin:0,fontSize:11,fontWeight:600,color:isToday?"#1a5c35":"#555"}}>{d.getDate()}</p>
+              </div>
+            );
+          })}
+        </div>
+        {reps.map(rep=>{
+          const rowPTO = ptoEntries.filter(e=>e.rep_id===rep.id);
+          return (
+            <div key={rep.id} style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f8f8f8"}}>
+              <div style={{padding:"7px 10px",display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <span style={{fontSize:11,fontWeight:600,color:"#1a1a1a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rep.name}</span>
+              </div>
+              {weekDays.map((d,i)=>{
+                const ds=d.toISOString().split('T')[0];
+                const pto=rowPTO.find(e=>e.calloff_date===ds);
+                const isToday=ds===todayStr();
+                return (
+                  <div key={i} style={{padding:"5px 3px",textAlign:"center",borderLeft:"1px solid #f8f8f8",background:pto?"#f5eefb":isToday?"#fafff8":"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {pto?(
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                        <span style={{fontSize:9,color:"#8e44ad",fontWeight:700}}>PTO</span>
+                        <button onClick={()=>removePTO(pto.id,rep.name)} style={{fontSize:9,color:"#e74c3c",background:"none",border:"none",cursor:"pointer",padding:0,lineHeight:1}}>✕</button>
+                      </div>
+                    ):(
+                      <button onClick={()=>{setAddForm({rep_id:String(rep.id),pto_date:ds,note:""});setAdding(true);}} style={{fontSize:10,color:"#ccc",background:"none",border:"none",cursor:"pointer",padding:2,borderRadius:4}}>+</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      <button onClick={()=>setAdding(true)} style={{width:"100%",padding:"11px",borderRadius:12,border:"none",background:"#8e44ad",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>+ Add PTO Entry</button>
+
+      {/* Legend */}
+      <div style={{marginTop:12,padding:"10px 14px",background:"#fff",borderRadius:10,border:"1.5px solid #efefef",display:"flex",gap:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#8e44ad",fontWeight:700,background:"#f5eefb",padding:"2px 6px",borderRadius:4}}>PTO</span><span style={{fontSize:11,color:"#888"}}>Pre-loaded from calendar</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:11,color:"#ccc"}}>+</span><span style={{fontSize:11,color:"#888"}}>Click to add PTO for that day</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#e74c3c"}}>✕</span><span style={{fontSize:11,color:"#888"}}>Click to remove</span></div>
+      </div>
+    </div>
+  );
+}
+
 // ── MGR: SETTINGS ─────────────────────────────────────────────────────
 function MgrSettings({ settings, reps, reload, fire }) {
   const [customCap, setCustomCap] = useState(settings.custom_limit??Math.floor(reps.length*0.3));
@@ -952,7 +1135,14 @@ function RepView({ repInfo, data, reload, onLogout }) {
       if(cooldownActive){fire("declined",`Cooldown active — ${fmtTime(cooldownLeft)} remaining`);return;}
       if(breaksLeft<=0){fire("declined","You've used all 3 health breaks today");return;}
     }
-    if(type==="lunch"&&lunchLeft<=0){fire("declined","Lunch slots full");return;}
+    if(type==="lunch"){
+      if(lunchLeft<=0){fire("declined","Lunch slots full");return;}
+      if(!inLunchWindow(myRep)){
+        await sbPost("adhoc_lunch_requests",{rep_id:repInfo.id,rep_name:repInfo.name,requested_time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})});
+        fire("info","Outside your lunch window — ad hoc request sent to manager 📩");
+        reload(); return;
+      }
+    }
     const updates = {status:type,updated_at:new Date().toISOString()};
     if(type==="health") updates.health_breaks_today=(myRep.health_breaks_today||0)+1;
     await sbPatch("rep_status",repInfo.id,updates);
@@ -1151,10 +1341,14 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
   const myIncoming = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const myOutgoing = swaps.filter(s=>s.requester_id===repInfo.id&&s.status==="pending");
 
+  const myTodayLunch = () => { const d=(repInfo.lunch_schedule||{})[DAYS[new Date().getDay()]]; return d?.time?fmt12h(d.time)+(d.duration===30?" (30m)":" (1hr)"):"Not set"; };
+  const theirTodayLunch = (rep) => { const d=(rep.lunch_schedule||{})[DAYS[new Date().getDay()]]; return d?.time?fmt12h(d.time)+(d.duration===30?" (30m)":" (1hr)"):"Not set"; };
   const submitSwap = async () => {
     const target = reps.find(r=>r.id===parseInt(targetId));
-    if(!target||!myDate||!theirDate){fire("declined","Fill in all fields");return;}
-    await sbPost("lunch_swaps",{requester_id:repInfo.id,requester_name:repInfo.name,target_id:target.id,target_name:target.name,requester_date:myDate,target_date:theirDate,status:"pending"});
+    if(!target){fire("declined","Select a rep to swap with");return;}
+    const myLunch = myTodayLunch();
+    const theirLunch = theirTodayLunch(target);
+    await sbPost("lunch_swaps",{requester_id:repInfo.id,requester_name:repInfo.name,target_id:target.id,target_name:target.name,requester_date:myLunch,target_date:theirLunch,status:"pending"});
     fire("info",`Swap request sent to ${target.name}`);
     setReqModal(false); reload();
   };
@@ -1186,24 +1380,30 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
   return (
     <div>
       {reqModal&&(
-        <Modal title="Request Lunch Swap" sub="SWAP REQUEST" onClose={()=>setReqModal(false)}>
-          <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
-            <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Swap with</label>
-              <select value={targetId} onChange={e=>setTargetId(e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
-                <option value="">Select rep…</option>
-                {reps.filter(r=>r.id!==repInfo.id).map(r=><option key={r.id} value={r.id}>{r.name} — 🌿 {r.health_breaks_today||0}/{HEALTH_PER_DAY} breaks today</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Your lunch slot (give away)</label>
-              <input value={myDate} onChange={e=>setMyDate(e.target.value)} placeholder="e.g. 12:00pm today" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Their lunch slot (take)</label>
-              <input value={theirDate} onChange={e=>setTheirDate(e.target.value)} placeholder="e.g. 2:00pm today" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-            </div>
+        <Modal title="Request Lunch Swap" sub="SWAP REQUEST" onClose={()=>setReqModal(false)} wide>
+          <p style={{fontSize:12,color:"#666",margin:"0 0 12px"}}>Your lunch today: <strong style={{color:"#1a5c35"}}>{myTodayLunch()}</strong></p>
+          <p style={{fontSize:11,color:"#aaa",margin:"0 0 10px",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Team lunch schedule today</p>
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+            {reps.filter(r=>r.id!==repInfo.id&&!["off","pto","sick"].includes(r.status)).map(r=>{
+              const lunch=theirTodayLunch(r);
+              const isSelected=targetId===String(r.id);
+              return (
+                <div key={r.id} onClick={()=>setTargetId(String(r.id))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:isSelected?"2px solid #8e44ad":"1.5px solid #e8e8e8",background:isSelected?"#f5eefb":"#fff",cursor:"pointer"}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
+                  <div style={{flex:1}}>
+                    <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</span>
+                    <span style={{fontSize:11,color:"#888",marginLeft:8}}>{lunch}</span>
+                  </div>
+                  <span style={{fontSize:11,color:"#aaa"}}>🌿 {r.health_breaks_today||0}/{HEALTH_PER_DAY}</span>
+                  {isSelected&&<span style={{color:"#8e44ad",fontSize:16}}>✓</span>}
+                </div>
+              );
+            })}
           </div>
+          {targetId&&(()=>{
+            const t=reps.find(r=>r.id===parseInt(targetId));
+            return t?<p style={{fontSize:12,color:"#8e44ad",margin:"0 0 12px",padding:"8px 12px",background:"#f5eefb",borderRadius:8}}>You give: <strong>{myTodayLunch()}</strong> · You get: <strong>{theirTodayLunch(t)}</strong></p>:null;
+          })()}
           <div style={{display:"flex",gap:8}}>
             <Btn label="Cancel" onClick={()=>setReqModal(false)} outline color="#888" small/>
             <Btn label="Send Request" onClick={submitSwap} color="#8e44ad"/>
