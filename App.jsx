@@ -64,6 +64,30 @@ function inLunchWindow(rep) {
 }
 const avatar = name => name.split(" ").map(p=>p[0]?.toUpperCase()||"").join("").slice(0,2)||"??";
 
+// ── TIME SELECT COMPONENT ────────────────────────────────────────────
+function TimeSelect({ value, onChange, placeholder }) {
+  const val = value||"";
+  const [h,m] = val.includes(":")?val.split(":").map(Number):[null,null];
+  const hours = Array.from({length:24},(_,i)=>i);
+  const mins = [0,15,30,45];
+  const setH = v => onChange(`${String(v).padStart(2,"0")}:${m!=null?String(m).padStart(2,"0"):"00"}`);
+  const setM = v => onChange(`${h!=null?String(h).padStart(2,"0"):"00"}:${String(v).padStart(2,"0")}`);
+  const sel = {padding:"5px 4px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff",cursor:"pointer"};
+  return (
+    <div style={{display:"flex",gap:3,alignItems:"center"}}>
+      <select value={h??""} onChange={e=>setH(parseInt(e.target.value))} style={{...sel,width:52}}>
+        <option value="">{placeholder||"HH"}</option>
+        {hours.map(i=><option key={i} value={i}>{String(i).padStart(2,"0")}</option>)}
+      </select>
+      <span style={{fontSize:12,color:"#aaa",fontWeight:700}}>:</span>
+      <select value={m??""} onChange={e=>setM(parseInt(e.target.value))} style={{...sel,width:48}}>
+        <option value="">MM</option>
+        {mins.map(i=><option key={i} value={i}>{String(i).padStart(2,"0")}</option>)}
+      </select>
+    </div>
+  );
+}
+
 // ── SUPABASE ──────────────────────────────────────────────────────────
 async function sb(path, opts={}) {
   const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
@@ -632,7 +656,7 @@ function AddRepModal({ onClose, onAdd }) {
   const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:""});
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
-  const setDay = (day,field,val) => set("lunch_schedule",{...form.lunch_schedule,[day]:{...(form.lunch_schedule[day]||{start:"09:00",end:"17:00",time:"12:00pm",duration:60}),[field]:val}});
+  const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}));
   return (
     <Modal title="Add Team Member" sub="NEW REP" onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -657,7 +681,7 @@ function AddRepModal({ onClose, onAdd }) {
         {form.shift_days.length>0&&(
           <div>
             <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
-            <div style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,marginBottom:4}}>
+            <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
               <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
               <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
               <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
@@ -665,11 +689,11 @@ function AddRepModal({ onClose, onAdd }) {
               <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
             </div>
             {form.shift_days.map(d=>(
-              <div key={d} style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,alignItems:"center",marginBottom:7}}>
+              <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
                 <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
-                <input type="text" value={(form.lunch_schedule[d]||{}).start||""} onChange={e=>setDay(d,"start",e.target.value)} placeholder="e.g. 09:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                <input type="text" value={(form.lunch_schedule[d]||{}).end||""} onChange={e=>setDay(d,"end",e.target.value)} placeholder="e.g. 17:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                <input type="text" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} placeholder="e.g. 12:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <TimeSelect value={(form.lunch_schedule[d]||{}).start||""} onChange={v=>setDay(d,"start",v)} placeholder="Start"/>
+                <TimeSelect value={(form.lunch_schedule[d]||{}).end||""} onChange={v=>setDay(d,"end",v)} placeholder="End"/>
+                <TimeSelect value={(form.lunch_schedule[d]||{}).time||""} onChange={v=>setDay(d,"time",v)} placeholder="Lunch"/>
                 <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
                   <option value={30}>30m</option><option value={60}>1hr</option>
                 </select>
@@ -709,7 +733,7 @@ function MgrSchedules({ reps, reload, fire }) {
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
-  const setLunch = (day,field,val) => set("lunch_schedule",{...form.lunch_schedule,[day]:{...(form.lunch_schedule[day]||{time:"12:00pm",duration:60}),[field]:val}});
+  // setLunch replaced by setDay above
 
   return (
     <div style={{marginTop:16}}>
@@ -739,7 +763,7 @@ function MgrSchedules({ reps, reload, fire }) {
             {form.shift_days.length>0&&(
               <div>
                 <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
-                <div style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,marginBottom:4}}>
+                <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
                   <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
                   <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
                   <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
@@ -747,11 +771,11 @@ function MgrSchedules({ reps, reload, fire }) {
                   <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
                 </div>
                 {form.shift_days.map(d=>(
-                  <div key={d} style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,alignItems:"center",marginBottom:7}}>
+                  <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
                     <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
-                    <input type="text" value={(form.lunch_schedule[d]||{}).start||""} onChange={e=>setDay(d,"start",e.target.value)} placeholder="e.g. 09:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                    <input type="text" value={(form.lunch_schedule[d]||{}).end||""} onChange={e=>setDay(d,"end",e.target.value)} placeholder="e.g. 17:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
-                    <input type="text" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} placeholder="e.g. 12:00" style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <TimeSelect value={(form.lunch_schedule[d]||{}).start||""} onChange={v=>setDay(d,"start",v)} placeholder="Start"/>
+                    <TimeSelect value={(form.lunch_schedule[d]||{}).end||""} onChange={v=>setDay(d,"end",v)} placeholder="End"/>
+                    <TimeSelect value={(form.lunch_schedule[d]||{}).time||""} onChange={v=>setDay(d,"time",v)} placeholder="Lunch"/>
                     <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
                       <option value={30}>30m</option><option value={60}>1hr</option>
                     </select>
