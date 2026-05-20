@@ -52,6 +52,21 @@ const fmtTime = s => { if(s<=0)return"0:00"; return `${Math.floor(s/60)}:${(s%60
 const fmtDur = s => { if(!s||s<=0)return"0m"; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; };
 const elapsedSec = iso => Math.floor((Date.now()-new Date(iso).getTime())/1000);
 const fmt12h = t => { if(!t)return'--'; const [h,m]=t.split(':').map(Number); return `${h%12||12}:${m.toString().padStart(2,'0')}${h>=12?'pm':'am'}`; };
+// UTC offsets in minutes for current period (May - CDT/EDT/PDT active)
+const TZ_OFFSET = { Central:-300, Eastern:-240, Pacific:-420, SA:120, GMT:0, IST:330 };
+
+function convertLunchTime(timeStr, fromTz, toTz) {
+  if(!timeStr||!timeStr.includes(":")) return timeStr||"--";
+  const [h,m] = timeStr.split(":").map(Number);
+  const fromOffset = TZ_OFFSET[fromTz]??0;
+  const toOffset   = TZ_OFFSET[toTz]??0;
+  const diffMin = toOffset - fromOffset;
+  const totalMin = h*60 + m + diffMin;
+  const adjH = ((totalMin/60|0) % 24 + 24) % 24;
+  const adjM = ((totalMin % 60) + 60) % 60;
+  return `${String(adjH).padStart(2,"0")}:${String(adjM).padStart(2,"0")}`;
+}
+
 function inLunchWindow(rep) {
   const day = DAYS[new Date().getDay()];
   const sched = (rep.lunch_schedule||{})[day];
@@ -1404,8 +1419,8 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
   const myIncoming = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const myOutgoing = swaps.filter(s=>s.requester_id===repInfo.id&&s.status==="pending");
 
-  const myTodayLunch = () => { const d=(repInfo.lunch_schedule||{})[DAYS[new Date().getDay()]]; return d?.time?fmt12h(d.time)+(d.duration===30?" (30m)":" (1hr)"):"Not set"; };
-  const theirTodayLunch = (rep) => { const d=(rep.lunch_schedule||{})[DAYS[new Date().getDay()]]; return d?.time?fmt12h(d.time)+(d.duration===30?" (30m)":" (1hr)"):"Not set"; };
+  const myTodayLunch = () => { const d=(repInfo.lunch_schedule||{})[DAYS[new Date().getDay()]]; return d?.time?fmt12h(d.time)+(d.duration===30?" (30m)":" (1hr)")+" "+repInfo.timezone:"Not set"; };
+  const theirTodayLunch = (rep) => { const d=(rep.lunch_schedule||{})[DAYS[new Date().getDay()]]; if(!d?.time) return "Not set"; const converted=convertLunchTime(d.time, rep.timezone||"Central", repInfo.timezone||"Central"); const sameZone=(rep.timezone||"Central")===(repInfo.timezone||"Central"); return fmt12h(converted)+(d.duration===30?" (30m)":" (1hr)")+(sameZone?"":" "+repInfo.timezone); };
   const submitSwap = async () => {
     const target = reps.find(r=>r.id===parseInt(targetId));
     if(!target){fire("declined","Select a rep to swap with");return;}
@@ -1461,7 +1476,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
                     <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</span>
                     <span style={{fontSize:11,color:"#888",marginLeft:8}}>{lunch}</span>
                   </div>
-                  <span style={{fontSize:11,color:"#aaa"}}>🌿 {r.health_breaks_today||0}/{HEALTH_PER_DAY}</span>
+                  <span style={{fontSize:11,color:"#aaa"}}>🥗 {theirTodayLunch(r)}</span>
                   {isSelected&&<span style={{color:"#8e44ad",fontSize:16}}>✓</span>}
                 </div>
               );
@@ -1499,7 +1514,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
               <div key={s.id} style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 13px",marginBottom:8}}>
                 <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{s.requester_name} wants to swap lunches</p>
                 <p style={{margin:"0 0 8px",fontSize:11,color:"#888"}}>They give: {s.requester_date} · You give: {s.target_date}</p>
-                {requester&&<p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Their breaks today: 🌿 {requester.health_breaks_today||0}/{HEALTH_PER_DAY}</p>}
+                {requester&&<p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Their lunch today: 🥗 {theirTodayLunch(requester)}</p>}
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={()=>declineSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
                   <button onClick={()=>acceptSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"none",background:"#8e44ad",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Accept ✓</button>
