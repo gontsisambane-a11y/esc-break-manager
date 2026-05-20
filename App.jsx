@@ -739,7 +739,7 @@ function MgrSchedules({ reps, reload, fire }) {
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
-  // setLunch replaced by setDay above
+  const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}))
 
   return (
     <div style={{marginTop:16}}>
