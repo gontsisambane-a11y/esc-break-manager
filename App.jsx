@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
-const MANAGER_PIN = "2024";
+const MANAGER_PIN = "1234";
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const LUNCH_LIMIT = 3;
@@ -577,10 +577,10 @@ function MgrTeam({ reps, settings, reload, fire }) {
 }
 
 function AddRepModal({ onClose, onAdd }) {
-  const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],shift_start:"09:00",shift_end:"17:00",lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:""});
+  const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:""});
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
-  const setLunch = (day,field,val) => set("lunch_schedule",{...form.lunch_schedule,[day]:{...(form.lunch_schedule[day]||{time:"12:00pm",duration:60}),[field]:val}});
+  const setDay = (day,field,val) => set("lunch_schedule",{...form.lunch_schedule,[day]:{...(form.lunch_schedule[day]||{start:"09:00",end:"17:00",time:"12:00pm",duration:60}),[field]:val}});
   return (
     <Modal title="Add Team Member" sub="NEW REP" onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -602,25 +602,24 @@ function AddRepModal({ onClose, onAdd }) {
             ))}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div>
-            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Shift Start</label>
-            <input type="time" value={form.shift_start} onChange={e=>set("shift_start",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Shift End</label>
-            <input type="time" value={form.shift_end} onChange={e=>set("shift_end",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-          </div>
-        </div>
         {form.shift_days.length>0&&(
           <div>
-            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Lunch Per Day</label>
+            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
+            <div style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,marginBottom:4}}>
+              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
+              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
+              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
+              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Lunch time</span>
+              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
+            </div>
             {form.shift_days.map(d=>(
-              <div key={d} style={{display:"grid",gridTemplateColumns:"50px 1fr 80px",gap:8,alignItems:"center",marginBottom:6}}>
-                <span style={{fontSize:12,fontWeight:600,color:"#555"}}>{d}</span>
-                <input placeholder="e.g. 12:00pm" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setLunch(d,"time",e.target.value)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none"}}/>
-                <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setLunch(d,"duration",parseInt(e.target.value))} style={{padding:"7px 8px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
-                  <option value={30}>30 min</option><option value={60}>1 hr</option>
+              <div key={d} style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,alignItems:"center",marginBottom:7}}>
+                <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
+                <input type="time" value={(form.lunch_schedule[d]||{}).start||"09:00"} onChange={e=>setDay(d,"start",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <input type="time" value={(form.lunch_schedule[d]||{}).end||"17:00"} onChange={e=>setDay(d,"end",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <input placeholder="12:00pm" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
+                  <option value={30}>30m</option><option value={60}>1hr</option>
                 </select>
               </div>
             ))}
@@ -646,8 +645,6 @@ function MgrSchedules({ reps, reload, fire }) {
       name: rep.name,
       timezone: rep.timezone||"Central",
       shift_days: rep.shift_days||[],
-      shift_start: rep.shift_start||"09:00",
-      shift_end: rep.shift_end||"17:00",
       lunch_schedule: rep.lunch_schedule||{},
     });
   };
@@ -687,25 +684,24 @@ function MgrSchedules({ reps, reload, fire }) {
                 ))}
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Shift Start</label>
-                <input type="time" value={form.shift_start} onChange={e=>set("shift_start",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-              </div>
-              <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Shift End</label>
-                <input type="time" value={form.shift_end} onChange={e=>set("shift_end",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-              </div>
-            </div>
             {form.shift_days.length>0&&(
               <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Lunch Per Day</label>
+                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
+                <div style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,marginBottom:4}}>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Lunch time</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
+                </div>
                 {form.shift_days.map(d=>(
-                  <div key={d} style={{display:"grid",gridTemplateColumns:"50px 1fr 80px",gap:8,alignItems:"center",marginBottom:6}}>
-                    <span style={{fontSize:12,fontWeight:600,color:"#555"}}>{d}</span>
-                    <input placeholder="e.g. 12:00pm" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setLunch(d,"time",e.target.value)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none"}}/>
-                    <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setLunch(d,"duration",parseInt(e.target.value))} style={{padding:"7px 8px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
-                      <option value={30}>30 min</option><option value={60}>1 hr</option>
+                  <div key={d} style={{display:"grid",gridTemplateColumns:"50px 80px 80px 1fr 80px",gap:6,alignItems:"center",marginBottom:7}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
+                    <input type="time" value={(form.lunch_schedule[d]||{}).start||"09:00"} onChange={e=>setDay(d,"start",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <input type="time" value={(form.lunch_schedule[d]||{}).end||"17:00"} onChange={e=>setDay(d,"end",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <input placeholder="12:00pm" value={(form.lunch_schedule[d]||{}).time||""} onChange={e=>setDay(d,"time",e.target.value)} style={{padding:"6px 8px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none"}}/>
+                    <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
+                      <option value={30}>30m</option><option value={60}>1hr</option>
                     </select>
                   </div>
                 ))}
@@ -731,7 +727,7 @@ function MgrSchedules({ reps, reload, fire }) {
                   <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
                   <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
                 </div>
-                <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{days} · {rep.shift_start||"--"}–{rep.shift_end||"--"}</p>
+                <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{days}</p>
               </div>
               <span style={{fontSize:12,color:"#bbb"}}>✏️</span>
             </div>
