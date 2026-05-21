@@ -327,7 +327,7 @@ function LoginScreen({ onSelect, reps }) {
 
 // ── MANAGER VIEW ──────────────────────────────────────────────────────
 function ManagerView({ data, reload, onLogout, centreOpen }) {
-  const { reps, settings, adHoc, swaps, activeBreaks } = data;
+  const { reps, settings, adHoc, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("overview");
   const [toast, setToast] = useState(null);
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
@@ -1254,7 +1254,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
 
 // ── REP VIEW ──────────────────────────────────────────────────────────
 function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
-  const { reps, settings, swaps, activeBreaks } = data;
+  const { reps, settings, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("my");
   const [toast, setToast] = useState(null);
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
