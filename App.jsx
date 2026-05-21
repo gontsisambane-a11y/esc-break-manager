@@ -4,13 +4,14 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "1234";
-const HUB_ENABLED = true; // flip to true when approved
+const HUB_ENABLED = false; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const LUNCH_LIMIT = 3;
 const H_LIMIT_NORMAL = 2;
 const H_LIMIT_PEAK = 1;
 const COOLDOWN_SEC = 7200;
+const QUEUE_ACCEPT_SEC = 120; // 2 min to accept a queued break
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TZLIST = ["Central","Eastern","Pacific","SA","GMT","IST"];
 const HARDCODED_PTO = [
@@ -163,6 +164,7 @@ async function loadAll() {
     sb("adhoc_lunch_requests?status=eq.pending&order=created_at.desc"),
     sb("lunch_swaps?status=in.(pending)&order=created_at.desc"),
     sb("break_log?ended_at=is.null&select=*"),
+    sb(`break_queue?date=eq.${todayStr()}&status=in.(waiting,notified)&order=queued_at`),
     sb(`calloffs?calloff_date=eq.${todayStr()}&reason=eq.pto&select=rep_name`),
   ]);
   const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false};
@@ -1277,10 +1279,60 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const canTakeHealth = healthLeft>0 && capLeft>0 && !cooldownActive && breaksLeft>0 && myRep.status==="available";
   const canTakeLunch = lunchLeft>0 && capLeft>0 && myRep.status==="available";
 
+  // Queue helpers
+  const myQueueEntry = breakQueue.find(q=>q.rep_id===repInfo.id);
+  const queuePosition = myQueueEntry?.status==="waiting" ? breakQueue.filter(q=>q.status==="waiting"&&q.queued_at<=myQueueEntry.queued_at).length : 0;
+  const isNotified = myQueueEntry?.status==="notified";
+  const notifiedSecsAgo = isNotified ? elapsedSec(myQueueEntry.notified_at) : 0;
+  const acceptSecsLeft = isNotified ? Math.max(0, QUEUE_ACCEPT_SEC - notifiedSecsAgo) : 0;
+
+  const joinQueue = async () => {
+    if(myQueueEntry) return;
+    await sbPost("break_queue",{rep_id:repInfo.id,rep_name:repInfo.name,status:"waiting",date:todayStr()});
+    fire("info","You're in the queue! We'll alert you when a slot opens 🌿");
+    reload();
+  };
+
+  const leaveQueue = async () => {
+    if(!myQueueEntry) return;
+    await sbPatch("break_queue",myQueueEntry.id,{status:"cancelled"});
+    fire("info","Removed from queue");
+    reload();
+  };
+
+  const acceptQueuedBreak = async () => {
+    if(!myQueueEntry) return;
+    await sbPatch("break_queue",myQueueEntry.id,{status:"accepted"});
+    const updates = {status:"health",updated_at:new Date().toISOString(),health_breaks_today:(myRep.health_breaks_today||0)+1};
+    await sbPatch("rep_status",repInfo.id,updates);
+    await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:"health"});
+    fire("approved","Enjoy your health break 🌿");
+    reload();
+  };
+
+  const processQueue = async () => {
+    // expire any notifications older than QUEUE_ACCEPT_SEC
+    const expired = breakQueue.filter(q=>q.status==="notified"&&elapsedSec(q.notified_at)>=QUEUE_ACCEPT_SEC);
+    for(const e of expired) await sbPatch("break_queue",e.id,{status:"expired"});
+    // notify the next waiting rep
+    const waiting = breakQueue.filter(q=>q.status==="waiting").sort((a,b)=>new Date(a.queued_at)-new Date(b.queued_at));
+    if(waiting.length>0) await sbPatch("break_queue",waiting[0].id,{status:"notified",notified_at:new Date().toISOString()});
+  };
+
   const startBreak = async (type) => {
-    if(capLeft<=0){fire("declined","Team cap reached — all break slots full");return;}
+    if(capLeft<=0){
+      if(type==="health"&&!myQueueEntry&&breaksLeft>0&&!cooldownActive){
+        await joinQueue(); return;
+      }
+      fire("declined","Team cap reached — all break slots full");return;
+    }
     if(type==="health"){
-      if(healthLeft<=0){fire("declined","Health break slots full");return;}
+      if(healthLeft<=0){
+        if(!myQueueEntry&&breaksLeft>0&&!cooldownActive){
+          await joinQueue(); return;
+        }
+        fire("declined","Health break slots full");return;
+      }
       if(cooldownActive){fire("declined",`Cooldown active — ${fmtTime(cooldownLeft)} remaining`);return;}
       if(breaksLeft<=0){fire("declined","You've used all 3 health breaks today");return;}
     }
@@ -1313,6 +1365,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     if(ab) await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
     await sbPatch("rep_status",repInfo.id,updates);
     fire("approved","Welcome back! You're on duty 🎉");
+    await processQueue();
     reload();
   };
 
@@ -1326,6 +1379,20 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+
+      {/* Queue notification - pulsing alert when it's your turn */}
+      {isNotified&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:999,background:"#1a5c35",padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 20px rgba(0,0,0,.3)",animation:"popIn .3s ease"}}>
+          <span style={{fontSize:28}}>🌿</span>
+          <div style={{flex:1}}>
+            <p style={{margin:0,fontSize:15,fontWeight:800,color:"#fff"}}>Your break is ready!</p>
+            <p style={{margin:"2px 0 0",fontSize:12,color:"rgba(255,255,255,.7)"}}>Accept within {fmtTime(acceptSecsLeft)} or it passes to the next rep</p>
+          </div>
+          <button onClick={acceptQueuedBreak} style={{padding:"10px 18px",borderRadius:10,border:"none",background:"#fff",color:"#1a5c35",cursor:"pointer",fontSize:13,fontWeight:800}}>
+            Accept 🌿
+          </button>
+        </div>
+      )}
 
       <div style={{background:"#1a5c35",padding:"20px 18px 16px",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -1381,6 +1448,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
   const [showBreakModal, setShowBreakModal] = useState(false);
   const cfg = ST[myRep.status]||ST.available;
   const onBreak = myRep.status==="health"||myRep.status==="lunch";
+  const totalWaiting = breakQueue.filter(q=>q.status==="waiting").length;
   const isOOO = myRep.status==="pto"||myRep.status==="sick";
   const isOff = myRep.status==="off";
 
@@ -1390,7 +1458,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
         <Modal title="Request Break" sub="BREAK REQUEST" onClose={()=>setShowBreakModal(false)}>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             {[
-              {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:`${breaksLeft===0?"No breaks left":"Slots full"}`):null},
+              {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
               {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
             ].map(o=>(
               <div key={o.key} onClick={()=>o.avail&&(startBreak(o.key),setShowBreakModal(false))} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
