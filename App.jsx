@@ -2371,6 +2371,60 @@ function LevelTool() {
   );
 }
 
+
+// ── ZIP FINDER ────────────────────────────────────────────────────────
+function ZipFinder({ locations, closures, isManager, onEdit }) {
+  const [zip, setZip] = useState("");
+  const [results, setResults] = useState(null);
+
+  const search = (val) => {
+    setZip(val);
+    if(val.length < 3) { setResults(null); return; }
+    const matches = locations.filter(l => l.zip && l.zip.startsWith(val));
+    if(matches.length > 0) { setResults(matches); return; }
+    if(val.length >= 5) {
+      const nearby = locations.filter(l => l.zip && l.zip.slice(0,3) === val.slice(0,3));
+      setResults(nearby);
+    } else {
+      setResults([]);
+    }
+  };
+
+  const getClosures = n => (closures[n.toLowerCase()])||[];
+
+  return (
+    <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e0e8f5",padding:"12px 14px",marginBottom:8}}>
+      <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",letterSpacing:.5}}>🔍 Find by Zip Code</p>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <input
+          value={zip}
+          onChange={e=>search(e.target.value.replace(/[^0-9]/g,"").slice(0,5))}
+          placeholder="Enter zip code…"
+          maxLength={5}
+          style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",letterSpacing:2,fontWeight:600}}
+        />
+        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>Clear</button>}
+      </div>
+      {zip.length>=3&&results!==null&&(
+        <div style={{marginTop:10}}>
+          {results.length===0&&(
+            <div style={{textAlign:"center",padding:"12px 0",color:"#aaa"}}>
+              <p style={{margin:0,fontSize:13}}>No schools found near {zip}</p>
+              <p style={{margin:"4px 0 0",fontSize:11}}>Try a nearby zip or search by name above</p>
+            </div>
+          )}
+          {results.length>0&&(
+            <div>
+              <p style={{margin:"0 0 8px",fontSize:11,color:"#1a5c35",fontWeight:600}}>{results.length} school{results.length>1?"s":""} found near {zip}</p>
+              {results.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>onEdit(l)}/>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── HUB CARDS ─────────────────────────────────────────────────────────
 function HubLocCard({loc,closures,isManager,onEdit}) {
   const [copiedExt,setCopiedExt]=useState(false);
