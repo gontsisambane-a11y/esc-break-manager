@@ -1643,56 +1643,6 @@ const HUB_LOCATIONS_FALLBACK = [
 ];
 const HUB_EVENTS_FALLBACK = [];
 
-// Pricing lookup keyed by normalized location name
-const PRICING = {
-  "anderson mill":      {mf:36,ss:38,priv:125,semi:65,odl:41,zip:"78750"},
-  "cedar park":         {mf:35,ss:38,priv:125,semi:65,odl:40},
-  "oak hill":           {mf:35,ss:38,priv:125,semi:65,odl:40},
-  "round rock":         {mf:37,ss:39,priv:125,semi:65,odl:42},
-  "westlake":           {mf:40,ss:43,priv:150,semi:80,odl:45},
-  "allen":              {mf:35,ss:38,priv:125,semi:65,odl:40},
-  "firewheel":          {mf:31,ss:34,priv:100,semi:55,odl:36},
-  "frisco - central (mckinney)":{mf:35,ss:38,priv:125,semi:65,odl:40},
-  "frisco - west":      {mf:35,ss:38,priv:125,semi:65,odl:40},
-  "plano":              {mf:35,ss:38,priv:125,semi:65,odl:40},
-  "flower mound":       {mf:31,ss:34,priv:100,semi:55,odl:36},
-  "fort worth":         {mf:31,ss:34,priv:100,semi:55,odl:36},
-  "southlake":          {mf:34,ss:37,priv:120,semi:65,odl:39},
-  "preston forest":     {mf:34,ss:37,priv:120,semi:65,odl:39},
-  "walnut hill":        {mf:36,ss:38,priv:125,semi:65,odl:41},
-  "fort wayne":         {mf:27,ss:29,priv:100,semi:55,odl:32},
-  "westfield":          {mf:32,ss:34,priv:100,semi:55,odl:37},
-  "clear lake":         {mf:29,ss:31,priv:120,semi:65,odl:34},
-  "katy":               {mf:27,ss:29,priv:100,semi:55,odl:32},
-  "meyerland":          {mf:29,ss:31,priv:120,semi:65,odl:34},
-  "saint street":       {mf:35,ss:38,priv:120,semi:65,odl:40},
-  "spring-klein":       {mf:30,ss:32,priv:120,semi:65,odl:35},
-  "vintage park":       {mf:30,ss:32,priv:120,semi:65,odl:35},
-  "the woodlands":      {mf:30,ss:32,priv:120,semi:65,odl:35},
-  "leawood":            {mf:32,ss:35,priv:120,semi:65,odl:37},
-  "northland":          {mf:31,ss:33,priv:120,semi:65,odl:36},
-  "westwood":           {mf:32,ss:35,priv:120,semi:65,odl:37},
-  "wichita":            {mf:28,ss:30,priv:120,semi:65,odl:33},
-  "beaverton-washington square":{mf:38,ss:41,priv:125,semi:65,odl:43},
-  "beaverton-tanasbourne":{mf:38,ss:41,priv:125,semi:65,odl:43},
-  "gig harbor":         {mf:38,ss:40,priv:100,semi:55,odl:43},
-  "hazel dell":         {mf:35,ss:38,priv:125,semi:65,odl:40},
-  "klahanie":           {mf:42,ss:44,priv:150,semi:80,odl:47},
-  "olympia":            {mf:27,ss:29,priv:85,semi:40,odl:32},
-  "tualatin":           {mf:38,ss:41,priv:125,semi:65,odl:43},
-  "alamo ranch":        {mf:30,ss:32,priv:120,semi:65,odl:35},
-  "huebner":            {mf:28,ss:30,priv:100,semi:55,odl:33},
-  "schertz":            {mf:29,ss:32,priv:120,semi:65,odl:34},
-  "stone oak":          {mf:30,ss:33,priv:120,semi:65,odl:35},
-  "brookfield":         {mf:28,ss:30,priv:120,semi:65,odl:33},
-  "henderson":          {mf:28,ss:30,priv:85,semi:55,odl:33},
-  "greenville":         {mf:31,ss:33,priv:100,semi:55,odl:36},
-  "colorado springs - briargate":{mf:32,ss:34,priv:125,semi:65,odl:37},
-};
-
-function getPricing(locName) {
-  return PRICING[locName.toLowerCase()] || null;
-}
 
 const HUB_PARTNERS = [
   {brand:"AQUAfin Swim School",locations:[
