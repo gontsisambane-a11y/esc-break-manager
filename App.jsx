@@ -3,10 +3,11 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
-const MANAGER_PIN = "2024";
+const MANAGER_PIN = "1234";
 const HUB_ENABLED = false; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
+const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
 const LUNCH_LIMIT = 3;
 const H_LIMIT_NORMAL = 2;
 const H_LIMIT_PEAK = 1;
@@ -183,8 +184,8 @@ async function loadAll() {
   const todayPTONames = todayPTO.map(p=>p.rep_name);
   for(const r of reps) {
     if(r.updated_at && !r.updated_at.startsWith(today) && (r.health_breaks_today>0||r.health_time_banked>0)) {
-      await sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_banked:0,last_break_returned_at:null});
-      r.health_breaks_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
+      await sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_today:0,health_time_banked:0,last_break_returned_at:null});
+      r.health_breaks_today=0; r.health_time_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
     }
     // auto-apply today's PTO from DB
     if(todayPTONames.includes(r.name) && r.status==="available") {
@@ -316,7 +317,7 @@ function LoginScreen({ onSelect, reps }) {
           {filtered.map(r=>(
             <button key={r.id} onClick={()=>onSelect("rep",r)} style={{padding:"12px 16px",borderRadius:12,border:"1.5px solid #e8e8e8",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
               <div style={{width:36,height:36,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
-              <div><p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{r.name}</p><p style={{margin:0,fontSize:11,color:"#aaa"}}>{r.timezone} · Breaks today: {r.health_breaks_today||0}/{HEALTH_PER_DAY}</p></div>
+              <div><p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{r.name}</p><p style={{margin:0,fontSize:11,color:"#aaa"}}>{r.timezone} · Banked: {fmtDur(r.health_time_banked||0)}/10m</p></div>
             </button>
           ))}
         </div>
@@ -438,7 +439,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     if(rep.status==="health") {
       updates.health_time_banked = newBanked;
       if(newBanked >= HEALTH_MAX_SEC) updates.last_break_returned_at = new Date().toISOString();
-      if(rep.health_breaks_today>=HEALTH_PER_DAY) fire("warn",`⚠️ ${rep.name} has used all ${HEALTH_PER_DAY} health breaks today`);
+      if(newBanked>=HEALTH_MAX_SEC&&(rep.health_breaks_today||0)+1>=HEALTH_PER_DAY) fire("warn",`⚠️ ${rep.name} has banked all ${HEALTH_PER_DAY} × 10 min today`);
     }
     if(ab) {
       await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
@@ -685,7 +686,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
       {reps.map(rep=>{
         const cfg=ST[rep.status]||ST.available;
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
-        const cooldownActive = (rep.health_time_banked||0)>=HEALTH_MAX_SEC && rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC;
+        const cooldownActive = !!(rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
         const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(rep.last_break_returned_at) : 0;
         return (
           <div key={rep.id} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
@@ -1272,8 +1273,9 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const capLeft = maxOut - totalOut;
 
   const myAB = activeBreaks.find(b=>b.rep_id===repInfo.id);
-  const cooldownActive = (myRep.health_time_banked||0)>=HEALTH_MAX_SEC && myRep.last_break_returned_at && elapsedSec(myRep.last_break_returned_at)<COOLDOWN_SEC;
+  const cooldownActive = !!(myRep.last_break_returned_at && elapsedSec(myRep.last_break_returned_at)<COOLDOWN_SEC);
   const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(myRep.last_break_returned_at||new Date().toISOString()) : 0;
+  const timeUsedToday = myRep.health_time_today||0;
   const breaksLeft = HEALTH_PER_DAY - (myRep.health_breaks_today||0);
 
   const canTakeHealth = healthLeft>0 && capLeft>0 && !cooldownActive && breaksLeft>0 && myRep.status==="available";
@@ -1303,7 +1305,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const acceptQueuedBreak = async () => {
     if(!myQueueEntry) return;
     await sbPatch("break_queue",myQueueEntry.id,{status:"accepted"});
-    const updates = {status:"health",updated_at:new Date().toISOString(),health_breaks_today:(myRep.health_breaks_today||0)+1};
+    const updates = {status:"health",updated_at:new Date().toISOString()};
     await sbPatch("rep_status",repInfo.id,updates);
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:"health"});
     fire("approved","Enjoy your health break 🌿");
@@ -1334,7 +1336,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         fire("declined","Health break slots full");return;
       }
       if(cooldownActive){fire("declined",`Cooldown active — ${fmtTime(cooldownLeft)} remaining`);return;}
-      if(breaksLeft<=0){fire("declined","You've used all 3 health breaks today");return;}
+    if(breaksLeft<=0){fire("declined","You've used all 3 health breaks today");return;}
+  
     }
     if(type==="lunch"){
       if(lunchLeft<=0){fire("declined","Lunch slots full");return;}
@@ -1345,7 +1348,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       }
     }
     const updates = {status:type,updated_at:new Date().toISOString()};
-    if(type==="health") updates.health_breaks_today=(myRep.health_breaks_today||0)+1;
+    // health_breaks_today incremented on RETURN only if full 10 min taken
     await sbPatch("rep_status",repInfo.id,updates);
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:type});
     fire("approved",`Enjoy your ${type==="lunch"?"lunch 🥗":"health break 🌿"}!`);
@@ -1355,12 +1358,12 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const returnFromBreak = async () => {
     const ab = activeBreaks.find(b=>b.rep_id===repInfo.id);
     const durSec = ab ? elapsedSec(ab.started_at) : 0;
-    const newBanked = myRep.status==="health" ? (myRep.health_time_banked||0)+durSec : myRep.health_time_banked||0;
+    const newBanked = myRep.status==="health" ? durSec : 0; // per-break only, not cumulative
     const updates = {status:"available",updated_at:new Date().toISOString()};
     if(myRep.status==="health") {
       updates.health_time_banked = newBanked;
       if(newBanked>=HEALTH_MAX_SEC) updates.last_break_returned_at = new Date().toISOString();
-      if(myRep.health_breaks_today>=HEALTH_PER_DAY) fire("warn","You've used all 3 health breaks for today");
+      if(newBanked>=HEALTH_MAX_SEC) fire("info","Full 10 min break taken — 2-hour cooldown now active 🕐");
     }
     if(ab) await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
     await sbPatch("rep_status",repInfo.id,updates);
@@ -1391,7 +1394,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[
-            {icon:"🌿",label:"Health",avail:healthLeft,total:hLimit,color:"#2980b9",extra:`${breaksLeft} left today`},
+            {icon:"🌿",label:"Health",avail:healthLeft,total:hLimit,color:"#2980b9",extra:cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:"Available"},
             {icon:"🥗",label:"Lunch",avail:lunchLeft,total:LUNCH_LIMIT,color:"#e07b00",extra:"slots"},
             {icon:"👥",label:"Team Cap",avail:capLeft,total:maxOut,color:"#8e44ad",extra:"slots"},
           ].map(m=>(
@@ -1483,7 +1486,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
         {!isOOO&&!isOff&&(
           <div style={{borderTop:onBreak?"1.5px solid rgba(0,0,0,.06)":"none",paddingTop:onBreak?12:0}}>
             <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,color:"#888"}}>🌿 Today: {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} health breaks</span>
+              <span style={{fontSize:11,color:"#888"}}>🌿 {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} full breaks · banked {fmtDur(myRep.health_time_banked||0)}/10m{cooldownActive?` · Cooldown: ${fmtTime(cooldownLeft)}`:""}</span>
               {cooldownActive&&<span style={{fontSize:11,color:"#e07b00",fontWeight:600}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
             </div>
             {onBreak?(
@@ -1530,7 +1533,7 @@ function RepTeam({ reps, myId, activeBreaks }) {
         {reps.map(rep=>{
           const cfg=ST[rep.status]||ST.available;
           const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
-          const cooldownActive=(rep.health_time_banked||0)>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC;
+          const cooldownActive=!!(rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
           const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
           const isMe=rep.id===myId;
           return (
