@@ -2389,7 +2389,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
   const [copiedExt,setCopiedExt]=useState(false);
   const [copiedPhone,setCopiedPhone]=useState(false);
   const [expanded,setExpanded]=useState(false);
-  const pricing = getPricing(loc.name);
+  const pricing = (loc.price_mf||loc.price_ss) ? {mf:loc.price_mf,ss:loc.price_ss,priv:loc.price_priv,semi:loc.price_semi,odl:loc.price_odl,priv20:loc.price_priv20} : null;
   const hasClosure=closures&&closures.length>0;
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const hours = loc.hours || {};
