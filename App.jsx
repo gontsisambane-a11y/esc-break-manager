@@ -1921,7 +1921,7 @@ function HubView({ isManager }) {
                 {/* Quick access */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
                   {[
-                    {icon:"📍",label:"Find Location & Price",sub:"Search any school",action:()=>{ const el=document.querySelector('input[placeholder*="Search"]'); if(el){el.focus();}},color:"#003087",bg:"#e8f0fe"},
+                    {icon:"📍",label:"Find Location & Price",sub:"Search any school",action:()=>setTab("locations"),color:"#003087",bg:"#e8f0fe"},
                     {icon:"🏊",label:"Level Assessment",sub:"Find the right class",action:()=>setTab("levels"),color:"#1a5c35",bg:"#eafaf1"},
                     {icon:"📄",label:"Documents",sub:"Scripts, SOPs, pricing",action:()=>setTab("docs"),color:"#8e44ad",bg:"#f5eefb"},
                     {icon:"👤",label:"Team Extensions",sub:"Copy any extension",action:()=>setTab("team"),color:"#e07b00",bg:"#fff8ee"},
