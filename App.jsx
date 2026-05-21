@@ -1634,7 +1634,13 @@ async function loadHubData() {
   };
 }
 
-const HUB_LOCATIONS_FALLBACK = [];
+const HUB_LOCATIONS_FALLBACK = [
+  {region:"Austin",name:"Anderson Mill",ext:"5001",privates:true,pool:"Chlorine",addr:"13492 N HWY 183 #500, Austin, TX",zip:"78750"},
+  {region:"Austin",name:"Cedar Park",ext:"1801",privates:true,pool:"Chlorine",addr:"1310 E Whitestone Blvd #590, Cedar Park, TX",zip:"78613"},
+  {region:"DFW 2",name:"Fort Worth",ext:"1201",privates:true,pool:"Chlorine",addr:"6250 Southwest Blvd, Fort Worth, TX",zip:"76109"},
+  {region:"Houston",name:"Katy",ext:"2601",privates:false,pool:"Chlorine",addr:"6823 S Fry Rd #200, Katy, TX",zip:"77494"},
+  {region:"San Antonio",name:"Stone Oak",ext:"1096",privates:true,pool:"Chlorine",addr:"20210 Stone Oak Pkwy #204, San Antonio, TX",zip:"78258"},
+];
 const HUB_EVENTS_FALLBACK = [];
 
 // Pricing lookup keyed by normalized location name
@@ -1998,18 +2004,21 @@ function HubView({ isManager }) {
         {tab==="locations"&&(
           <div>
             <div style={{position:"sticky",top:0,zIndex:10,paddingBottom:10,paddingTop:4,background:"#f0f4f8"}}>
-              <div style={{display:"flex",gap:8,marginBottom:8}}>
-                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, region, or extension…"
-                  style={{flex:1,boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
+  <div style={{display:"flex",gap:8,marginBottom:8}}>
+                <div style={{position:"relative",flex:1}}>
+                  <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, region, or extension…"
+                    style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
+                  {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#aaa"}}>✕</button>}
+                </div>
               </div>
               <ZipFinder locations={locations} closures={closureMap} isManager={isManager} onEdit={(l)=>setEditModal({type:"loc",item:l})}/>
             </div>
-            {matchLoc.length===0&&!term&&(
-              <p style={{textAlign:"center",color:"#aaa",padding:"30px 0",fontSize:13}}>Search by name above or use the zip code finder</p>
+            {matchLoc.length===0&&term&&(
+              <p style={{textAlign:"center",color:"#aaa",padding:"30px 0",fontSize:13}}>No locations found for "{q}"</p>
             )}
-            {term&&Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
+            {matchLoc.length>0&&Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
               <div key={region} style={{marginBottom:16}}>
-                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>{region}</p>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>{region} ({locs.length})</p>
                 {locs.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
               </div>
             ))}
