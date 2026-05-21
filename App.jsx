@@ -464,6 +464,11 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     reload();
   };
 
+  const resetBalance = async (rep) => {
+    await sbPatch("rep_status",rep.id,{health_breaks_today:0,health_time_banked:0,last_break_returned_at:null,updated_at:new Date().toISOString()});
+    fire("approved",`${rep.name}'s break balance reset ✅`); reload();
+  };
+
   const handleOverridePeak = async (rep) => {
     setPeakOverride(p=>({...p,[rep.id]:!p[rep.id]}));
     fire("info",`Peak limit ${peakOverride[rep.id]?"restored":"overridden"} for ${rep.name}`);
