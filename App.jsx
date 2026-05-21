@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "1234";
-const HUB_ENABLED = true; // flip to true when approved
+const HUB_ENABLED = false; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const LUNCH_LIMIT = 3;
@@ -1618,16 +1618,17 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
 // ── HUB SUPABASE ─────────────────────────────────────────────────────
 async function loadHubData() {
   const today = todayStr();
-  const [promos,closures,docs,locations,events] = await Promise.all([
+  const [promos,closures,docs,locations,events,alerts] = await Promise.all([
     sb("hub_promos?active=eq.true&order=created_at").catch(()=>[]),
     sb(`hub_closures?end_date=gte.${today}&order=start_date`).catch(()=>[]),
     sb("hub_docs?order=sort_order,created_at").catch(()=>[]),
     sb("hub_locations?order=sort_order").catch(()=>[]),
     sb("hub_events?order=created_at").catch(()=>[]),
+    sb("hub_alerts?active=eq.true&order=sort_order").catch(()=>[]),
   ]);
   return {
     promos: promos.filter(p=>!p.expires_on||p.expires_on>=today),
-    closures, docs,
+    closures, docs, alerts,
     locations: locations.length>0?locations:HUB_LOCATIONS_FALLBACK,
     events: events.length>0?events:HUB_EVENTS_FALLBACK,
   };
@@ -1812,7 +1813,7 @@ function HubView({ isManager }) {
   useEffect(()=>{ reload(); },[]);
 
   const term = q.toLowerCase().trim();
-  const {promos,closures,docs,locations,events} = hubData;
+  const {promos,closures,docs,locations,events,alerts=[]} = hubData;
 
   const matchLoc    = locations.filter(l=>!term||(l.name+l.region+l.ext+l.addr).toLowerCase().includes(term));
   const matchPromo  = promos.filter(p=>!term||(p.title+p.code+p.rules).toLowerCase().includes(term));
@@ -1833,12 +1834,15 @@ function HubView({ isManager }) {
   const saveLoc=async(f)=>{ await sbPatch("hub_locations",f.id,{ext:f.ext,privates:f.privates,pool:f.pool,addr:f.addr}); fire("approved","Location updated"); setEditModal(null); reload(); };
   const saveEvent=async(f)=>{ if(f.id)await sbPatch("hub_events",f.id,{name:f.name,event_date:f.event_date,note:f.note}); else await sbPost("hub_events",{name:f.name,event_date:f.event_date,note:f.note||""}); fire("approved","Event saved"); setEditModal(null); reload(); };
   const deleteEvent=async(id)=>{ await sbDel("hub_events",id); fire("info","Event removed"); reload(); };
+  const saveAlert=async(f)=>{ if(f.id)await sbPatch("hub_alerts",f.id,{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type}); else await sbPost("hub_alerts",{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type||"warning",sort_order:0,active:true}); fire("approved","Reminder saved"); setEditModal(null); reload(); };
+  const deleteAlert=async(id)=>{ await sbPatch("hub_alerts",id,{active:false}); fire("info","Reminder removed"); reload(); };
 
   const repTabs = [
     {k:"home",l:"🏠 Home"},
     {k:"locations",l:"📍 Locations"},
     {k:"levels",l:"🏊 Level Tool"},
     {k:"docs",l:"📄 Docs"},
+    {k:"reminders",l:"📋 Reminders"},
   ];
   const mgrOnlyTabs = isManager ? [
     {k:"promos",l:"🎯 Promos"},
@@ -1846,6 +1850,7 @@ function HubView({ isManager }) {
     {k:"team",l:"👤 Team"},
     {k:"partners",l:"🤝 Partners"},
     {k:"events",l:"📅 Events"},
+    {k:"alerts_mgr",l:"⚠️ Reminders"},
   ] : [];
   const allTabs = [...repTabs,...mgrOnlyTabs];
 
@@ -1862,6 +1867,7 @@ function HubView({ isManager }) {
       {editModal?.type==="doc"&&<HubDocModal item={editModal.item} onClose={()=>setEditModal(null)} onSave={saveDoc} onDelete={deleteDoc}/>}
       {editModal?.type==="loc"&&<HubLocModal item={editModal.item} onClose={()=>setEditModal(null)} onSave={saveLoc}/>}
       {editModal?.type==="event"&&<HubEventModal item={editModal.item} onClose={()=>setEditModal(null)} onSave={saveEvent} onDelete={deleteEvent}/>}
+      {editModal?.type==="alert"&&<HubAlertModal item={editModal.item} onClose={()=>setEditModal(null)} onSave={saveAlert} onDelete={deleteAlert}/>}
 
       {/* Header */}
       <div style={{background:"#003087",padding:"14px 18px 0",color:"#fff"}}>
@@ -2109,136 +2115,252 @@ function HubView({ isManager }) {
             ))}
           </div>
         )}
+
+        {/* REMINDERS — rep view */}
+        {tab==="reminders"&&(
+          <RemindersTab alerts={alerts} isManager={false}/>
+        )}
+
+        {/* REMINDERS — manager edit */}
+        {tab==="alerts_mgr"&&isManager&&(
+          <RemindersTab alerts={alerts} isManager={true} onAdd={()=>setEditModal({type:"alert",item:null})} onEdit={(a)=>setEditModal({type:"alert",item:a})}/>
+        )}
       </div>
     </div>
   );
 }
 
 // ── LEVEL TOOL ────────────────────────────────────────────────────────
+// Decision tree nodes — each node is either a question or a result
+const LEVEL_NODES = {
+  // Entry point
+  start: { type:"age" },
+
+  // Age-based direct results (no questions needed)
+  bathtime: { type:"result", level:"Bathtime Babies", max:"10 child/parent pairs", parentIn:true,
+    script:"Based on their age, [name] is perfect for our Bathtime Babies program. This is a parent participation class for ages 2 to 5 months. The maximum size is 10 child/parent pairs. In this class you'll learn different activities to enjoy during bathtime and acclimate your little one to water. You'll see their strength and balance improve remarkably in just a few weeks!" },
+  l1a: { type:"result", level:"Level 1A", max:"6 child/parent pairs", parentIn:true,
+    script:"[Name] is perfect for our Level 1A class. This is a parent participation class — you'll be in the water with them. The maximum size is 6 child/parent pairs. In Level 1A, [name] will learn 5 to 6 seconds of underwater breath control. We also teach water safety at this level since that's always our top priority." },
+  l1b: { type:"result", level:"Level 1B", max:"6 child/parent pairs", parentIn:true,
+    script:"[Name] is perfect for our Level 1B class. This is a parent participation class — you'll be in the water with them. The maximum size is 6 child/parent pairs. In Level 1B, [name] will learn 8 to 10 seconds of underwater breath control. We also teach water safety at this level since that's always our top priority." },
+  l2:  { type:"result", level:"Level 2", max:"4 swimmers", parentIn:false,
+    script:"Since [name] has swimming experience, I recommend Level 2. This is NOT a parent participation class — you'll be watching from the side or the observation room. The maximum size is 4 students. [Name] will work on independent kicking for 5 feet, backfloating for 10 seconds, independent rollovers, and maintaining 8 to 10 seconds of breath control. We also teach water safety at this level." },
+  l3:  { type:"result", level:"Level 3", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 3 class. In this class they'll learn to kick 5 feet through the water without a flotation device and hold their breath for 8 to 10 seconds underwater. Maximum of 4 swimmers per class. We also teach water safety at this level." },
+  l4:  { type:"result", level:"Level 4", max:"4 swimmers", parentIn:false,
+    script:"Since [name] has swimming experience, I recommend Level 4. In this level they'll learn to kick 10 feet through the water and start to learn a rollover breath. Maximum of 4 swimmers per class. We also teach water safety at this level." },
+  l6:  { type:"result", level:"Level 6", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 6 class. In this class they'll learn to kick 15 feet with 10 seconds of breath control, backfloat independently, and jump into the water, turn around to the wall, and safely climb out. Maximum of 4 swimmers per class. We also teach water safety at this level." },
+  l7:  { type:"result", level:"Level 7", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 7 class. In this class they'll learn to swim independently, get front and rollover breaths, and kick and glide on their back. Maximum of 4 swimmers per class. We also teach water safety at this level." },
+  l8:  { type:"result", level:"Level 8", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 8 class. In this level they'll learn to swim freestyle with side breathing for 20 feet, the elementary backstroke, and to tread water. Maximum of 4 swimmers per class. We also teach water safety at this level." },
+  l9:  { type:"result", level:"Level 9", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 9 class. In this level they'll learn freestyle with bilateral breathing on both sides, and backstroke for the full length of the pool. Maximum of 4 swimmers per class." },
+  l10: { type:"result", level:"Level 10", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 10 class. In this level they'll learn freestyle, backstroke, butterfly kick, and breaststroke kick for the full length of the pool. Maximum of 4 swimmers per class." },
+  l11: { type:"result", level:"Level 11", max:"4 swimmers", parentIn:false,
+    script:"[Name] is perfect for our Level 11 class. In this level they'll learn all four strokes — freestyle, backstroke, butterfly, and breaststroke — for the full length of the pool. Maximum of 4 swimmers per class." },
+  stp: { type:"result", level:"Swim Team Prep", max:"Varies", parentIn:false,
+    script:"It sounds like [name] is ready for Swim Team Prep! In this class they'll work on conditioning and legal techniques for all four competitive swimming strokes in a swim team-style environment." },
+  adult:{ type:"result", level:"Adult Lessons", max:"4 swimmers", parentIn:false,
+    script:"[Name is / You are] perfect for our Adult level. This class is customized to meet your specific swimming goals! On the first day your instructor will take a few minutes to discuss current skill level and get an idea of goals for the class." },
+
+  // Questions
+  q_2yr: { type:"question", qNum:1, qTotal:1,
+    ask:"Can [name] hold their breath underwater for 8 to 10 seconds AND kick 5 feet without a flotation device?",
+    yes:"l2", no:"l1b" },
+  q_3yr: { type:"question", qNum:1, qTotal:1,
+    ask:"Can [name] hold their breath underwater for 8 to 10 seconds AND kick 5 feet without a flotation device?",
+    yes:"l4", no:"l3" },
+  q_411_1: { type:"question", qNum:1, qTotal:6,
+    ask:"Can [name] jump in the water, kick for 10 feet, and backfloat independently?",
+    yes:"q_411_2", no:"l6" },
+  q_411_2: { type:"question", qNum:2, qTotal:6,
+    ask:"Can [name] swim with freestyle arms independently over 10 feet with an independent breath?",
+    yes:"q_411_3", no:"l7" },
+  q_411_3: { type:"question", qNum:3, qTotal:6,
+    ask:"Can [name] swim freestyle with rhythmic side breathing for 20 feet, swim elementary backstroke, AND tread water independently?",
+    yes:"q_411_4", no:"l8" },
+  q_411_4: { type:"question", qNum:4, qTotal:6,
+    ask:"Can [name] swim freestyle while breathing on both sides AND swim backstroke for the full length of the pool (about 25 yards)?",
+    yes:"q_411_5", no:"l9" },
+  q_411_5: { type:"question", qNum:5, qTotal:6,
+    ask:"Can [name] swim freestyle, backstroke, butterfly kick, AND breaststroke kick for the full length of the pool?",
+    yes:"q_411_6", no:"l10" },
+  q_411_6: { type:"question", qNum:6, qTotal:6,
+    ask:"Can [name] swim all four full strokes — freestyle, backstroke, butterfly, AND breaststroke — for the full length of the pool?",
+    yes:"stp", no:"l11" },
+};
+
+const AGE_BUCKETS = [
+  { label:"2–5 months",   node:"bathtime" },
+  { label:"6–16 months",  node:"l1a" },
+  { label:"17–23 months", node:"l1b" },
+  { label:"2 years old",  node:"q_2yr" },
+  { label:"3 years old",  node:"q_3yr" },
+  { label:"4–11 years",   node:"q_411_1" },
+  { label:"12+ years",    node:"adult" },
+];
+
 function LevelTool() {
-  const [ageInput,setAgeInput] = useState("");
-  const [ageMonths,setAgeMonths] = useState(null);
-  const [answers,setAnswers] = useState([]);
-  const [result,setResult] = useState(null);
-  const [copied,setCopied] = useState(false);
+  const [nodeKey, setNodeKey] = useState(null);
+  const [history, setHistory]  = useState([]);
+  const [copied, setCopied]    = useState(false);
 
-  const reset=()=>{ setAgeInput(""); setAgeMonths(null); setAnswers([]); setResult(null); };
+  const node = nodeKey ? LEVEL_NODES[nodeKey] : null;
+  const isResult   = node?.type === "result";
+  const isQuestion = node?.type === "question";
 
-  const handleAge=(input)=>{
-    setAgeInput(input);
-    setAnswers([]); setResult(null);
-    const n = parseFloat(input);
-    if(isNaN(n)||n<=0) return;
-    // parse as years if < 24, months if >= 24
-    const months = n < 24 ? Math.round(n * 12) : Math.round(n);
-    setAgeMonths(months);
-    const r = getLevelFromAge(months, []);
-    if(r) setResult(r);
+  const goTo = (key) => {
+    setHistory(h => [...h, nodeKey]);
+    setNodeKey(key);
+    setCopied(false);
   };
 
-  const handleAnswer=(ans)=>{
-    const newAnswers=[...answers,ans];
-    setAnswers(newAnswers);
-    const r=getLevelFromAge(ageMonths,newAnswers);
-    if(r) setResult(r);
+  const goBack = () => {
+    const prev = [...history];
+    const last = prev.pop();
+    setHistory(prev);
+    setNodeKey(last || null);
+    setCopied(false);
   };
 
-  const currentQ = ageMonths&&!result ? getQuestion(ageMonths, answers.length) : null;
-  const levelData = result ? LEVEL_TREE[result] : null;
+  const reset = () => { setNodeKey(null); setHistory([]); setCopied(false); };
 
-  const ageButtons=[
-    {label:"2–5 mo",months:3},{label:"6–16 mo",months:10},{label:"17–23 mo",months:20},
-    {label:"2 yrs",months:24},{label:"3 yrs",months:36},{label:"4–5 yrs",months:54},
-    {label:"6–8 yrs",months:84},{label:"9–11 yrs",months:120},{label:"12+ yrs",months:150},
-  ];
+  const copyScript = () => {
+    if(node?.script) { navigator.clipboard?.writeText(node.script); setCopied(true); setTimeout(()=>setCopied(false),2000); }
+  };
 
   return (
     <div>
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px",marginBottom:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <p style={{margin:0,fontWeight:700,fontSize:15,color:"#1a5c35"}}>🏊 Level Assessment Tool</p>
-          {(ageMonths||result)&&<button onClick={reset} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>Start over</button>}
+      {/* Tool card */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:12}}>
+        {/* Header */}
+        <div style={{background:"#1a5c35",padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <p style={{margin:0,fontSize:10,color:"rgba(255,255,255,.6)",letterSpacing:1.5,textTransform:"uppercase"}}>Level Assessment</p>
+            <p style={{margin:"2px 0 0",fontSize:15,fontWeight:700,color:"#fff"}}>🏊 Find the Right Class</p>
+          </div>
+          {nodeKey&&<button onClick={reset} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid rgba(255,255,255,.3)",background:"transparent",cursor:"pointer",fontSize:11,color:"rgba(255,255,255,.8)",fontWeight:600}}>Start Over</button>}
         </div>
 
-        {!ageMonths&&(
-          <div>
-            <p style={{margin:"0 0 10px",fontSize:13,color:"#555"}}>Select the swimmer's age:</p>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
-              {ageButtons.map((b,i)=>(
-                <button key={i} onClick={()=>handleAge(b.months/12)} style={{padding:"10px 6px",borderRadius:10,border:"1.5px solid #c8e6c9",background:"#f1f8f3",cursor:"pointer",fontSize:12,fontWeight:600,color:"#1a5c35",textAlign:"center"}}>{b.label}</button>
-              ))}
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10}}>
-              <input value={ageInput} onChange={e=>handleAge(e.target.value)} placeholder="Or type exact age in years (e.g. 3.5)" type="number" min="0.1" step="0.1" style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-            </div>
-          </div>
-        )}
+        <div style={{padding:"16px"}}>
 
-        {ageMonths&&!result&&currentQ&&(
-          <div>
-            <p style={{margin:"0 0 6px",fontSize:11,color:"#888"}}>Age confirmed. Qualifying question:</p>
-            <p style={{margin:"0 0 16px",fontSize:14,fontWeight:600,color:"#1a1a1a",lineHeight:1.5}}>{currentQ.q}</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <button onClick={()=>handleAnswer("yes")} style={{padding:"14px",borderRadius:12,border:"2px solid #1a5c35",background:"#eafaf1",cursor:"pointer",fontSize:15,fontWeight:700,color:"#1a5c35"}}>✅ Yes</button>
-              <button onClick={()=>handleAnswer("no")}  style={{padding:"14px",borderRadius:12,border:"2px solid #c0392b",background:"#fdf0ee",cursor:"pointer",fontSize:15,fontWeight:700,color:"#c0392b"}}>❌ No</button>
-            </div>
-            {answers.length>0&&<p style={{margin:"10px 0 0",fontSize:11,color:"#aaa",textAlign:"center"}}>Question {answers.length+1} of up to 6</p>}
-          </div>
-        )}
-
-        {result&&levelData&&(
-          <div>
-            <div style={{background:"#eafaf1",border:"2px solid #1a5c35",borderRadius:12,padding:"14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
-              <span style={{fontSize:32}}>🏊</span>
-              <div>
-                <p style={{margin:"0 0 2px",fontSize:11,color:"#1a5c35",fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>Recommended Level</p>
-                <p style={{margin:0,fontSize:22,fontWeight:800,color:"#1a5c35"}}>{levelData.level}</p>
-                <p style={{margin:"2px 0 0",fontSize:12,color:"#555"}}>Max class size: {levelData.max}</p>
+          {/* STEP 1 — Age selection */}
+          {!nodeKey&&(
+            <div>
+              <p style={{margin:"0 0 12px",fontSize:14,color:"#444",fontWeight:500}}>Step 1 — Select swimmer's age:</p>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {AGE_BUCKETS.map((b,i)=>(
+                  <button key={i} onClick={()=>goTo(b.node)}
+                    style={{padding:"13px 16px",borderRadius:10,border:"1.5px solid #d4eadc",background:"#f4fbf6",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a5c35",textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s"}}>
+                    {b.label}
+                    <span style={{fontSize:16,opacity:.5}}>→</span>
+                  </button>
+                ))}
               </div>
             </div>
-            <div style={{background:"#f8f8f8",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
-              <p style={{margin:"0 0 6px",fontSize:11,color:"#888",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Script to read to parent</p>
-              <p style={{margin:0,fontSize:13,color:"#1a1a1a",lineHeight:1.7,fontStyle:"italic"}}>"{levelData.script}"</p>
+          )}
+
+          {/* STEP 2 — Question */}
+          {isQuestion&&(
+            <div>
+              {/* Progress */}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{flex:1,height:4,background:"#f0f0f0",borderRadius:4,overflow:"hidden"}}>
+                  <div style={{width:`${(node.qNum/node.qTotal)*100}%`,height:"100%",background:"#1a5c35",transition:"width .3s"}}/>
+                </div>
+                <span style={{fontSize:11,color:"#aaa",whiteSpace:"nowrap"}}>Q{node.qNum} of {node.qTotal}</span>
+              </div>
+
+              {/* Question */}
+              <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"14px 16px",marginBottom:16}}>
+                <p style={{margin:"0 0 4px",fontSize:10,color:"#1a5c35",fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>Ask the parent:</p>
+                <p style={{margin:0,fontSize:14,fontWeight:600,color:"#1a1a1a",lineHeight:1.6}}>{node.ask}</p>
+              </div>
+
+              {/* YES / NO */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                <button onClick={()=>goTo(node.yes)}
+                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #1a5c35",background:"#eafaf1",cursor:"pointer",fontSize:16,fontWeight:800,color:"#1a5c35",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  ✅ YES
+                </button>
+                <button onClick={()=>goTo(node.no)}
+                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #c0392b",background:"#fdf0ee",cursor:"pointer",fontSize:16,fontWeight:800,color:"#c0392b",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  ❌ NO
+                </button>
+              </div>
+
+              {history.length>0&&<button onClick={goBack} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#aaa",padding:0}}>← Back</button>}
             </div>
-            <button onClick={()=>{navigator.clipboard?.writeText(levelData.script);setCopied(true);setTimeout(()=>setCopied(false),1500);}} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600,transition:"background .2s"}}>
-              {copied?"✓ Script Copied!":"📋 Copy Script"}
-            </button>
-          </div>
-        )}
+          )}
+
+          {/* RESULT */}
+          {isResult&&(
+            <div>
+              {/* Level badge */}
+              <div style={{background:"linear-gradient(135deg,#1a5c35,#2ecc71)",borderRadius:12,padding:"16px",marginBottom:14,textAlign:"center"}}>
+                <p style={{margin:"0 0 2px",fontSize:10,color:"rgba(255,255,255,.7)",letterSpacing:1.5,textTransform:"uppercase"}}>Recommended Level</p>
+                <p style={{margin:"0 0 6px",fontSize:26,fontWeight:800,color:"#fff"}}>{node.level}</p>
+                <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,background:"rgba(255,255,255,.2)",color:"#fff",padding:"3px 10px",borderRadius:20}}>Max: {node.max}</span>
+                  <span style={{fontSize:11,background:"rgba(255,255,255,.2)",color:"#fff",padding:"3px 10px",borderRadius:20}}>{node.parentIn?"👨‍👩‍👦 Parent in water":"🏊 No parent required"}</span>
+                </div>
+              </div>
+
+              {/* Script */}
+              <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"12px 14px",marginBottom:12}}>
+                <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:"#1a5c35",letterSpacing:.5,textTransform:"uppercase"}}>📢 Say this to the parent:</p>
+                <p style={{margin:0,fontSize:13,color:"#2c3e50",lineHeight:1.7,fontStyle:"italic"}}>"{node.script}"</p>
+              </div>
+
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={copyScript}
+                  style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,transition:"background .2s"}}>
+                  {copied?"✓ Script Copied to Clipboard!":"📋 Copy Script"}
+                </button>
+                {history.length>0&&<button onClick={goBack} style={{padding:"12px 14px",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>← Back</button>}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Quick reference cheat sheet */}
+      {/* Quick reference table */}
       <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px"}}>
-        <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 10px",fontWeight:700}}>Quick Reference — All Levels</p>
+        <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 10px",fontWeight:700}}>Quick Reference</p>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead>
-              <tr style={{background:"#f0f4f8"}}>
-                {["Level","Age","Key Skill","Max"].map(h=><th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #efefef"}}>{h}</th>)}
+              <tr style={{background:"#f4fbf6"}}>
+                {["Level","Age","Key skills","Max"].map(h=>(
+                  <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#1a5c35",borderBottom:"1.5px solid #d4eadc"}}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {[
-                ["Bathtime Babies","2–5 mo","Bath acclimation","10 pairs"],
+                ["Bathtime Babies","2–5 mo","Bathtime acclimation","10 pairs"],
                 ["Level 1A","6–16 mo","5–6s breath control","6 pairs"],
                 ["Level 1B","17–23 mo","8–10s breath control","6 pairs"],
-                ["Level 2","2 yrs+","Kick 5ft, backfloat","4"],
-                ["Level 3","3 yrs","Kick 5ft, 8–10s breath","4"],
-                ["Level 4","3 yrs+","Kick 10ft, rollover","4"],
-                ["Level 6","4–11 yrs","Kick 15ft, backfloat, jump","4"],
-                ["Level 7","4–11 yrs","Freestyle arms + breath","4"],
-                ["Level 8","4–11 yrs","Side breathing, backstroke","4"],
-                ["Level 9","4–11 yrs","Bilateral breathing","4"],
-                ["Level 10","4–11 yrs","All 4 stroke kicks","4"],
-                ["Level 11","4–11 yrs","All 4 full strokes","4"],
-                ["Swim Team Prep","6+ (post-L11)","Competitive strokes","Varies"],
+                ["Level 2","2 yrs + exp","Kick 5ft, backfloat","4"],
+                ["Level 3","3 yrs, no exp","Kick 5ft, 8–10s breath","4"],
+                ["Level 4","3 yrs + exp","Kick 10ft, rollover","4"],
+                ["Level 6","4–11, no exp","Kick 15ft, backfloat, jump","4"],
+                ["Level 7","4–11","Freestyle arms + breath","4"],
+                ["Level 8","4–11","Side breathing 20ft, backstroke","4"],
+                ["Level 9","4–11","Bilateral breathing, backstroke","4"],
+                ["Level 10","4–11","All 4 stroke kicks","4"],
+                ["Level 11","4–11","All 4 full strokes","4"],
+                ["Swim Team Prep","6+, post-L11","Competitive conditioning","Varies"],
                 ["Adult","12+","Customized to goals","4"],
               ].map(([l,a,s,m],i)=>(
-                <tr key={i} style={{borderBottom:"1px solid #f8f8f8",background:i%2===0?"#fff":"#fafafa"}}>
+                <tr key={i} style={{borderBottom:"1px solid #f5f5f5",background:i%2===0?"#fff":"#fafcff"}}>
                   <td style={{padding:"6px 8px",fontWeight:600,color:"#1a5c35"}}>{l}</td>
                   <td style={{padding:"6px 8px",color:"#555"}}>{a}</td>
                   <td style={{padding:"6px 8px",color:"#555"}}>{s}</td>
-                  <td style={{padding:"6px 8px",fontWeight:600}}>{m}</td>
+                  <td style={{padding:"6px 8px",fontWeight:600,color:"#1a1a1a"}}>{m}</td>
                 </tr>
               ))}
             </tbody>
@@ -2249,100 +2371,119 @@ function LevelTool() {
   );
 }
 
-
-// ── ZIP FINDER ────────────────────────────────────────────────────────
-function ZipFinder({ locations, closures, isManager, onEdit }) {
-  const [zip, setZip] = useState("");
-  const [results, setResults] = useState(null);
-
-  const search = (val) => {
-    setZip(val);
-    if(val.length < 3) { setResults(null); return; }
-    const matches = locations.filter(l => l.zip && l.zip.startsWith(val));
-    // also show same-state if zip is 5 digits
-    let nearby = [];
-    if(val.length >= 5 && matches.length === 0) {
-      // try first 3 digits for approximate area
-      const prefix = val.slice(0,3);
-      nearby = locations.filter(l => l.zip && l.zip.startsWith(prefix));
-    }
-    setResults(matches.length > 0 ? matches : nearby.length > 0 ? nearby : []);
-  };
-
-  const getClosures = n => (closures[n.toLowerCase()])||[];
-
+// ── HUB CARDS ─────────────────────────────────────────────────────────
+function HubLocCard({loc,closures,isManager,onEdit}) {
+  const [copiedExt,setCopiedExt]=useState(false);
+  const [copiedPhone,setCopiedPhone]=useState(false);
+  const [expanded,setExpanded]=useState(false);
+  const pricing = getPricing(loc.name);
+  const hasClosure=closures&&closures.length>0;
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const hours = loc.hours || {};
+  const instructors = loc.instructors || [];
+  const snInstructors = instructors.filter(i=>i.sn==='Y');
+  const langInstructors = instructors.filter(i=>i.lang&&i.lang.toLowerCase()!=='english'&&i.lang.toLowerCase()!=='english ');
   return (
-    <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e0e8f5",padding:"12px 14px",marginBottom:8}}>
-      <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",letterSpacing:.5}}>🔍 Find by Zip Code</p>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <input
-          value={zip}
-          onChange={e=>search(e.target.value.replace(/\D/g,"").slice(0,5))}
-          placeholder="Enter zip code…"
-          maxLength={5}
-          style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",letterSpacing:2,fontWeight:600}}
-        />
-        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>Clear</button>}
+    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${hasClosure?"#f5b7b1":"#e0e8f5"}`,marginBottom:8,overflow:"hidden"}}>
+      <div style={{padding:"12px 14px"}}>
+        {hasClosure&&closures.map((c,i)=>(
+          <div key={i} style={{background:"#fde8e8",borderRadius:7,padding:"5px 9px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:12}}>🚫</span>
+            <p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>{c.start_date} to {c.end_date} · {c.reason}</p>
+          </div>
+        ))}
+        <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+              <span style={{fontWeight:700,fontSize:15,color:"#1a1a1a"}}>{loc.name}</span>
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:"#003087",fontWeight:700}}>{loc.region}</span>
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?"#fff3cd":"#e8f4fd",color:loc.pool==="Salt"?"#856404":"#0d6efd",fontWeight:700}}>{loc.pool}</span>
+              {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:"#1a5c35",fontWeight:700}}>20min Privates</span>}
+            </div>
+            <p style={{margin:"0 0 4px",fontSize:11,color:"#aaa"}}>📍 {loc.addr}</p>
+            {loc.direct_phone&&<p style={{margin:"0 0 4px",fontSize:12,color:"#1a1a1a",fontWeight:500}}>📞 {loc.direct_phone}</p>}
+            {loc.gm_name&&<p style={{margin:"0 0 6px",fontSize:11,color:"#888"}}>👤 GM: {loc.gm_name}</p>}
+            {pricing&&(
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
+                <span style={{fontSize:11,background:"#e8f0fe",color:"#003087",padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
+                <span style={{fontSize:11,background:"#f0f4f8",color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
+                <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
+                <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
+              </div>
+            )}
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <p style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:"#003087",letterSpacing:1}}>{loc.ext}</p>
+            <div style={{display:"flex",gap:5,justifyContent:"flex-end",marginBottom:5}}>
+              <button onClick={()=>{navigator.clipboard?.writeText(loc.ext);setCopiedExt(true);setTimeout(()=>setCopiedExt(false),1500);}} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #003087",background:copiedExt?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copiedExt?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedExt?"✓ Copied":"Copy Ext"}</button>
+              {isManager&&<button onClick={onEdit} style={{padding:"5px 8px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Edit</button>}
+            </div>
+            {loc.direct_phone&&(
+              <button onClick={()=>{navigator.clipboard?.writeText(loc.direct_phone);setCopiedPhone(true);setTimeout(()=>setCopiedPhone(false),1500);}} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #1a5c35",background:copiedPhone?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:10,color:copiedPhone?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s",width:"100%"}}>{copiedPhone?"✓ Phone Copied":"Copy Phone"}</button>
+            )}
+          </div>
+        </div>
+        {/* Expand toggle */}
+        {(Object.keys(hours).length>0||instructors.length>0)&&(
+          <button onClick={()=>setExpanded(!expanded)} style={{marginTop:8,padding:"5px 0",background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#003087",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+            {expanded?"▲ Less info":"▼ Hours, pool & instructors"}
+          </button>
+        )}
       </div>
-      {zip.length>=3&&results!==null&&(
-        <div style={{marginTop:10}}>
-          {results.length===0&&(
-            <div style={{textAlign:"center",padding:"12px 0",color:"#aaa"}}>
-              <p style={{margin:0,fontSize:13}}>No schools found near {zip}</p>
-              <p style={{margin:"4px 0 0",fontSize:11}}>Try a nearby zip or search by name above</p>
+
+      {/* Expanded details */}
+      {expanded&&(
+        <div style={{borderTop:"1px solid #f0f4f8",padding:"12px 14px",background:"#fafcff"}}>
+          {/* Hours */}
+          {Object.keys(hours).length>0&&(
+            <div style={{marginBottom:12}}>
+              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>🕐 Location Hours</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 10px"}}>
+                {days.map(d=>(
+                  <div key={d} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0",borderBottom:"1px solid #f0f0f0"}}>
+                    <span style={{color:"#888",fontWeight:500}}>{d.slice(0,3)}</span>
+                    <span style={{color:hours[d]==='CLOSED'?"#e74c3c":"#1a1a1a",fontWeight:hours[d]==='CLOSED'?600:400}}>{hours[d]||'—'}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          {results.length>0&&(
+          {/* Pool specs */}
+          {(loc.pool_dim||loc.pool_depth)&&(
+            <div style={{marginBottom:12,display:"flex",gap:10}}>
+              {loc.pool_dim&&<span style={{fontSize:11,background:"#e8f4fd",color:"#0d6efd",padding:"3px 9px",borderRadius:7}}>📐 {loc.pool_dim}</span>}
+              {loc.pool_depth&&<span style={{fontSize:11,background:"#e8f4fd",color:"#0d6efd",padding:"3px 9px",borderRadius:7}}>↕ {loc.pool_depth}</span>}
+              <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"3px 9px",borderRadius:7}}>🌡 90°F</span>
+            </div>
+          )}
+          {/* Special needs & languages highlight */}
+          {(snInstructors.length>0||langInstructors.length>0)&&(
+            <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+              {snInstructors.length>0&&<span style={{fontSize:11,background:"#eafaf1",color:"#1a5c35",padding:"3px 9px",borderRadius:7,fontWeight:600}}>♿ {snInstructors.length} special needs instructor{snInstructors.length>1?"s":""}</span>}
+              {langInstructors.length>0&&<span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"3px 9px",borderRadius:7,fontWeight:600}}>🌍 {[...new Set(langInstructors.flatMap(i=>i.lang.split(/[,&\/]/).map(l=>l.trim()).filter(l=>l&&l.toLowerCase()!=='english')))].join(", ")}</span>}
+            </div>
+          )}
+          {/* Instructors */}
+          {instructors.length>0&&(
             <div>
-              <p style={{margin:"0 0 8px",fontSize:11,color:"#1a5c35",fontWeight:600}}>{results.length} school{results.length>1?"s":""} found near {zip}</p>
-              {results.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>onEdit(l)}/>)}
+              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>👩‍🏫 Instructors ({instructors.length})</p>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {instructors.map((ins,i)=>(
+                  <div key={i} style={{background:"#fff",borderRadius:9,padding:"8px 10px",border:"1px solid #efefef"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:ins.desc?3:0}}>
+                      <span style={{fontWeight:600,fontSize:12}}>{ins.name}</span>
+                      {ins.level&&<span style={{fontSize:9,background:ins.level.toLowerCase().includes('manager')?"#e8f0fe":"#f0f4f8",color:ins.level.toLowerCase().includes('manager')?"#003087":"#888",padding:"1px 5px",borderRadius:3,fontWeight:600}}>{ins.level}</span>}
+                      {ins.sn==='Y'&&<span style={{fontSize:9,background:"#eafaf1",color:"#1a5c35",padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
+                      {ins.lang&&ins.lang.toLowerCase()!=='english'&&ins.lang.toLowerCase()!=='english '&&<span style={{fontSize:9,background:"#f5eefb",color:"#8e44ad",padding:"1px 5px",borderRadius:3}}>{ins.lang}</span>}
+                    </div>
+                    {ins.desc&&<p style={{margin:0,fontSize:11,color:"#666",lineHeight:1.4}}>{ins.desc}</p>}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── HUB CARDS ─────────────────────────────────────────────────────────
-function HubLocCard({loc,closures,isManager,onEdit}) {
-  const [copiedExt,setCopiedExt]=useState(false);
-  const pricing = getPricing(loc.name);
-  const hasClosure=closures&&closures.length>0;
-  return (
-    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${hasClosure?"#f5b7b1":"#e0e8f5"}`,padding:"12px 14px",marginBottom:8}}>
-      {hasClosure&&closures.map((c,i)=>(
-        <div key={i} style={{background:"#fde8e8",borderRadius:7,padding:"5px 9px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:12}}>🚫</span>
-          <p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>{c.start_date} to {c.end_date} · {c.reason}</p>
-        </div>
-      ))}
-      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
-            <span style={{fontWeight:700,fontSize:15,color:"#1a1a1a"}}>{loc.name}</span>
-            <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:"#003087",fontWeight:700}}>{loc.region}</span>
-            <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?"#fff3cd":"#e8f4fd",color:loc.pool==="Salt"?"#856404":"#0d6efd",fontWeight:700}}>{loc.pool}</span>
-            {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:"#1a5c35",fontWeight:700}}>20min Privates</span>}
-          </div>
-          <p style={{margin:"0 0 6px",fontSize:11,color:"#aaa"}}>📍 {loc.addr}</p>
-          {pricing&&(
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,background:"#e8f0fe",color:"#003087",padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
-              <span style={{fontSize:11,background:"#f0f4f8",color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
-              <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
-              <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
-            </div>
-          )}
-        </div>
-        <div style={{textAlign:"right",flexShrink:0}}>
-          <p style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:"#003087",letterSpacing:1}}>{loc.ext}</p>
-          <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
-            <button onClick={()=>{navigator.clipboard?.writeText(loc.ext);setCopiedExt(true);setTimeout(()=>setCopiedExt(false),1500);}} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #003087",background:copiedExt?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copiedExt?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedExt?"Copied!":"Copy"}</button>
-            {isManager&&<button onClick={onEdit} style={{padding:"5px 8px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Edit</button>}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2669,6 +2810,164 @@ function HubEventModal({item,onClose,onSave,onDelete}) {
   );
 }
 
+
+
+// ── REMINDERS TAB ─────────────────────────────────────────────────────
+const CHECKLIST_ITEMS = [
+  {id:"loc",   cat:"📍 Location",      text:"Confirmed correct location with customer"},
+  {id:"nomu",  cat:"📍 Location",      text:"Class is NOT marked Makeup Only"},
+  {id:"ptype", cat:"🎯 Promo Code",    text:"Promo applied to TUITION only (not reg fee, ODL, or clinic)"},
+  {id:"pmont", cat:"🎯 Promo Code",    text:"Month-specific promo applied to THAT month only (not multiple)"},
+  {id:"pone",  cat:"🎯 Promo Code",    text:"Only ONE promo per charge"},
+  {id:"pcode", cat:"🎯 Promo Code",    text:"Not using a site-only promo code"},
+  {id:"sib3",  cat:"👶 Sibling Disc.", text:"Sibling discount = first FULL 3 months (not partial first month)"},
+  {id:"sibauto",cat:"👶 Sibling Disc.","text":"NOT manually applied at Gig Harbor, Henderson, or Olympia"},
+  {id:"sibtype",cat:"👶 Sibling Disc.","text":"NOT applied to clinics or ODLs — continuous classes only"},
+  {id:"asof",  cat:"💳 Charges",       text:"As Of Date set to 1st of each future month"},
+  {id:"ccat",  cat:"💳 Charges",       text:"Charge Category = Tuition - [Month Year] (NOT Clinic/Parent Portal)"},
+  {id:"pay",   cat:"💳 Charges",       text:"Card on file OR payment collected today"},
+  {id:"hs",    cat:"🔗 HubSpot",       text:'If no payment: "Enrolled - Did Not Collect Payment" selected in HubSpot'},
+  {id:"log",   cat:"🔗 HubSpot",       text:"Call logged with correct DNR/outcome reason"},
+  {id:"stage", cat:"🔗 HubSpot",       text:"Deal stage updated correctly (Trial vs Registration)"},
+  {id:"odlu",  cat:"📅 ODLs",         text:"$5 ODL upcharge quoted to customer"},
+  {id:"odlslot",cat:"📅 ODLs",        text:"ODL scheduled in regular class slot (NOT clinic slot)"},
+];
+
+function RemindersTab({alerts, isManager, onAdd, onEdit}) {
+  const [checked, setChecked] = useState({});
+  const [openCat, setOpenCat] = useState(null);
+  const toggle = (id) => setChecked(p=>({...p,[id]:!p[id]}));
+  const resetChecklist = () => setChecked({});
+  const doneCount = Object.values(checked).filter(Boolean).length;
+  const totalCount = CHECKLIST_ITEMS.length;
+
+  // Group alerts by category
+  const alertsByCat = (alerts||[]).reduce((acc,a)=>{
+    if(!acc[a.category]) acc[a.category]=[];
+    acc[a.category].push(a);
+    return acc;
+  },{});
+
+  const typeColors = {
+    error:  {bg:"#fdf0ee",border:"#f5b7b1",icon:"🚨",text:"#c0392b"},
+    warning:{bg:"#fffdf8",border:"#f0c080",icon:"⚠️",text:"#856404"},
+    info:   {bg:"#e8f0fe",border:"#aed6f1",icon:"ℹ️",text:"#1a4a8a"},
+  };
+
+  return (
+    <div>
+      {/* ENROLLMENT CHECKLIST */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
+        <div style={{background:"#003087",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <p style={{margin:0,fontSize:10,color:"rgba(255,255,255,.6)",letterSpacing:1.5,textTransform:"uppercase"}}>Before you submit</p>
+            <p style={{margin:"2px 0 0",fontSize:15,fontWeight:700,color:"#fff"}}>📋 Enrollment Checklist</p>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <p style={{margin:0,fontSize:18,fontWeight:800,color:doneCount===totalCount?"#2ecc71":"#fff"}}>{doneCount}/{totalCount}</p>
+            {doneCount===totalCount&&<p style={{margin:0,fontSize:10,color:"#2ecc71",fontWeight:700}}>ALL CLEAR ✓</p>}
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div style={{height:4,background:"#e0e8f5"}}>
+          <div style={{width:`${(doneCount/totalCount)*100}%`,height:"100%",background:doneCount===totalCount?"#2ecc71":"#003087",transition:"width .3s"}}/>
+        </div>
+        <div style={{padding:"12px 14px"}}>
+          {/* Group by category */}
+          {Object.entries(CHECKLIST_ITEMS.reduce((acc,item)=>{
+            if(!acc[item.cat]) acc[item.cat]=[];
+            acc[item.cat].push(item);
+            return acc;
+          },{})).map(([cat,items])=>(
+            <div key={cat} style={{marginBottom:10}}>
+              <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:"#555",letterSpacing:.3}}>{cat}</p>
+              {items.map(item=>(
+                <div key={item.id} onClick={()=>toggle(item.id)}
+                  style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 10px",borderRadius:9,cursor:"pointer",background:checked[item.id]?"#f0faf4":"#fafafa",border:`1px solid ${checked[item.id]?"#c8e6c9":"#efefef"}`,marginBottom:5,transition:"all .15s"}}>
+                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${checked[item.id]?"#1a5c35":"#ddd"}`,background:checked[item.id]?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all .15s"}}>
+                    {checked[item.id]&&<span style={{fontSize:12,color:"#fff",fontWeight:800}}>✓</span>}
+                  </div>
+                  <p style={{margin:0,fontSize:12,color:checked[item.id]?"#1a5c35":"#444",lineHeight:1.5,textDecoration:checked[item.id]?"line-through":"none",transition:"all .15s"}}>{item.text}</p>
+                </div>
+              ))}
+            </div>
+          ))}
+          <button onClick={resetChecklist} style={{width:"100%",padding:"9px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888",marginTop:4,fontWeight:500}}>
+            ↺ Reset for next customer
+          </button>
+        </div>
+      </div>
+
+      {/* RULES REFERENCE */}
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:0,fontWeight:700}}>⚠️ Common Mistakes — Rules</p>
+          {isManager&&<button onClick={onAdd} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Reminder</button>}
+        </div>
+        {Object.entries(alertsByCat).map(([cat,catAlerts])=>(
+          <div key={cat} style={{marginBottom:12}}>
+            <button onClick={()=>setOpenCat(openCat===cat?null:cat)}
+              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #efefef",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:openCat===cat?8:0}}>
+              <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{cat}</span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:10,background:"#f0f4f8",color:"#888",padding:"2px 7px",borderRadius:10}}>{catAlerts.length} rules</span>
+                <span style={{fontSize:14,color:"#aaa"}}>{openCat===cat?"▲":"▼"}</span>
+              </div>
+            </button>
+            {openCat===cat&&catAlerts.map((a,i)=>{
+              const style = typeColors[a.alert_type]||typeColors.warning;
+              return (
+                <div key={i} style={{background:style.bg,border:`1.5px solid ${style.border}`,borderRadius:10,padding:"11px 14px",marginBottom:7,display:"flex",gap:10,alignItems:"flex-start"}}>
+                  <span style={{fontSize:16,flexShrink:0}}>{style.icon}</span>
+                  <div style={{flex:1}}>
+                    <p style={{margin:"0 0 3px",fontWeight:700,fontSize:13,color:style.text}}>{a.title}</p>
+                    <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.6}}>{a.body}</p>
+                  </div>
+                  {isManager&&<button onClick={()=>onEdit(a)} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888",flexShrink:0}}>Edit</button>}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── HUB ALERT MODAL ───────────────────────────────────────────────────
+function HubAlertModal({item,onClose,onSave,onDelete}) {
+  const [f,setF]=useState({title:item?.title||"",body:item?.body||"",category:item?.category||"General",alert_type:item?.alert_type||"warning",id:item?.id});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const cats=["Promos","Sibling Discount","Charges","Location","HubSpot","ODLs","General"];
+  return (
+    <Modal title={item?"Edit Reminder":"Add Reminder"} sub="REMINDER" onClose={onClose} wide>
+      <div style={{display:"flex",flexDirection:"column",gap:11}}>
+        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Description</label><textarea value={f.body} onChange={e=>set("body",e.target.value)} rows={3} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6,fontFamily:"inherit"}}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Category</label>
+            <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+              {cats.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Type</label>
+            <select value={f.alert_type} onChange={e=>set("alert_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+              <option value="error">🚨 Error (red)</option>
+              <option value="warning">⚠️ Warning (amber)</option>
+              <option value="info">ℹ️ Info (blue)</option>
+            </select>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:4}}>
+          {item&&<Btn label="Remove" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
+          <div style={{flex:1}}/>
+          <Btn label="Cancel" onClick={onClose} outline color="#888" small/>
+          <Btn label="Save Reminder" onClick={()=>onSave(f)} color="#c0392b" small/>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 export default function App() {
   const [view, setView] = useState("login");
