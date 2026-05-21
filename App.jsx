@@ -3,8 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
-const MANAGER_PIN = "2024";
-const HUB_ENABLED = true; // flip to true when approved
+const MANAGER_PIN = "1234";
+const HUB_ENABLED = false; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const LUNCH_LIMIT = 3;
@@ -1633,48 +1633,92 @@ async function loadHubData() {
   };
 }
 
-const HUB_LOCATIONS_FALLBACK = [
-  {region:"Austin",name:"Anderson Mill",ext:"5001",privates:true,pool:"Chlorine",addr:"13492 N HWY 183 #500, Austin, TX"},
-  {region:"Austin",name:"Cedar Park",ext:"1801",privates:true,pool:"Chlorine",addr:"1310 E Whitestone Blvd #590, Cedar Park, TX"},
-  {region:"DFW 2",name:"Fort Worth",ext:"1201",privates:true,pool:"Chlorine",addr:"6250 Southwest Blvd, Fort Worth, TX"},
-];
-const HUB_EVENTS_FALLBACK = [
-  {name:"Solon site opens",event_date:"Jul 11, 2026",note:"Tentative"},
-];
+const HUB_LOCATIONS_FALLBACK = [];
+const HUB_EVENTS_FALLBACK = [];
+
+// Pricing lookup keyed by normalized location name
+const PRICING = {
+  "anderson mill":      {mf:36,ss:38,priv:125,semi:65,odl:41,zip:"78750"},
+  "cedar park":         {mf:35,ss:38,priv:125,semi:65,odl:40},
+  "oak hill":           {mf:35,ss:38,priv:125,semi:65,odl:40},
+  "round rock":         {mf:37,ss:39,priv:125,semi:65,odl:42},
+  "westlake":           {mf:40,ss:43,priv:150,semi:80,odl:45},
+  "allen":              {mf:35,ss:38,priv:125,semi:65,odl:40},
+  "firewheel":          {mf:31,ss:34,priv:100,semi:55,odl:36},
+  "frisco - central (mckinney)":{mf:35,ss:38,priv:125,semi:65,odl:40},
+  "frisco - west":      {mf:35,ss:38,priv:125,semi:65,odl:40},
+  "plano":              {mf:35,ss:38,priv:125,semi:65,odl:40},
+  "flower mound":       {mf:31,ss:34,priv:100,semi:55,odl:36},
+  "fort worth":         {mf:31,ss:34,priv:100,semi:55,odl:36},
+  "southlake":          {mf:34,ss:37,priv:120,semi:65,odl:39},
+  "preston forest":     {mf:34,ss:37,priv:120,semi:65,odl:39},
+  "walnut hill":        {mf:36,ss:38,priv:125,semi:65,odl:41},
+  "fort wayne":         {mf:27,ss:29,priv:100,semi:55,odl:32},
+  "westfield":          {mf:32,ss:34,priv:100,semi:55,odl:37},
+  "clear lake":         {mf:29,ss:31,priv:120,semi:65,odl:34},
+  "katy":               {mf:27,ss:29,priv:100,semi:55,odl:32},
+  "meyerland":          {mf:29,ss:31,priv:120,semi:65,odl:34},
+  "saint street":       {mf:35,ss:38,priv:120,semi:65,odl:40},
+  "spring-klein":       {mf:30,ss:32,priv:120,semi:65,odl:35},
+  "vintage park":       {mf:30,ss:32,priv:120,semi:65,odl:35},
+  "the woodlands":      {mf:30,ss:32,priv:120,semi:65,odl:35},
+  "leawood":            {mf:32,ss:35,priv:120,semi:65,odl:37},
+  "northland":          {mf:31,ss:33,priv:120,semi:65,odl:36},
+  "westwood":           {mf:32,ss:35,priv:120,semi:65,odl:37},
+  "wichita":            {mf:28,ss:30,priv:120,semi:65,odl:33},
+  "beaverton-washington square":{mf:38,ss:41,priv:125,semi:65,odl:43},
+  "beaverton-tanasbourne":{mf:38,ss:41,priv:125,semi:65,odl:43},
+  "gig harbor":         {mf:38,ss:40,priv:100,semi:55,odl:43},
+  "hazel dell":         {mf:35,ss:38,priv:125,semi:65,odl:40},
+  "klahanie":           {mf:42,ss:44,priv:150,semi:80,odl:47},
+  "olympia":            {mf:27,ss:29,priv:85,semi:40,odl:32},
+  "tualatin":           {mf:38,ss:41,priv:125,semi:65,odl:43},
+  "alamo ranch":        {mf:30,ss:32,priv:120,semi:65,odl:35},
+  "huebner":            {mf:28,ss:30,priv:100,semi:55,odl:33},
+  "schertz":            {mf:29,ss:32,priv:120,semi:65,odl:34},
+  "stone oak":          {mf:30,ss:33,priv:120,semi:65,odl:35},
+  "brookfield":         {mf:28,ss:30,priv:120,semi:65,odl:33},
+  "henderson":          {mf:28,ss:30,priv:85,semi:55,odl:33},
+  "greenville":         {mf:31,ss:33,priv:100,semi:55,odl:36},
+  "colorado springs - briargate":{mf:32,ss:34,priv:125,semi:65,odl:37},
+};
+
+function getPricing(locName) {
+  return PRICING[locName.toLowerCase()] || null;
+}
 
 const HUB_PARTNERS = [
   {brand:"AQUAfin Swim School",locations:[
-    {name:"Fleming Island",current:"10112",queue:"10111",addr:"2276 Village Square Pkwy, Fleming Island, FL 32003"},
-    {name:"Mandarin",current:"10115",queue:"10114",addr:"3993 San Jose Park Dr, Jacksonville, FL 32217"},
-    {name:"Ponte Vedra (Nocatee)",current:"10117",queue:"10116",addr:"820 Commed Blvd, Orange City, FL 32763"},
-    {name:"St. Augustine",current:"10119",queue:"10118",addr:"130 Center Place Way, St. Augustine, FL 32095"},
-    {name:"St. Johns Bluff",current:"10121",queue:"10120",addr:"2006 St. Johns Bluff Rd S, Jacksonville, FL 32246"},
+    {name:"Fleming Island",current:"10112",queue:"10111",addr:"2276 Village Square Pkwy, Fleming Island, FL"},
+    {name:"Mandarin",current:"10115",queue:"10114",addr:"3993 San Jose Park Dr, Jacksonville, FL"},
+    {name:"Ponte Vedra (Nocatee)",current:"10117",queue:"10116",addr:"820 Commed Blvd, Orange City, FL"},
+    {name:"St. Augustine",current:"10119",queue:"10118",addr:"130 Center Place Way, St. Augustine, FL"},
+    {name:"St. Johns Bluff",current:"10121",queue:"10120",addr:"2006 St. Johns Bluff Rd S, Jacksonville, FL"},
   ]},
-  {brand:"AQua Wave Swim School",locations:[{name:"Lake Forest",current:"10077",queue:"10078",addr:"27025 Burbank, Lake Forest, CA 92610"}]},
-  {brand:"Charlotte Swim Academy",locations:[{name:"Charlotte",current:"10107",queue:"10106",addr:"9315-A Monroe Rd, Charlotte, NC 28270"}]},
+  {brand:"AQua Wave",locations:[{name:"Lake Forest",current:"10077",queue:"10078",addr:"27025 Burbank, Lake Forest, CA"}]},
+  {brand:"Charlotte Swim Academy",locations:[{name:"Charlotte",current:"10107",queue:"10106",addr:"9315-A Monroe Rd, Charlotte, NC"}]},
   {brand:"King's Swim Academy",locations:[
-    {name:"San Carlos",current:"2107",queue:"1207",addr:"1119 Industrial Rd, San Carlos, CA 94070"},
-    {name:"San Mateo",current:"1607",queue:"1107",addr:"57 E 40th Ave, San Mateo, CA 94403"},
+    {name:"San Carlos",current:"2107",queue:"1207",addr:"1119 Industrial Rd, San Carlos, CA"},
+    {name:"San Mateo",current:"1607",queue:"1107",addr:"57 E 40th Ave, San Mateo, CA"},
   ]},
   {brand:"Little Flippers",locations:[
-    {name:"Natick",current:"2607",queue:"3207",addr:"7 Strathmore Rd, Natick, MA 01760"},
-    {name:"Winchester",current:"8007",queue:"2307",addr:"29 East St, Winchester, MA 01890"},
+    {name:"Natick",current:"2607",queue:"3207",addr:"7 Strathmore Rd, Natick, MA"},
+    {name:"Winchester",current:"8007",queue:"2307",addr:"29 East St, Winchester, MA"},
   ]},
   {brand:"Njswim",locations:[
-    {name:"Brick",current:"10080",queue:"10079",addr:"Laurel Square Shopping Center, 1930 Route 88, Brick, NJ 08724"},
-    {name:"Florham Park",current:"10094",queue:"10093",addr:"Brooklake Country Club, 139 Brooklake Rd, Florham Park, NJ 07932"},
-    {name:"Lakeside-Roxbury",current:"10082",queue:"10081",addr:"143 Lakeside Blvd, Landing, NJ 07850"},
-    {name:"Manasquan",current:"10098",queue:"10097",addr:"The Atlantic Club, 1904 Atlantic Ave, Manasquan, NJ 08736"},
-    {name:"Sparta",current:"10084",queue:"10083",addr:"350 Sparta Ave, Sparta, NJ 07871"},
-    {name:"Turnersville",current:"10086",queue:"10085",addr:"3501 NJ-42 Unit 420, Turnersville, NJ 08012"},
+    {name:"Brick",current:"10080",queue:"10079",addr:"1930 Route 88, Brick, NJ"},
+    {name:"Florham Park",current:"10094",queue:"10093",addr:"139 Brooklake Rd, Florham Park, NJ"},
+    {name:"Lakeside-Roxbury",current:"10082",queue:"10081",addr:"143 Lakeside Blvd, Landing, NJ"},
+    {name:"Manasquan",current:"10098",queue:"10097",addr:"1904 Atlantic Ave, Manasquan, NJ"},
+    {name:"Sparta",current:"10084",queue:"10083",addr:"350 Sparta Ave, Sparta, NJ"},
+    {name:"Turnersville",current:"10086",queue:"10085",addr:"3501 NJ-42, Turnersville, NJ"},
   ]},
-  {brand:"Planet Gymnastics",locations:[{name:"Natick",current:"1507",queue:"4007",addr:"7 Strathmore Rd, Natick, MA 01760"}]},
   {brand:"SwimKids",locations:[
-    {name:"Gainesville",current:"10048",queue:"10047",addr:"13555 Wellington Center Cir Unit 109, Gainesville, VA 20155"},
-    {name:"Leesburg",current:"1407",queue:"7007",addr:"681 Potomac Station Dr, Leesburg, VA 20176"},
-    {name:"Woodbridge",current:"10045",queue:"10044",addr:"14531 Potomac Mills Rd, Woodbridge, VA 22192"},
+    {name:"Gainesville",current:"10048",queue:"10047",addr:"13555 Wellington Center Cir, Gainesville, VA"},
+    {name:"Leesburg",current:"1407",queue:"7007",addr:"681 Potomac Station Dr, Leesburg, VA"},
+    {name:"Woodbridge",current:"10045",queue:"10044",addr:"14531 Potomac Mills Rd, Woodbridge, VA"},
   ]},
-  {brand:"Swim To Shore",locations:[{name:"Murrieta",current:"10130",queue:"10129",addr:"25395 Madison Ave #101, Murrieta, CA 92562"}]},
+  {brand:"Swim To Shore",locations:[{name:"Murrieta",current:"10130",queue:"10129",addr:"25395 Madison Ave, Murrieta, CA"}]},
 ];
 
 const HUB_TEAM = [
@@ -1690,21 +1734,79 @@ const HUB_TEAM = [
   {name:"Pamela Martin",ext:"9346"},
 ];
 
+// Level assessment decision tree
+const LEVEL_TREE = {
+  start: { q:"How old is the swimmer?", type:"age" },
+  result_bb: { level:"Bathtime Babies", max:"10 pairs (parent+child)", script:"Based on their age, [name] is perfect for our Bathtime Babies program. This is a parent participation class for ages 2–5 months. Max size is 10 child/parent pairs. You'll learn activities to enjoy during bathtime and acclimate your little one to water. You'll see their strength and balance improve in just a few weeks!" },
+  result_1a: { level:"Level 1A", max:"6 pairs (parent in water)", script:"[Name] is perfect for Level 1A. This is a parent participation class — you'll be in the water with them. Max size is 6 child/parent pairs. In Level 1A, [name] will learn 5–6 seconds of underwater breath control. We also teach water safety, which is always our top priority." },
+  result_1b: { level:"Level 1B", max:"6 pairs (parent in water)", script:"[Name] is perfect for Level 1B. This is a parent participation class — you'll be in the water with them. Max size is 6 child/parent pairs. In Level 1B, [name] will learn 8–10 seconds of underwater breath control. We also teach water safety, which is always our top priority." },
+  result_2:  { level:"Level 2", max:"4 swimmers (no parent)", script:"Since [name] has experience, I recommend Level 2. This is NOT a parent participation class — you'll watch from the side or observation room. Max size is 4 students. [Name] will work on independent kicking for 5 feet, backfloating for 10 seconds, independent rollovers, and 8–10 seconds of breath control. We also teach water safety at this level." },
+  result_3:  { level:"Level 3", max:"4 swimmers", script:"[Name] is perfect for Level 3. In this class they'll learn to kick 5 feet without a flotation device and hold their breath for 8–10 seconds underwater. Max size is 4 swimmers. We also teach water safety at this level." },
+  result_4:  { level:"Level 4", max:"4 swimmers", script:"Since [name] has experience, I recommend Level 4. In this level they'll learn to kick 10 feet through the water and start to learn a rollover breath. Max size is 4 swimmers. We also teach water safety at this level." },
+  result_6:  { level:"Level 6", max:"4 swimmers", script:"[Name] is perfect for Level 6. In this class they'll learn to kick 15 feet with 10 seconds of breath control, backfloat independently, and jump into the water, turn around, and safely climb out. Max size is 4 swimmers. We also teach water safety at this level." },
+  result_7:  { level:"Level 7", max:"4 swimmers", script:"[Name] is perfect for Level 7. In this class they'll learn to swim independently, get front and rollover breaths, and kick and glide on their back. Max size is 4 swimmers. We also teach water safety at this level." },
+  result_8:  { level:"Level 8", max:"4 swimmers", script:"[Name] is perfect for Level 8. In this level they'll learn freestyle arms with side breathing for 20 feet, the elementary backstroke, and to tread water. Max size is 4 swimmers. We also teach water safety at this level." },
+  result_9:  { level:"Level 9", max:"4 swimmers", script:"[Name] is perfect for Level 9. In this level they'll learn freestyle with bilateral breathing on both sides, and backstroke for the full length of the pool. Max size is 4 swimmers." },
+  result_10: { level:"Level 10", max:"4 swimmers", script:"[Name] is perfect for Level 10. In this level they'll learn freestyle, backstroke, butterfly kick, and breaststroke kick for the full length of the pool. Max size is 4 swimmers." },
+  result_11: { level:"Level 11", max:"4 swimmers", script:"[Name] is perfect for Level 11. In this level they'll learn to swim all four strokes — freestyle, backstroke, butterfly, and breaststroke — for the full length of the pool. Max size is 4 swimmers." },
+  result_stp:{ level:"Swim Team Prep", max:"Varies", script:"It sounds like [name] is ready for Swim Team Prep! In this class they'll work on conditioning and legal techniques for all four competitive swimming strokes in a swim team-style environment." },
+  result_adult:{level:"Adult Lessons", max:"4 swimmers", script:"[Name/You are] perfect for our Adult level. This class is customized to meet your specific swimming goals! On the first day, your instructor will take a few minutes to discuss current skill level and get an idea of your goals for the class." },
+};
+
+function getLevelFromAge(ageMonths, answers) {
+  if(ageMonths <= 5)  return "result_bb";
+  if(ageMonths <= 16) return "result_1a";
+  if(ageMonths <= 23) return "result_1b";
+  // 24+ months need qualifying questions
+  if(ageMonths >= 144) return "result_adult"; // 12+
+  const ageYears = ageMonths / 12;
+  if(answers.length === 0) return null; // need questions
+  if(ageYears < 3) {
+    // 2 years old: can they hold breath 8-10s and kick 5ft?
+    return answers[0] === "yes" ? "result_2" : "result_1b";
+  }
+  if(ageYears < 4) {
+    // 3 years old: same question
+    return answers[0] === "yes" ? "result_4" : "result_3";
+  }
+  // 4-11 years: up to 5 questions
+  if(answers[0] === "no")  return "result_6";
+  if(answers[1] === "no")  return "result_7";
+  if(answers[2] === "no")  return "result_8";
+  if(answers[3] === "no")  return "result_9";
+  if(answers[4] === "no")  return "result_10";
+  if(answers[5] === "no")  return "result_11";
+  return "result_stp";
+}
+
+function getQuestion(ageMonths, step) {
+  const ageYears = ageMonths / 12;
+  if(ageYears < 3) return { q:"Can they hold their breath underwater for 8–10 seconds AND kick 5 feet without a flotation device?", step:0 };
+  if(ageYears < 4) return { q:"Can they hold their breath for 8–10 seconds AND kick 5 feet without a flotation device?", step:0 };
+  const qs = [
+    "Can they jump in the water, kick for 10 feet, and backfloat independently?",
+    "Can they swim freestyle arms independently over 10 feet with an independent breath?",
+    "Can they swim freestyle with rhythmic side breathing for 20 feet, elementary backstroke, and tread water independently?",
+    "Can they swim freestyle while breathing on both sides AND backstroke for the full pool length (~25 yards)?",
+    "Can they swim freestyle, backstroke, butterfly kick, AND breaststroke kick for the full pool length?",
+    "Can they swim all four strokes — freestyle, backstroke, butterfly, AND breaststroke — for the full pool length?",
+  ];
+  return { q: qs[step] || null, step };
+}
+
 // ── HUB VIEW ──────────────────────────────────────────────────────────
 function HubView({ isManager }) {
   const [hubData,setHubData] = useState({promos:[],closures:[],docs:[],locations:[],events:[]});
   const [loading,setLoading] = useState(true);
   const [q,setQ] = useState("");
-  const [section,setSection] = useState("search");
-  const [expandedPromo,setExpandedPromo] = useState(null);
-  const [expandedDoc,setExpandedDoc] = useState(null);
-  const [editModal,setEditModal] = useState(null); // {type, item}
+  const [tab,setTab] = useState("home");
+  const [editModal,setEditModal] = useState(null);
   const [toast,setToast] = useState(null);
   const fire = (type,msg)=>setToast({type,msg,id:Date.now()});
 
   const reload = async()=>{
     try{ const d=await loadHubData(); setHubData(d); }
-    catch(e){ console.error("Hub load error",e); }
+    catch(e){ console.error(e); }
     finally{ setLoading(false); }
   };
   useEffect(()=>{ reload(); },[]);
@@ -1716,72 +1818,41 @@ function HubView({ isManager }) {
   const matchPromo  = promos.filter(p=>!term||(p.title+p.code+p.rules).toLowerCase().includes(term));
   const matchTeam   = HUB_TEAM.filter(t=>!term||(t.name+t.ext).toLowerCase().includes(term));
   const matchDocs   = docs.filter(d=>!term||(d.title+(d.content||"")).toLowerCase().includes(term));
-  const matchPartner= HUB_PARTNERS.filter(p=>!term||p.brand.toLowerCase().includes(term)||p.locations.some(l=>(l.name+l.current+l.queue).toLowerCase().includes(term)));
-  const totalResults= matchLoc.length+matchPromo.length+matchTeam.length+matchDocs.length;
+  const matchPartner= HUB_PARTNERS.filter(p=>!term||p.brand.toLowerCase().includes(term)||p.locations.some(l=>(l.name+l.current).toLowerCase().includes(term)));
 
-  const closureMap = closures.reduce((acc,c)=>{
-    const key=c.location_name.toLowerCase();
-    if(!acc[key])acc[key]=[];
-    acc[key].push(c); return acc;
-  },{});
+  const closureMap = closures.reduce((acc,c)=>{ const k=c.location_name.toLowerCase(); if(!acc[k])acc[k]=[]; acc[k].push(c); return acc; },{});
+  const getClosures = n => closureMap[n.toLowerCase()]||[];
 
-  const getClosures = (locName)=>closureMap[locName.toLowerCase()]||[];
+  // CRUD
+  const savePromo=async(f)=>{ if(f.id)await sbPatch("hub_promos",f.id,{title:f.title,code:f.code,rules:f.rules,expires_on:f.expires_on||null,proactive:f.proactive,active:true}); else await sbPost("hub_promos",{title:f.title,code:f.code,rules:f.rules,expires_on:f.expires_on||null,proactive:f.proactive,active:true}); fire("approved","Promo saved"); setEditModal(null); reload(); };
+  const deletePromo=async(id)=>{ await sbPatch("hub_promos",id,{active:false}); fire("info","Promo removed"); reload(); };
+  const saveClosure=async(f)=>{ if(f.id)await sbPatch("hub_closures",f.id,{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason}); else await sbPost("hub_closures",{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason}); fire("approved","Closure saved"); setEditModal(null); reload(); };
+  const deleteClosure=async(id)=>{ await sbDel("hub_closures",id); fire("info","Closure removed"); reload(); };
+  const saveDoc=async(f)=>{ if(f.id)await sbPatch("hub_docs",f.id,{title:f.title,content:f.content,category:f.category,updated_at:new Date().toISOString()}); else await sbPost("hub_docs",{title:f.title,content:f.content,category:f.category,sort_order:0}); fire("approved","Doc saved"); setEditModal(null); reload(); };
+  const deleteDoc=async(id)=>{ await sbDel("hub_docs",id); fire("info","Doc removed"); reload(); };
+  const saveLoc=async(f)=>{ await sbPatch("hub_locations",f.id,{ext:f.ext,privates:f.privates,pool:f.pool,addr:f.addr}); fire("approved","Location updated"); setEditModal(null); reload(); };
+  const saveEvent=async(f)=>{ if(f.id)await sbPatch("hub_events",f.id,{name:f.name,event_date:f.event_date,note:f.note}); else await sbPost("hub_events",{name:f.name,event_date:f.event_date,note:f.note||""}); fire("approved","Event saved"); setEditModal(null); reload(); };
+  const deleteEvent=async(id)=>{ await sbDel("hub_events",id); fire("info","Event removed"); reload(); };
 
-  // ── CRUD helpers ─────────────────────────────────────────────────
-  const savePromo = async(form)=>{
-    if(form.id) await sbPatch("hub_promos",form.id,{title:form.title,code:form.code,rules:form.rules,expires_on:form.expires_on||null,proactive:form.proactive,active:true});
-    else await sbPost("hub_promos",{title:form.title,code:form.code,rules:form.rules,expires_on:form.expires_on||null,proactive:form.proactive,active:true});
-    fire("approved","Promo saved"); setEditModal(null); reload();
-  };
-  const deletePromo = async(id)=>{
-    await sbPatch("hub_promos",id,{active:false});
-    fire("info","Promo removed"); reload();
-  };
-  const saveClosure = async(form)=>{
-    if(form.id) await sbPatch("hub_closures",form.id,{location_name:form.location_name,start_date:form.start_date,end_date:form.end_date,reason:form.reason});
-    else await sbPost("hub_closures",{location_name:form.location_name,start_date:form.start_date,end_date:form.end_date,reason:form.reason});
-    fire("approved","Closure saved"); setEditModal(null); reload();
-  };
-  const deleteClosure = async(id)=>{
-    await sbDel("hub_closures",id);
-    fire("info","Closure removed"); reload();
-  };
-  const saveDoc = async(form)=>{
-    if(form.id) await sbPatch("hub_docs",form.id,{title:form.title,content:form.content,category:form.category,updated_at:new Date().toISOString()});
-    else await sbPost("hub_docs",{title:form.title,content:form.content,category:form.category,sort_order:0});
-    fire("approved","Doc saved"); setEditModal(null); reload();
-  };
-  const deleteDoc = async(id)=>{
-    await sbDel("hub_docs",id);
-    fire("info","Doc removed"); reload();
-  };
-  const saveLoc = async(form)=>{
-    await sbPatch("hub_locations",form.id,{ext:form.ext,privates:form.privates,pool:form.pool,addr:form.addr});
-    fire("approved","Location updated"); setEditModal(null); reload();
-  };
-  const saveEvent = async(form)=>{
-    if(form.id) await sbPatch("hub_events",form.id,{name:form.name,event_date:form.event_date,note:form.note});
-    else await sbPost("hub_events",{name:form.name,event_date:form.event_date,note:form.note||""});
-    fire("approved","Event saved"); setEditModal(null); reload();
-  };
-  const deleteEvent = async(id)=>{ await sbDel("hub_events",id); fire("info","Event removed"); reload(); };
+  const repTabs = [
+    {k:"home",l:"🏠 Home"},
+    {k:"locations",l:"📍 Locations"},
+    {k:"levels",l:"🏊 Level Tool"},
+    {k:"docs",l:"📄 Docs"},
+  ];
+  const mgrOnlyTabs = isManager ? [
+    {k:"promos",l:"🎯 Promos"},
+    {k:"closures",l:"🚫 Closures"},
+    {k:"team",l:"👤 Team"},
+    {k:"partners",l:"🤝 Partners"},
+    {k:"events",l:"📅 Events"},
+  ] : [];
+  const allTabs = [...repTabs,...mgrOnlyTabs];
 
-  const badge=(label,color="#1a5c35",bg="#eafaf1")=>(
-    <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:bg,color,fontWeight:700,letterSpacing:.3}}>{label}</span>
-  );
-
-  const EditBtn=({onClick})=>(isManager?<button onClick={onClick} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888",flexShrink:0}}>Edit</button>:null);
-  const AddBtn=({label,onClick})=>(isManager?<button onClick={onClick} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>{label}</button>:null);
-  const DelBtn=({onClick})=>(isManager?<button onClick={onClick} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b",flexShrink:0}}>Remove</button>:null);
-
-  const sections=["search","locations","promos","team","partners","events","docs"];
-  if(isManager) sections.push("closures");
-  const sectionLabels={search:`Search${term?` (${totalResults})`:""}`,locations:"Locations",promos:"Promos",team:"Team",partners:"Partners",events:"Events",docs:"Docs",closures:`Closures${closures.length>0?` (${closures.length})`:""}`};
-
-  if(loading) return <div style={{padding:"40px 0",textAlign:"center",color:"#aaa",fontSize:13}}>Loading hub data…</div>;
+  if(loading) return <div style={{padding:"40px 0",textAlign:"center",color:"#aaa",fontSize:13}}>Loading hub…</div>;
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f0f4f8",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
@@ -1793,194 +1864,482 @@ function HubView({ isManager }) {
       {editModal?.type==="event"&&<HubEventModal item={editModal.item} onClose={()=>setEditModal(null)} onSave={saveEvent} onDelete={deleteEvent}/>}
 
       {/* Header */}
-      <div style={{background:"#003087",padding:"18px 16px 14px",color:"#fff"}}>
-        {isManager&&<span style={{fontSize:9,background:"rgba(255,255,255,.2)",padding:"2px 8px",borderRadius:4,letterSpacing:1.5,fontWeight:700,display:"inline-block",marginBottom:6}}>MANAGER EDIT MODE</span>}
-        <h1 style={{margin:"0 0 10px",fontSize:20,fontWeight:800}}>🏊 Emler Knowledge Hub</h1>
-        <div style={{position:"relative"}}>
-          <input value={q} onChange={e=>{setQ(e.target.value);setSection("search");}} placeholder="Search locations, promos, extensions…"
-            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px 10px 36px",borderRadius:11,border:"none",fontSize:13,outline:"none",background:"rgba(255,255,255,.95)"}}/>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:15}}>🔍</span>
-          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:"#aaa"}}>✕</button>}
+      <div style={{background:"#003087",padding:"14px 18px 0",color:"#fff"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <span style={{fontSize:22}}>🏊</span>
+          <div style={{flex:1}}>
+            <p style={{margin:0,fontSize:11,opacity:.6,letterSpacing:1.5,textTransform:"uppercase"}}>Emler Knowledge Hub</p>
+            {isManager&&<span style={{fontSize:9,background:"rgba(255,255,255,.2)",padding:"1px 6px",borderRadius:3,fontWeight:700,letterSpacing:1}}>MANAGER</span>}
+          </div>
+          {closures.length>0&&<span style={{background:"#e74c3c",color:"#fff",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20}}>⚠️ {closures.length} Closure{closures.length>1?"s":""}</span>}
         </div>
-        {term&&<p style={{margin:"6px 0 0",fontSize:11,opacity:.7}}>{totalResults} results</p>}
-      </div>
-
-      {/* Tabs */}
-      <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb",overflowX:"auto"}}>
-        <div style={{display:"flex",padding:"0 12px",minWidth:"max-content"}}>
-          {sections.map(s=>(
-            <button key={s} onClick={()=>setSection(s)} style={{padding:"10px 11px",border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:section===s?700:500,color:section===s?"#003087":"#999",borderBottom:section===s?"2.5px solid #003087":"2.5px solid transparent",marginBottom:-1.5,whiteSpace:"nowrap",textTransform:"capitalize"}}>{sectionLabels[s]}</button>
+        {/* Search */}
+        <div style={{position:"relative",marginBottom:12}}>
+          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:15,opacity:.5}}>🔍</span>
+          <input value={q} onChange={e=>{setQ(e.target.value);if(e.target.value)setTab("home");}}
+            placeholder="Search anything — location, price, promo code…"
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 36px",borderRadius:10,border:"none",fontSize:13,outline:"none",background:"rgba(255,255,255,.95)",color:"#1a1a1a"}}/>
+          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#aaa"}}>✕</button>}
+        </div>
+        {/* Tabs */}
+        <div style={{display:"flex",gap:0,overflowX:"auto",marginLeft:-18,paddingLeft:18,marginRight:-18}}>
+          {allTabs.map(t=>(
+            <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"8px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:tab===t.k?700:400,color:tab===t.k?"#fff":"rgba(255,255,255,.55)",borderBottom:tab===t.k?"2.5px solid #fff":"2.5px solid transparent",whiteSpace:"nowrap",transition:"all .15s"}}>{t.l}</button>
           ))}
         </div>
       </div>
 
-      <div style={{padding:"14px 14px",maxWidth:640,margin:"0 auto"}}>
+      <div style={{padding:"14px 14px 0",maxWidth:800,margin:"0 auto"}}>
 
-        {/* SEARCH */}
-        {section==="search"&&(
+        {/* HOME / SEARCH RESULTS */}
+        {tab==="home"&&(
           <div>
-            {!term&&<div style={{textAlign:"center",padding:"28px 0 16px"}}><p style={{fontSize:28,margin:"0 0 6px"}}>🔍</p><p style={{fontWeight:600,fontSize:14,color:"#555",margin:"0 0 3px"}}>Search everything</p><p style={{fontSize:12,color:"#aaa",margin:0}}>Locations, extensions, promos, team members, docs</p></div>}
-            {term&&matchLoc.length>0&&(<div style={{marginBottom:16}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 7px",fontWeight:700}}>📍 Locations ({matchLoc.length})</p>
-              {matchLoc.slice(0,4).map((l,i)=><LocationCard key={i} loc={l} closures={getClosures(l.name)} badge={badge} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
-              {matchLoc.length>4&&<p style={{fontSize:12,color:"#aaa",textAlign:"center",cursor:"pointer",margin:"4px 0"}} onClick={()=>setSection("locations")}>+{matchLoc.length-4} more →</p>}
-            </div>)}
-            {term&&matchPromo.length>0&&(<div style={{marginBottom:16}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:"0 0 7px",fontWeight:700}}>🎯 Promos ({matchPromo.length})</p>
-              {matchPromo.map((p,i)=><PromoCard key={i} promo={p} expanded={expandedPromo===i} onToggle={()=>setExpandedPromo(expandedPromo===i?null:i)} badge={badge} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
-            </div>)}
-            {term&&matchTeam.length>0&&(<div style={{marginBottom:16}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 7px",fontWeight:700}}>👤 Team ({matchTeam.length})</p>
-              {matchTeam.map((t,i)=><TeamCard key={i} member={t}/>)}
-            </div>)}
-            {term&&matchDocs.length>0&&(<div style={{marginBottom:16}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 7px",fontWeight:700}}>📄 Docs ({matchDocs.length})</p>
-              {matchDocs.map((d,i)=><DocCard key={i} doc={d} expanded={expandedDoc===d.id} onToggle={()=>setExpandedDoc(expandedDoc===d.id?null:d.id)} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
-            </div>)}
-            {term&&totalResults===0&&(<div style={{textAlign:"center",padding:"36px 0",color:"#bbb"}}><p style={{fontSize:28,margin:"0 0 6px"}}>🤔</p><p style={{fontWeight:600,fontSize:14,color:"#888"}}>No results for "{q}"</p></div>)}
+            {/* Active closures banner */}
+            {closures.length>0&&(
+              <div style={{background:"#fde8e8",border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+                <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#c0392b",letterSpacing:1,textTransform:"uppercase"}}>🚫 Active Closures</p>
+                {closures.map((c,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<closures.length-1?6:0}}>
+                    <div><p style={{margin:0,fontWeight:600,fontSize:13,color:"#7a1a1a"}}>{c.location_name}</p><p style={{margin:0,fontSize:11,color:"#c0392b"}}>{c.start_date} → {c.end_date} · {c.reason}</p></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Search results */}
+            {term&&(
+              <div>
+                {matchLoc.length>0&&(
+                  <div style={{marginBottom:14}}>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>📍 Locations</p>
+                    {matchLoc.slice(0,3).map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
+                  </div>
+                )}
+                {matchPromo.length>0&&(
+                  <div style={{marginBottom:14}}>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:"0 0 8px",fontWeight:700}}>🎯 Promos</p>
+                    {matchPromo.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+                  </div>
+                )}
+                {matchTeam.length>0&&(
+                  <div style={{marginBottom:14}}>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 8px",fontWeight:700}}>👤 Team</p>
+                    {matchTeam.map((t,i)=><HubTeamCard key={i} member={t}/>)}
+                  </div>
+                )}
+                {matchDocs.length>0&&(
+                  <div style={{marginBottom:14}}>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 8px",fontWeight:700}}>📄 Docs</p>
+                    {matchDocs.slice(0,3).map((d,i)=><HubDocCard key={i} doc={d} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
+                  </div>
+                )}
+                {matchLoc.length===0&&matchPromo.length===0&&matchTeam.length===0&&matchDocs.length===0&&(
+                  <div style={{textAlign:"center",padding:"36px 0",color:"#aaa"}}><p style={{fontSize:28,margin:"0 0 6px"}}>🤔</p><p style={{fontWeight:600,fontSize:14,color:"#888"}}>No results for "{q}"</p></div>
+                )}
+              </div>
+            )}
+
+            {/* No search — show dashboard */}
+            {!term&&(
+              <div>
+                {/* Active Promos */}
+                {promos.length>0&&(
+                  <div style={{marginBottom:16}}>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#856404",margin:"0 0 8px",fontWeight:700}}>🎯 Active Promotions</p>
+                    {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+                    {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed #ddd",background:"transparent",cursor:"pointer",fontSize:12,color:"#aaa",marginTop:6}}>+ Add Promo</button>}
+                  </div>
+                )}
+                {promos.length===0&&(
+                  <div style={{background:"#fffdf8",border:"1.5px solid #f0c080",borderRadius:12,padding:"14px",marginBottom:16,textAlign:"center"}}>
+                    <p style={{margin:0,fontSize:13,color:"#856404"}}>🎯 No active promotions right now</p>
+                    {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{marginTop:8,padding:"6px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Promo</button>}
+                  </div>
+                )}
+                {/* Quick access */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                  {[
+                    {icon:"📍",label:"Find Location & Price",sub:"Search any school",action:()=>{ const el=document.querySelector('input[placeholder*="Search"]'); if(el){el.focus();}},color:"#003087",bg:"#e8f0fe"},
+                    {icon:"🏊",label:"Level Assessment",sub:"Find the right class",action:()=>setTab("levels"),color:"#1a5c35",bg:"#eafaf1"},
+                    {icon:"📄",label:"Documents",sub:"Scripts, SOPs, pricing",action:()=>setTab("docs"),color:"#8e44ad",bg:"#f5eefb"},
+                    {icon:"👤",label:"Team Extensions",sub:"Copy any extension",action:()=>setTab("team"),color:"#e07b00",bg:"#fff8ee"},
+                  ].map((c,i)=>(
+                    <div key={i} onClick={c.action} style={{background:"#fff",borderRadius:12,padding:"14px",border:`1.5px solid ${c.bg}`,cursor:"pointer",transition:"all .15s"}}>
+                      <span style={{fontSize:22}}>{c.icon}</span>
+                      <p style={{margin:"6px 0 2px",fontWeight:600,fontSize:13,color:c.color}}>{c.label}</p>
+                      <p style={{margin:0,fontSize:11,color:"#aaa"}}>{c.sub}</p>
+                    </div>
+                  ))}
+                </div>
+                {/* Events if any */}
+                {events.length>0&&(
+                  <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:16}}>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#e07b00",margin:"0 0 8px",fontWeight:700}}>📅 Upcoming</p>
+                    {events.map((e,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<events.length-1?6:0}}>
+                        <p style={{margin:0,fontSize:13,fontWeight:500}}>{e.name}</p>
+                        <span style={{fontSize:11,color:"#888"}}>{e.event_date}{e.note?` · ${e.note}`:""}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* LOCATIONS */}
-        {section==="locations"&&(
+        {tab==="locations"&&(
           <div>
-            {Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
+            <div style={{position:"sticky",top:0,zIndex:10,paddingBottom:10,paddingTop:4,background:"#f0f4f8"}}>
+              <div style={{display:"flex",gap:8,marginBottom:8}}>
+                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, region, or extension…"
+                  style={{flex:1,boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
+              </div>
+              <ZipFinder locations={locations} closures={closureMap} isManager={isManager} onEdit={(l)=>setEditModal({type:"loc",item:l})}/>
+            </div>
+            {matchLoc.length===0&&!term&&(
+              <p style={{textAlign:"center",color:"#aaa",padding:"30px 0",fontSize:13}}>Search by name above or use the zip code finder</p>
+            )}
+            {term&&Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
               <div key={region} style={{marginBottom:16}}>
-                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 7px",fontWeight:700}}>{region} ({locs.length})</p>
-                {locs.map((l,i)=><LocationCard key={i} loc={l} closures={getClosures(l.name)} badge={badge} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>{region}</p>
+                {locs.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
               </div>
             ))}
           </div>
         )}
 
-        {/* PROMOS */}
-        {section==="promos"&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:isManager?10:0}}>
-                <p style={{margin:0,fontSize:11,color:"#856404",fontWeight:600}}>⚡ Always check expiry dates before applying a promo</p>
-              </div>
-              <AddBtn label="+ Add Promo" onClick={()=>setEditModal({type:"promo",item:null})}/>
-            </div>
-            {matchPromo.length===0&&<p style={{textAlign:"center",color:"#aaa",padding:"24px 0",fontSize:13}}>No active promos</p>}
-            {matchPromo.map((p,i)=><PromoCard key={i} promo={p} expanded={expandedPromo===i} onToggle={()=>setExpandedPromo(expandedPromo===i?null:i)} badge={badge} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
-          </div>
-        )}
-
-        {/* TEAM */}
-        {section==="team"&&(
-          <div>
-            <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 10px",fontWeight:700}}>ESC Team Extensions</p>
-            {matchTeam.map((t,i)=><TeamCard key={i} member={t}/>)}
-          </div>
-        )}
-
-        {/* PARTNERS */}
-        {section==="partners"&&(
-          <div>
-            {HUB_PARTNERS.filter(p=>!term||p.brand.toLowerCase().includes(term)||p.locations.some(l=>(l.name+l.current+l.queue).toLowerCase().includes(term))).map((p,i)=>(
-              <div key={i} style={{marginBottom:16}}>
-                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 7px",fontWeight:700}}>{p.brand}</p>
-                {p.locations.filter(l=>!term||(p.brand+l.name+l.current+l.queue).toLowerCase().includes(term)).map((l,j)=>(
-                  <PartnerLocCard key={j} brand={p.brand} loc={l} badge={badge}/>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* EVENTS */}
-        {section==="events"&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#e07b00",margin:0,fontWeight:700}}>Upcoming Events & Openings</p>
-              <AddBtn label="+ Add Event" onClick={()=>setEditModal({type:"event",item:null})}/>
-            </div>
-            {events.map((e,i)=>(
-              <div key={i} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 13px",marginBottom:7,display:"flex",alignItems:"center",gap:10}}>
-                <span style={{fontSize:22,flexShrink:0}}>🏊</span>
-                <div style={{flex:1}}>
-                  <p style={{margin:0,fontWeight:600,fontSize:13}}>{e.name}</p>
-                  <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{e.event_date}{e.note?` · ${e.note}`:""}</p>
-                </div>
-                <EditBtn onClick={()=>setEditModal({type:"event",item:e})}/>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* LEVEL TOOL */}
+        {tab==="levels"&&<LevelTool/>}
 
         {/* DOCS */}
-        {section==="docs"&&(
+        {tab==="docs"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:0,fontWeight:700}}>Documents ({docs.length})</p>
-              <AddBtn label="+ Add Doc" onClick={()=>setEditModal({type:"doc",item:null})}/>
+              {isManager&&<button onClick={()=>setEditModal({type:"doc",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#8e44ad",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Doc</button>}
             </div>
-            {docs.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#bbb"}}><p style={{fontSize:22,margin:"0 0 6px"}}>📄</p><p style={{fontSize:13,color:"#aaa"}}>No documents yet. Add your first doc above.</p></div>}
-            {matchDocs.map((d,i)=><DocCard key={i} doc={d} expanded={expandedDoc===d.id} onToggle={()=>setExpandedDoc(expandedDoc===d.id?null:d.id)} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
-          </div>
-        )}
-
-        {/* CLOSURES (manager only) */}
-        {section==="closures"&&isManager&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:0,fontWeight:700}}>Active Closures ({closures.length})</p>
-              <AddBtn label="+ Log Closure" onClick={()=>setEditModal({type:"closure",item:null})}/>
-            </div>
-            {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#bbb"}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No active closures</p></div>}
-            {closures.map((c,i)=>(
-              <div key={i} style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
-                <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-                  <span style={{fontSize:18,flexShrink:0}}>🚫</span>
-                  <div style={{flex:1}}>
-                    <p style={{margin:0,fontWeight:600,fontSize:13,color:"#7a1a1a"}}>{c.location_name}</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:"#c0392b"}}>{c.start_date} → {c.end_date}</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{c.reason}</p>
-                  </div>
-                  <div style={{display:"flex",gap:5,flexShrink:0}}>
-                    <EditBtn onClick={()=>setEditModal({type:"closure",item:c})}/>
-                    <DelBtn onClick={()=>deleteClosure(c.id)}/>
-                  </div>
-                </div>
+            {/* Group by category */}
+            {Object.entries(docs.reduce((acc,d)=>{const cat=d.category||"General";if(!acc[cat])acc[cat]=[];acc[cat].push(d);return acc;},{})).map(([cat,catDocs])=>(
+              <div key={cat} style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 8px",fontWeight:700}}>{cat}</p>
+                {catDocs.map((d,i)=><HubDocCard key={i} doc={d} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
               </div>
             ))}
           </div>
         )}
 
+        {/* MANAGER TABS */}
+        {tab==="promos"&&isManager&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:"#856404",fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
+              <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
+            </div>
+            {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={true} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+          </div>
+        )}
+        {tab==="closures"&&isManager&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:0,fontWeight:700}}>Active Closures ({closures.length})</p>
+              <button onClick={()=>setEditModal({type:"closure",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Log Closure</button>
+            </div>
+            {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#bbb"}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No active closures</p></div>}
+            {closures.map((c,i)=>(
+              <div key={i} style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:7,display:"flex",alignItems:"flex-start",gap:10}}>
+                <span style={{fontSize:18}}>🚫</span>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontWeight:600,fontSize:13,color:"#7a1a1a"}}>{c.location_name}</p>
+                  <p style={{margin:"2px 0",fontSize:11,color:"#c0392b"}}>{c.start_date} → {c.end_date}</p>
+                  <p style={{margin:0,fontSize:11,color:"#888"}}>{c.reason}</p>
+                </div>
+                <div style={{display:"flex",gap:5}}>
+                  <button onClick={()=>setEditModal({type:"closure",item:c})} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>
+                  <button onClick={()=>deleteClosure(c.id)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {tab==="team"&&(
+          <div>
+            <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 10px",fontWeight:700}}>ESC Team Extensions</p>
+            {HUB_TEAM.map((t,i)=><HubTeamCard key={i} member={t}/>)}
+          </div>
+        )}
+        {tab==="partners"&&(
+          <div>
+            {HUB_PARTNERS.map((p,i)=>(
+              <div key={i} style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 8px",fontWeight:700}}>{p.brand}</p>
+                {p.locations.map((l,j)=>{
+                  const [cop,setCop]=useState(false);
+                  return (
+                    <div key={j} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                      <div style={{flex:1}}>
+                        <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{l.name}</p>
+                        <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{l.addr}</p>
+                        <div style={{display:"flex",gap:10}}>
+                          <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:"#003087"}}>{l.current}</strong></span>
+                          <span style={{fontSize:11,color:"#888"}}>New: <strong style={{color:"#8e44ad"}}>{l.queue}</strong></span>
+                        </div>
+                      </div>
+                      <button onClick={()=>{navigator.clipboard?.writeText(l.current);setCop(true);setTimeout(()=>setCop(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #ddd",background:cop?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:cop?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{cop?"✓":"Copy"}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+        {tab==="events"&&isManager&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#e07b00",margin:0,fontWeight:700}}>Events & Openings</p>
+              <button onClick={()=>setEditModal({type:"event",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#e07b00",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Event</button>
+            </div>
+            {events.map((e,i)=>(
+              <div key={i} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 14px",marginBottom:7,display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>🏊</span>
+                <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:13}}>{e.name}</p><p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{e.event_date}{e.note?` · ${e.note}`:""}</p></div>
+                <button onClick={()=>setEditModal({type:"event",item:e})} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── LEVEL TOOL ────────────────────────────────────────────────────────
+function LevelTool() {
+  const [ageInput,setAgeInput] = useState("");
+  const [ageMonths,setAgeMonths] = useState(null);
+  const [answers,setAnswers] = useState([]);
+  const [result,setResult] = useState(null);
+  const [copied,setCopied] = useState(false);
+
+  const reset=()=>{ setAgeInput(""); setAgeMonths(null); setAnswers([]); setResult(null); };
+
+  const handleAge=(input)=>{
+    setAgeInput(input);
+    setAnswers([]); setResult(null);
+    const n = parseFloat(input);
+    if(isNaN(n)||n<=0) return;
+    // parse as years if < 24, months if >= 24
+    const months = n < 24 ? Math.round(n * 12) : Math.round(n);
+    setAgeMonths(months);
+    const r = getLevelFromAge(months, []);
+    if(r) setResult(r);
+  };
+
+  const handleAnswer=(ans)=>{
+    const newAnswers=[...answers,ans];
+    setAnswers(newAnswers);
+    const r=getLevelFromAge(ageMonths,newAnswers);
+    if(r) setResult(r);
+  };
+
+  const currentQ = ageMonths&&!result ? getQuestion(ageMonths, answers.length) : null;
+  const levelData = result ? LEVEL_TREE[result] : null;
+
+  const ageButtons=[
+    {label:"2–5 mo",months:3},{label:"6–16 mo",months:10},{label:"17–23 mo",months:20},
+    {label:"2 yrs",months:24},{label:"3 yrs",months:36},{label:"4–5 yrs",months:54},
+    {label:"6–8 yrs",months:84},{label:"9–11 yrs",months:120},{label:"12+ yrs",months:150},
+  ];
+
+  return (
+    <div>
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <p style={{margin:0,fontWeight:700,fontSize:15,color:"#1a5c35"}}>🏊 Level Assessment Tool</p>
+          {(ageMonths||result)&&<button onClick={reset} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>Start over</button>}
+        </div>
+
+        {!ageMonths&&(
+          <div>
+            <p style={{margin:"0 0 10px",fontSize:13,color:"#555"}}>Select the swimmer's age:</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+              {ageButtons.map((b,i)=>(
+                <button key={i} onClick={()=>handleAge(b.months/12)} style={{padding:"10px 6px",borderRadius:10,border:"1.5px solid #c8e6c9",background:"#f1f8f3",cursor:"pointer",fontSize:12,fontWeight:600,color:"#1a5c35",textAlign:"center"}}>{b.label}</button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10}}>
+              <input value={ageInput} onChange={e=>handleAge(e.target.value)} placeholder="Or type exact age in years (e.g. 3.5)" type="number" min="0.1" step="0.1" style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+            </div>
+          </div>
+        )}
+
+        {ageMonths&&!result&&currentQ&&(
+          <div>
+            <p style={{margin:"0 0 6px",fontSize:11,color:"#888"}}>Age confirmed. Qualifying question:</p>
+            <p style={{margin:"0 0 16px",fontSize:14,fontWeight:600,color:"#1a1a1a",lineHeight:1.5}}>{currentQ.q}</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <button onClick={()=>handleAnswer("yes")} style={{padding:"14px",borderRadius:12,border:"2px solid #1a5c35",background:"#eafaf1",cursor:"pointer",fontSize:15,fontWeight:700,color:"#1a5c35"}}>✅ Yes</button>
+              <button onClick={()=>handleAnswer("no")}  style={{padding:"14px",borderRadius:12,border:"2px solid #c0392b",background:"#fdf0ee",cursor:"pointer",fontSize:15,fontWeight:700,color:"#c0392b"}}>❌ No</button>
+            </div>
+            {answers.length>0&&<p style={{margin:"10px 0 0",fontSize:11,color:"#aaa",textAlign:"center"}}>Question {answers.length+1} of up to 6</p>}
+          </div>
+        )}
+
+        {result&&levelData&&(
+          <div>
+            <div style={{background:"#eafaf1",border:"2px solid #1a5c35",borderRadius:12,padding:"14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:32}}>🏊</span>
+              <div>
+                <p style={{margin:"0 0 2px",fontSize:11,color:"#1a5c35",fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>Recommended Level</p>
+                <p style={{margin:0,fontSize:22,fontWeight:800,color:"#1a5c35"}}>{levelData.level}</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#555"}}>Max class size: {levelData.max}</p>
+              </div>
+            </div>
+            <div style={{background:"#f8f8f8",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+              <p style={{margin:"0 0 6px",fontSize:11,color:"#888",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Script to read to parent</p>
+              <p style={{margin:0,fontSize:13,color:"#1a1a1a",lineHeight:1.7,fontStyle:"italic"}}>"{levelData.script}"</p>
+            </div>
+            <button onClick={()=>{navigator.clipboard?.writeText(levelData.script);setCopied(true);setTimeout(()=>setCopied(false),1500);}} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600,transition:"background .2s"}}>
+              {copied?"✓ Script Copied!":"📋 Copy Script"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Quick reference cheat sheet */}
+      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px"}}>
+        <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 10px",fontWeight:700}}>Quick Reference — All Levels</p>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead>
+              <tr style={{background:"#f0f4f8"}}>
+                {["Level","Age","Key Skill","Max"].map(h=><th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #efefef"}}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Bathtime Babies","2–5 mo","Bath acclimation","10 pairs"],
+                ["Level 1A","6–16 mo","5–6s breath control","6 pairs"],
+                ["Level 1B","17–23 mo","8–10s breath control","6 pairs"],
+                ["Level 2","2 yrs+","Kick 5ft, backfloat","4"],
+                ["Level 3","3 yrs","Kick 5ft, 8–10s breath","4"],
+                ["Level 4","3 yrs+","Kick 10ft, rollover","4"],
+                ["Level 6","4–11 yrs","Kick 15ft, backfloat, jump","4"],
+                ["Level 7","4–11 yrs","Freestyle arms + breath","4"],
+                ["Level 8","4–11 yrs","Side breathing, backstroke","4"],
+                ["Level 9","4–11 yrs","Bilateral breathing","4"],
+                ["Level 10","4–11 yrs","All 4 stroke kicks","4"],
+                ["Level 11","4–11 yrs","All 4 full strokes","4"],
+                ["Swim Team Prep","6+ (post-L11)","Competitive strokes","Varies"],
+                ["Adult","12+","Customized to goals","4"],
+              ].map(([l,a,s,m],i)=>(
+                <tr key={i} style={{borderBottom:"1px solid #f8f8f8",background:i%2===0?"#fff":"#fafafa"}}>
+                  <td style={{padding:"6px 8px",fontWeight:600,color:"#1a5c35"}}>{l}</td>
+                  <td style={{padding:"6px 8px",color:"#555"}}>{a}</td>
+                  <td style={{padding:"6px 8px",color:"#555"}}>{s}</td>
+                  <td style={{padding:"6px 8px",fontWeight:600}}>{m}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── ZIP FINDER ────────────────────────────────────────────────────────
+function ZipFinder({ locations, closures, isManager, onEdit }) {
+  const [zip, setZip] = useState("");
+  const [results, setResults] = useState(null);
+
+  const search = (val) => {
+    setZip(val);
+    if(val.length < 3) { setResults(null); return; }
+    const matches = locations.filter(l => l.zip && l.zip.startsWith(val));
+    // also show same-state if zip is 5 digits
+    let nearby = [];
+    if(val.length >= 5 && matches.length === 0) {
+      // try first 3 digits for approximate area
+      const prefix = val.slice(0,3);
+      nearby = locations.filter(l => l.zip && l.zip.startsWith(prefix));
+    }
+    setResults(matches.length > 0 ? matches : nearby.length > 0 ? nearby : []);
+  };
+
+  const getClosures = n => (closures[n.toLowerCase()])||[];
+
+  return (
+    <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e0e8f5",padding:"12px 14px",marginBottom:8}}>
+      <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",letterSpacing:.5}}>🔍 Find by Zip Code</p>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <input
+          value={zip}
+          onChange={e=>search(e.target.value.replace(/\D/g,"").slice(0,5))}
+          placeholder="Enter zip code…"
+          maxLength={5}
+          style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",letterSpacing:2,fontWeight:600}}
+        />
+        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>Clear</button>}
+      </div>
+      {zip.length>=3&&results!==null&&(
+        <div style={{marginTop:10}}>
+          {results.length===0&&(
+            <div style={{textAlign:"center",padding:"12px 0",color:"#aaa"}}>
+              <p style={{margin:0,fontSize:13}}>No schools found near {zip}</p>
+              <p style={{margin:"4px 0 0",fontSize:11}}>Try a nearby zip or search by name above</p>
+            </div>
+          )}
+          {results.length>0&&(
+            <div>
+              <p style={{margin:"0 0 8px",fontSize:11,color:"#1a5c35",fontWeight:600}}>{results.length} school{results.length>1?"s":""} found near {zip}</p>
+              {results.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>onEdit(l)}/>)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── HUB CARDS ─────────────────────────────────────────────────────────
-function LocationCard({loc,closures,badge,isManager,onEdit}) {
-  const [copied,setCopied]=useState(false);
-  const copy=()=>{navigator.clipboard?.writeText(loc.ext);setCopied(true);setTimeout(()=>setCopied(false),1500);};
-  const hasClosure = closures&&closures.length>0;
+function HubLocCard({loc,closures,isManager,onEdit}) {
+  const [copiedExt,setCopiedExt]=useState(false);
+  const pricing = getPricing(loc.name);
+  const hasClosure=closures&&closures.length>0;
   return (
-    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${hasClosure?"#f5b7b1":"#efefef"}`,padding:"11px 13px",marginBottom:7}}>
+    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${hasClosure?"#f5b7b1":"#e0e8f5"}`,padding:"12px 14px",marginBottom:8}}>
       {hasClosure&&closures.map((c,i)=>(
         <div key={i} style={{background:"#fde8e8",borderRadius:7,padding:"5px 9px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:13}}>🚫</span>
+          <span style={{fontSize:12}}>🚫</span>
           <p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>{c.start_date} to {c.end_date} · {c.reason}</p>
         </div>
       ))}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
         <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",marginBottom:4}}>
-            <span style={{fontWeight:700,fontSize:13,color:"#1a1a1a"}}>{loc.name}</span>
-            {badge(loc.region,"#003087","#e8f0fe")}
-            {badge(loc.pool,loc.pool==="Salt"?"#856404":"#0d6efd",loc.pool==="Salt"?"#fff3cd":"#e8f4fd")}
-            {loc.privates&&badge("20min privates","#1a5c35","#eafaf1")}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+            <span style={{fontWeight:700,fontSize:15,color:"#1a1a1a"}}>{loc.name}</span>
+            <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:"#003087",fontWeight:700}}>{loc.region}</span>
+            <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?"#fff3cd":"#e8f4fd",color:loc.pool==="Salt"?"#856404":"#0d6efd",fontWeight:700}}>{loc.pool}</span>
+            {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:"#1a5c35",fontWeight:700}}>20min Privates</span>}
           </div>
-          <p style={{margin:0,fontSize:11,color:"#888"}}>📍 {loc.addr}</p>
+          <p style={{margin:"0 0 6px",fontSize:11,color:"#aaa"}}>📍 {loc.addr}</p>
+          {pricing&&(
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,background:"#e8f0fe",color:"#003087",padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
+              <span style={{fontSize:11,background:"#f0f4f8",color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
+              <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
+              <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
+            </div>
+          )}
         </div>
         <div style={{textAlign:"right",flexShrink:0}}>
-          <p style={{margin:"0 0 4px",fontSize:20,fontWeight:800,color:"#003087",letterSpacing:1}}>{loc.ext}</p>
-          <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-            <button onClick={copy} style={{padding:"4px 9px",borderRadius:7,border:"1.5px solid #003087",background:copied?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copied?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copied?"Copied!":"Copy"}</button>
-            {isManager&&<button onClick={onEdit} style={{padding:"4px 8px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>}
+          <p style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:"#003087",letterSpacing:1}}>{loc.ext}</p>
+          <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
+            <button onClick={()=>{navigator.clipboard?.writeText(loc.ext);setCopiedExt(true);setTimeout(()=>setCopiedExt(false),1500);}} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #003087",background:copiedExt?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copiedExt?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedExt?"Copied!":"Copy"}</button>
+            {isManager&&<button onClick={onEdit} style={{padding:"5px 8px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Edit</button>}
           </div>
         </div>
       </div>
@@ -1988,24 +2347,28 @@ function LocationCard({loc,closures,badge,isManager,onEdit}) {
   );
 }
 
-function PromoCard({promo,expanded,onToggle,badge,isManager,onEdit}) {
+function HubPromoCard({promo,isManager,onEdit}) {
+  const [expanded,setExpanded]=useState(false);
+  const [copiedCode,setCopiedCode]=useState(false);
+  const isExpiring = promo.expires_on && (new Date(promo.expires_on)-new Date())/(1000*60*60*24) < 7;
   return (
-    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${promo.expires_on?"#f0c080":"#efefef"}`,padding:"12px 13px",marginBottom:8}}>
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,cursor:"pointer"}} onClick={onToggle}>
+    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${isExpiring?"#f5b7b1":"#f0c080"}`,padding:"12px 14px",marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",marginBottom:4}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
             <span style={{fontWeight:700,fontSize:13}}>{promo.title}</span>
-            {promo.proactive&&badge("Offer proactively","#1a5c35","#eafaf1")}
-            {!promo.proactive&&badge("Customer mentions only","#c0392b","#fdf0ee")}
+            {promo.proactive&&<span style={{fontSize:9,background:"#eafaf1",color:"#1a5c35",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
+            {!promo.proactive&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
+            {promo.expires_on&&<span style={{fontSize:9,background:isExpiring?"#fde8e8":"#fff3cd",color:isExpiring?"#c0392b":"#856404",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Exp: {promo.expires_on}</span>}
           </div>
-          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:11,fontWeight:700,color:"#003087",background:"#e8f0fe",padding:"3px 8px",borderRadius:6}}>{promo.code}</span>
-            {promo.expires_on&&<span style={{fontSize:10,color:"#856404",background:"#fff3cd",padding:"2px 7px",borderRadius:5,fontWeight:600}}>Exp: {promo.expires_on}</span>}
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:14,fontWeight:800,color:"#003087",background:"#e8f0fe",padding:"4px 12px",borderRadius:8,letterSpacing:.5}}>{promo.code}</span>
+            <button onClick={()=>{navigator.clipboard?.writeText(promo.code);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),1500);}} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:copiedCode?"#003087":"#fff",cursor:"pointer",fontSize:11,color:copiedCode?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedCode?"✓ Copied":"Copy Code"}</button>
           </div>
         </div>
-        <div style={{display:"flex",gap:5,alignItems:"flex-start",flexShrink:0}}>
-          {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>}
-          <span style={{fontSize:14,color:"#aaa"}}>{expanded?"▲":"▼"}</span>
+        <div style={{display:"flex",gap:5,flexShrink:0}}>
+          {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>}
+          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#aaa"}}>{expanded?"▲":"▼"}</button>
         </div>
       </div>
       {expanded&&(
@@ -2018,61 +2381,62 @@ function PromoCard({promo,expanded,onToggle,badge,isManager,onEdit}) {
   );
 }
 
-function DocCard({doc,expanded,onToggle,isManager,onEdit}) {
+function HubDocCard({doc,isManager,onEdit}) {
+  const [expanded,setExpanded]=useState(false);
+  // Simple formatter: ALL CAPS lines → bold header, lines with → → highlighted
+  const formatContent=(text)=>{
+    if(!text) return null;
+    return text.split('\n').map((line,i)=>{
+      const trimmed=line.trim();
+      if(!trimmed) return <div key={i} style={{height:6}}/>;
+      if(trimmed.match(/^[═─]{3,}/)) return <hr key={i} style={{border:"none",borderTop:"1px solid #efefef",margin:"6px 0"}}/>;
+      if(trimmed===trimmed.toUpperCase()&&trimmed.length>3&&!trimmed.includes('$')&&!trimmed.match(/^\d/))
+        return <p key={i} style={{margin:"10px 0 4px",fontSize:11,fontWeight:700,color:"#003087",letterSpacing:.5,textTransform:"uppercase"}}>{trimmed}</p>;
+      if(trimmed.startsWith('"')&&trimmed.endsWith('"'))
+        return <p key={i} style={{margin:"4px 0",fontSize:12,color:"#1a5c35",background:"#f0faf4",borderLeft:"3px solid #1a5c35",padding:"4px 8px",borderRadius:"0 6px 6px 0",lineHeight:1.6}}>{trimmed}</p>;
+      if(trimmed.startsWith('☐')||trimmed.startsWith('✓'))
+        return <p key={i} style={{margin:"3px 0",fontSize:12,color:"#555",paddingLeft:8}}>{trimmed}</p>;
+      if(trimmed.startsWith('→')||trimmed.includes(' → '))
+        return <p key={i} style={{margin:"3px 0",fontSize:12,color:"#8e44ad",fontWeight:500,paddingLeft:8}}>{trimmed}</p>;
+      if(trimmed.match(/^\d+\./)||trimmed.match(/^(STEP|Step)\s+\d+/))
+        return <p key={i} style={{margin:"6px 0 2px",fontSize:12,fontWeight:700,color:"#1a1a1a"}}>{trimmed}</p>;
+      return <p key={i} style={{margin:"2px 0",fontSize:12,color:"#444",lineHeight:1.6}}>{trimmed}</p>;
+    });
+  };
+
   return (
-    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 13px",marginBottom:7}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={onToggle}>
+    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 14px",marginBottom:7}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={()=>setExpanded(!expanded)}>
         <span style={{fontSize:18,flexShrink:0}}>📄</span>
         <div style={{flex:1}}>
-          <p style={{margin:0,fontWeight:600,fontSize:13}}>{doc.title}</p>
-          {doc.category&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#f0f0f0",color:"#666",fontWeight:600}}>{doc.category}</span>}
+          <p style={{margin:0,fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{doc.title}</p>
         </div>
         <div style={{display:"flex",gap:5,flexShrink:0}}>
           {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>}
-          <span style={{fontSize:14,color:"#aaa"}}>{expanded?"▲":"▼"}</span>
+          <span style={{fontSize:14,color:"#aaa",padding:"3px 6px"}}>{expanded?"▲":"▼"}</span>
         </div>
       </div>
       {expanded&&doc.content&&(
-        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f5f5f5"}}>
-          <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.8,whiteSpace:"pre-line"}}>{doc.content}</p>
+        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f5f5f5",maxHeight:500,overflowY:"auto"}}>
+          {formatContent(doc.content)}
         </div>
       )}
     </div>
   );
 }
 
-function TeamCard({member}) {
+function HubTeamCard({member}) {
   const [copied,setCopied]=useState(false);
-  const copy=()=>{navigator.clipboard?.writeText(member.ext);setCopied(true);setTimeout(()=>setCopied(false),1500);};
   return (
-    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
       <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{avatar(member.name)}</div>
       <p style={{margin:0,flex:1,fontWeight:600,fontSize:13}}>{member.name}</p>
-      <span style={{fontSize:15,fontWeight:800,color:"#1a5c35",marginRight:6}}>{member.ext}</span>
-      <button onClick={copy} style={{padding:"4px 9px",borderRadius:7,border:"1.5px solid #1a5c35",background:copied?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:11,color:copied?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s"}}>{copied?"✓":"Copy"}</button>
+      <span style={{fontSize:16,fontWeight:800,color:"#1a5c35",marginRight:8}}>{member.ext}</span>
+      <button onClick={()=>{navigator.clipboard?.writeText(member.ext);setCopied(true);setTimeout(()=>setCopied(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #1a5c35",background:copied?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:11,color:copied?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s"}}>{copied?"✓":"Copy"}</button>
     </div>
   );
 }
 
-function PartnerLocCard({brand,loc,badge}) {
-  const [copied,setCopied]=useState(false);
-  const copy=()=>{navigator.clipboard?.writeText(loc.current);setCopied(true);setTimeout(()=>setCopied(false),1500);};
-  return (
-    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6}}>
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
-        <div style={{flex:1}}>
-          <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{loc.name}</p>
-          <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{loc.addr}</p>
-          <div style={{display:"flex",gap:6}}>
-            <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:"#003087"}}>{loc.current}</strong></span>
-            <span style={{fontSize:11,color:"#888"}}>New queue: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
-          </div>
-        </div>
-        <button onClick={copy} style={{padding:"4px 9px",borderRadius:7,border:"1.5px solid #ddd",background:copied?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:copied?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{copied?"✓":"Copy"}</button>
-      </div>
-    </div>
-  );
-}
 
 // ── HUB EDIT MODALS ───────────────────────────────────────────────────
 function HubPromoModal({item,onClose,onSave,onDelete}) {
@@ -2131,13 +2495,110 @@ function HubClosureModal({item,locations,onClose,onSave,onDelete}) {
 
 function HubDocModal({item,onClose,onSave,onDelete}) {
   const [f,setF]=useState({title:item?.title||"",content:item?.content||"",category:item?.category||"General",id:item?.id});
+  const [extracting,setExtracting]=useState(false);
+  const [uploadErr,setUploadErr]=useState("");
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const cats=["General","Scripts","SOPs","Pricing","Levels","FAQs","Policies"];
+  const fileRef=useRef();
+
+  const detectCategory=(name)=>{
+    const n=name.toLowerCase();
+    if(n.includes("script")||n.includes("call")||n.includes("objection")) return "Scripts";
+    if(n.includes("sop")||n.includes("procedure")||n.includes("how to")||n.includes("birthday")||n.includes("sibling")||n.includes("unavail")) return "SOPs";
+    if(n.includes("pric")||n.includes("tuition")||n.includes("fee")) return "Pricing";
+    if(n.includes("level")||n.includes("skill")||n.includes("assess")) return "Levels";
+    if(n.includes("faq")||n.includes("question")) return "FAQs";
+    if(n.includes("polic")||n.includes("max avail")||n.includes("declined")||n.includes("payment")) return "Policies";
+    return "General";
+  };
+
+  const csvToText=(csv)=>{
+    return csv.split("\n").map(row=>{
+      const cells=row.split(",").map(c=>c.replace(/^"|"$/g,"").trim());
+      return cells.filter(Boolean).join("  |  ");
+    }).filter(Boolean).join("\n");
+  };
+
+  const loadScript=(src)=>new Promise((res,rej)=>{
+    if(document.querySelector(`script[src="${src}"]`)){res();return;}
+    const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);
+  });
+
+  const extractPDF=async(file)=>{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const ab=await file.arrayBuffer();
+    const pdf=await window.pdfjsLib.getDocument({data:ab}).promise;
+    let text="";
+    for(let i=1;i<=pdf.numPages;i++){
+      const page=await pdf.getPage(i);
+      const tc=await page.getTextContent();
+      text+=tc.items.map(t=>t.str).join(" ")+("\n");
+    }
+    return text.trim();
+  };
+
+  const extractDocx=async(file)=>{
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+    const ab=await file.arrayBuffer();
+    const result=await window.mammoth.extractRawText({arrayBuffer:ab});
+    return result.value.trim();
+  };
+
+  const handleFile=async(file)=>{
+    if(!file)return;
+    setUploadErr("");setExtracting(true);
+    try{
+      const ext=file.name.split(".").pop().toLowerCase();
+      const title=file.name.replace(/\.[^.]+$/,"");
+      const cat=detectCategory(file.name);
+      let text="";
+      if(["txt","md"].includes(ext)){
+        text=await file.text();
+      } else if(ext==="csv"){
+        const raw=await file.text();
+        text=csvToText(raw);
+      } else if(ext==="pdf"){
+        text=await extractPDF(file);
+      } else if(ext==="docx"){
+        text=await extractDocx(file);
+      } else {
+        setUploadErr("Unsupported file type. Use PDF, Word (.docx), CSV, or TXT.");
+        setExtracting(false);return;
+      }
+      setF({...f,title,content:text,category:cat,id:f.id});
+    } catch(e){
+      setUploadErr("Could not extract file content. Try downloading as plain text (.txt) from Google Docs and uploading that.");
+      console.error(e);
+    }
+    setExtracting(false);
+  };
+
   return (
     <Modal title={item?"Edit Document":"Add Document"} sub="DOC" onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
+        {!item&&(
+          <div
+            onClick={()=>fileRef.current?.click()}
+            onDragOver={e=>e.preventDefault()}
+            onDrop={e=>{e.preventDefault();handleFile(e.dataTransfer.files[0]);}}
+            style={{border:"2px dashed #8e44ad",borderRadius:12,padding:"18px",textAlign:"center",cursor:"pointer",background:"#f5eefb",transition:"background .2s"}}
+          >
+            <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md,.csv" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
+            {extracting?(
+              <div><p style={{margin:0,fontSize:13,color:"#8e44ad",fontWeight:600}}>Extracting content…</p><p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>This may take a few seconds</p></div>
+            ):(
+              <div>
+                <p style={{margin:0,fontSize:22}}>📂</p>
+                <p style={{margin:"6px 0 2px",fontSize:13,fontWeight:600,color:"#8e44ad"}}>Drop a file or click to upload</p>
+                <p style={{margin:0,fontSize:11,color:"#aaa"}}>PDF · Word (.docx) · CSV · TXT — category auto-detected from filename</p>
+              </div>
+            )}
+          </div>
+        )}
+        {uploadErr&&<div style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:9,padding:"9px 12px"}}><p style={{margin:0,fontSize:12,color:"#c0392b"}}>{uploadErr}</p></div>}
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Auto-filled from filename" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
           <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Category</label>
             <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
               {cats.map(c=><option key={c}>{c}</option>)}
@@ -2145,9 +2606,9 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
           </div>
         </div>
         <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Content</label>
-          <textarea value={f.content} onChange={e=>set("content",e.target.value)} rows={10} placeholder="Paste or type the document content here…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.7,fontFamily:"inherit"}}/>
-          <p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>Plain text only. Line breaks are preserved.</p>
+          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Content {f.content&&<span style={{color:"#1a5c35",fontWeight:600}}>✓ Extracted</span>}</label>
+          <textarea value={f.content} onChange={e=>set("content",e.target.value)} rows={10} placeholder="Upload a file above or paste content here…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1.5px solid ${f.content?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",resize:"vertical",lineHeight:1.7,fontFamily:"inherit"}}/>
+          <p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>Review and edit extracted content before saving.</p>
         </div>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Delete Doc" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
@@ -2207,6 +2668,7 @@ function HubEventModal({item,onClose,onSave,onDelete}) {
     </Modal>
   );
 }
+
 
 export default function App() {
   const [view, setView] = useState("login");
