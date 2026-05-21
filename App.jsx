@@ -1380,20 +1380,6 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
-      {/* Queue notification - pulsing alert when it's your turn */}
-      {isNotified&&(
-        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:999,background:"#1a5c35",padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 20px rgba(0,0,0,.3)",animation:"popIn .3s ease"}}>
-          <span style={{fontSize:28}}>🌿</span>
-          <div style={{flex:1}}>
-            <p style={{margin:0,fontSize:15,fontWeight:800,color:"#fff"}}>Your break is ready!</p>
-            <p style={{margin:"2px 0 0",fontSize:12,color:"rgba(255,255,255,.7)"}}>Accept within {fmtTime(acceptSecsLeft)} or it passes to the next rep</p>
-          </div>
-          <button onClick={acceptQueuedBreak} style={{padding:"10px 18px",borderRadius:10,border:"none",background:"#fff",color:"#1a5c35",cursor:"pointer",fontSize:13,fontWeight:800}}>
-            Accept 🌿
-          </button>
-        </div>
-      )}
-
       <div style={{background:"#1a5c35",padding:"20px 18px 16px",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div>
@@ -1434,7 +1420,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
 
       <div style={{padding:"16px 16px",maxWidth:480,margin:"0 auto"}}>
         {tab==="my"&&(
-          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo}/>
+          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak}/>
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
@@ -1444,7 +1430,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   );
 }
 
-function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo }) {
+function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
   const cfg = ST[myRep.status]||ST.available;
   const onBreak = myRep.status==="health"||myRep.status==="lunch";
@@ -1461,7 +1447,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
               {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
             ].map(o=>(
-              <div key={o.key} onClick={()=>o.avail&&(startBreak(o.key),setShowBreakModal(false))} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
+              <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:24}}>{o.icon}</span>
                   <div style={{flex:1}}>
@@ -1503,7 +1489,29 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
             {onBreak?(
               <button onClick={returnFromBreak} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
             ):(
-              <button onClick={()=>setShowBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
+              <>
+                <button onClick={()=>setShowBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
+                {myQueueEntry?.status==="waiting"&&(
+                  <div style={{background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:12,padding:"12px 13px",marginTop:10,display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:20}}>🕐</span>
+                    <div style={{flex:1}}>
+                      <p style={{margin:0,fontWeight:700,fontSize:13,color:"#003087"}}>#{queuePosition} in the queue</p>
+                      <p style={{margin:"2px 0 0",fontSize:11,color:"#555"}}>{queuePosition===1?"You're up next!":"Waiting for a slot to open"}</p>
+                    </div>
+                    <button onClick={leaveQueue} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#fff",cursor:"pointer",fontSize:11,color:"#003087",fontWeight:600}}>Leave</button>
+                  </div>
+                )}
+                {isNotified&&(
+                  <div style={{background:"#1a5c35",borderRadius:12,padding:"12px 13px",marginTop:10}}>
+                    <p style={{margin:"0 0 4px",fontSize:13,fontWeight:700,color:"#fff"}}>🌿 Your break is ready!</p>
+                    <p style={{margin:"0 0 10px",fontSize:11,color:"rgba(255,255,255,.7)"}}>Accept within {fmtTime(acceptSecsLeft)} or it passes to the next rep</p>
+                    <button onClick={acceptQueuedBreak} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"#fff",color:"#1a5c35",cursor:"pointer",fontSize:13,fontWeight:800}}>Accept Break ✅</button>
+                  </div>
+                )}
+                {breakQueue.filter(q=>q.status==="waiting").length>0&&!myQueueEntry&&(
+                  <p style={{margin:"8px 0 0",fontSize:11,color:"#aaa",textAlign:"center"}}>{breakQueue.filter(q=>q.status==="waiting").length} rep{breakQueue.filter(q=>q.status==="waiting").length>1?"s are":" is"} in the health break queue</p>
+                )}
+              </>
             )}
           </div>
         )}
