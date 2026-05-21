@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
-const MANAGER_PIN = "2024";
+const MANAGER_PIN = "1234";
+const HUB_ENABLED = false; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const LUNCH_LIMIT = 3;
@@ -345,6 +346,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
     {k:"pto",l:"PTO"},
     {k:"reports",l:"Reports"},
     {k:"settings",l:"Settings"},
+    ...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[]),
   ];
 
   return (
@@ -415,6 +417,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="reports"   &&<MgrReports reps={reps}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
+        {tab==="hub"&&HUB_ENABLED&&<HubView/>}
       </div>
     </div>
   );
@@ -1356,7 +1359,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       {/* Rep Tabs */}
       <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb"}}>
         <div style={{display:"flex",padding:"0 16px"}}>
-          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`}].map(t=>(
+          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.k?700:500,color:tab===t.k?"#1a5c35":mySwaps.length>0&&t.k==="swaps"?"#e07b00":"#999",borderBottom:tab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,transition:"all .15s"}}>{t.l}</button>
           ))}
         </div>
@@ -1368,6 +1371,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
+        {tab==="hub"&&HUB_ENABLED&&<HubView/>}
       </div>
     </div>
   );
@@ -1610,6 +1614,481 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
 }
 
 // ── APP ROOT ──────────────────────────────────────────────────────────
+
+// ── HUB DATA ──────────────────────────────────────────────────────────
+const HUB_LOCATIONS = [
+  // AUSTIN
+  {region:"Austin",name:"Anderson Mill",ext:"5001",privates:true,pool:"Chlorine",addr:"13492 N HWY 183 #500, Austin, TX"},
+  {region:"Austin",name:"Cedar Park",ext:"1801",privates:true,pool:"Chlorine",addr:"1310 E Whitestone Blvd #590, Cedar Park, TX"},
+  {region:"Austin",name:"Oak Hill",ext:"2301",privates:true,pool:"Chlorine",addr:"7100 US-290 Ste B, Austin, TX"},
+  {region:"Austin",name:"Round Rock",ext:"1400",privates:true,pool:"Chlorine",addr:"2800 S I-35 #190, Round Rock, TX"},
+  {region:"Austin",name:"Westlake",ext:"6001",privates:true,pool:"Chlorine",addr:"3267 Bee Cave Rd #145, Austin, TX"},
+  // DFW 1
+  {region:"DFW 1",name:"Allen",ext:"9001",privates:true,pool:"Chlorine",addr:"909 W Stacy Rd, Allen, TX"},
+  {region:"DFW 1",name:"Firewheel",ext:"3001",privates:true,pool:"Chlorine",addr:"5250 HWY 78 #980, Sachse, TX"},
+  {region:"DFW 1",name:"Frisco - Central (McKinney)",ext:"1101",privates:true,pool:"Chlorine",addr:"7151 Preston Rd #321, Frisco, TX"},
+  {region:"DFW 1",name:"Frisco - West",ext:"2101",privates:true,pool:"Chlorine",addr:"2440 El Dorado Pkwy #120, Frisco, TX"},
+  {region:"DFW 1",name:"Plano",ext:"8001",privates:true,pool:"Chlorine",addr:"4621 West Park Blvd #104, Plano, TX"},
+  // DFW 2
+  {region:"DFW 2",name:"Flower Mound",ext:"1003",privates:true,pool:"Chlorine",addr:"3000 Waketon Rd #102, Flower Mound, TX"},
+  {region:"DFW 2",name:"Fort Worth",ext:"1201",privates:true,pool:"Chlorine",addr:"6250 Southwest Blvd, Fort Worth, TX"},
+  {region:"DFW 2",name:"Southlake",ext:"1301",privates:true,pool:"Chlorine",addr:"280 Commerce St #180, Southlake, TX"},
+  // Dallas
+  {region:"Dallas",name:"Preston Forest",ext:"7001",privates:true,pool:"Chlorine",addr:"11909 Preston Rd #1422, Dallas, TX"},
+  {region:"Dallas",name:"Walnut Hill",ext:"1701",privates:true,pool:"Chlorine",addr:"9820 N Central Expy #500, Dallas, TX"},
+  // Indiana
+  {region:"Indiana",name:"Fort Wayne",ext:"9141",privates:false,pool:"Chlorine",addr:"10530 Maysville Rd, Fort Wayne, IN"},
+  {region:"Indiana",name:"Westfield",ext:"10123",privates:true,pool:"Chlorine",addr:"15955 Spring Mill Depot Dr Ste 105, Westfield, IN 46074"},
+  // Houston
+  {region:"Houston",name:"Clear Lake",ext:"1601",privates:true,pool:"Chlorine",addr:"5440 El Dorado Blvd #900, Houston, TX"},
+  {region:"Houston",name:"Katy",ext:"2601",privates:false,pool:"Chlorine",addr:"6823 S Fry Rd #200, Katy, TX"},
+  {region:"Houston",name:"Meyerland",ext:"1501",privates:false,pool:"Chlorine",addr:"9929 S Post Oak Rd, Houston, TX"},
+  {region:"Houston",name:"Saint Street",ext:"9155",privates:false,pool:"Chlorine",addr:"2717 Saint St, Houston, TX 77027"},
+  {region:"Houston",name:"Spring-Klein",ext:"1901",privates:false,pool:"Chlorine",addr:"603 Spring Stuebner Rd #100, Spring, TX"},
+  {region:"Houston",name:"Vintage Park",ext:"2001",privates:false,pool:"Chlorine",addr:"106 Vintage Park Blvd B, Houston, TX"},
+  {region:"Houston",name:"The Woodlands",ext:"2501",privates:true,pool:"Chlorine",addr:"27822 I-45N, Oak Ridge North, TX"},
+  // Midwest
+  {region:"Midwest",name:"Leawood",ext:"4001",privates:true,pool:"Salt",addr:"3612 W 135th St #D201, Leawood, KS"},
+  {region:"Midwest",name:"Northland",ext:"9180",privates:false,pool:"Chlorine",addr:"8350 N Broadway, Kansas City, MO"},
+  {region:"Midwest",name:"Westwood",ext:"2201",privates:true,pool:"Salt",addr:"2848 W 47th St, Kansas City, KS"},
+  {region:"Midwest",name:"Wichita",ext:"9296",privates:false,pool:"Chlorine",addr:"1800 N Rock Rd Ste 100, Wichita, KS 67206"},
+  // Northwest
+  {region:"Northwest",name:"Beaverton-Washington Square",ext:"9029",privates:false,pool:"Chlorine",addr:"9140 SW Hall Blvd, Beaverton, OR"},
+  {region:"Northwest",name:"Beaverton-Tanasbourne",ext:"10090",privates:true,pool:"Chlorine",addr:"1225 NW Waterhouse Ave, Beaverton, OR"},
+  {region:"Northwest",name:"Gig Harbor",ext:"10096",privates:false,pool:"Chlorine",addr:"4914 Point Fosdick Dr, Gig Harbor, WA 98335"},
+  {region:"Northwest",name:"Hazel Dell",ext:"10126",privates:true,pool:"Chlorine",addr:"8810 NE 5th Ave, Vancouver, WA 98665"},
+  {region:"Northwest",name:"Klahanie",ext:"10092",privates:true,pool:"Chlorine",addr:"4506 Klahanie Dr SE, Sammamish, WA"},
+  {region:"Northwest",name:"Olympia",ext:"1005",privates:false,pool:"Chlorine",addr:"110 Delphi Rd NW Ste 102, Olympia, WA 98502"},
+  {region:"Northwest",name:"Tualatin",ext:"9022",privates:false,pool:"Chlorine",addr:"19449 SW Martinazzi Ave, Tualatin, OR"},
+  // San Antonio
+  {region:"San Antonio",name:"Alamo Ranch",ext:"2401",privates:true,pool:"Chlorine",addr:"6626 W Loop 1064 N, San Antonio, TX"},
+  {region:"San Antonio",name:"Huebner",ext:"3201",privates:true,pool:"Chlorine",addr:"15502 Huebner Rd #111, San Antonio, TX"},
+  {region:"San Antonio",name:"Schertz",ext:"3301",privates:true,pool:"Chlorine",addr:"6044 FM 3009 #285, Schertz, TX"},
+  {region:"San Antonio",name:"Stone Oak",ext:"1096",privates:true,pool:"Chlorine",addr:"20210 Stone Oak Pkwy #204, San Antonio, TX"},
+  // Other
+  {region:"Great Lakes",name:"Brookfield",ext:"9293",privates:false,pool:"Chlorine",addr:"350 Discovery Dr, Brookfield, WI 53045"},
+  {region:"Nevada",name:"Henderson",ext:"10025",privates:false,pool:"Chlorine",addr:"10907 S Eastern Ave, Henderson, NV 89052"},
+  {region:"Southeast",name:"Greenville",ext:"9319",privates:false,pool:"Chlorine",addr:"1025 Woodruff Rd Ste J105, Greenville, SC 29607"},
+  {region:"Colorado",name:"Colorado Springs - Briargate",ext:"9144",privates:true,pool:"Chlorine",addr:"5470 Powers Center Point #130, Colorado Springs, CO"},
+];
+
+const HUB_PROMOS = [
+  {
+    code:"DIVEIN40",
+    title:"40% Off June Tuition",
+    expires:"Jun 14",
+    proactive:true,
+    rules:"Valid for leads and lapsed customers only — NOT active customers. Discount applies to June tuition only. Customer must enroll for at least 2 months (June & July). Continuous monthly lessons only — no clinics or ODLs. Valid for all brands EXCEPT SWIMKIDS. You may offer this proactively."
+  },
+  {
+    code:"SOLON26FREE",
+    title:"New Solon Site Opening Promo",
+    expires:"Jul 10",
+    proactive:true,
+    rules:"First 4 lessons free for anyone signing up for continuous lessons at our new Solon location with no drop date. Customer only has to pay the registration fee. You may offer this proactively."
+  },
+  {
+    code:"Auto (no code)",
+    title:"Multi-Class Discount — 10% Off",
+    expires:"Ongoing",
+    proactive:false,
+    rules:"10% off a student's second continuous class (and third/fourth). ICP applies this automatically — do NOT manually add it. Customer must be continuously enrolled. ODLs do not count. IMPORTANT: delete the Student Discount field manually if ICP tries to add the discount to an ODL charge."
+  },
+  {
+    code:"Ask manager for code",
+    title:"Registration Fee Override — 3+ Students",
+    expires:"Ongoing",
+    proactive:false,
+    rules:"Maximum of 2 annual registration fees per family. Use the promo code to zero out the annual registration fee for the third student and beyond in the same family."
+  },
+  {
+    code:"No code (auto at Day 28)",
+    title:"Lead Journey Day 28 — 20% Off",
+    expires:"Ongoing",
+    proactive:false,
+    rules:"20% off the first month of classes for leads who reached Day 28 of the DNR Sequence. DO NOT offer proactively — customer must bring this up themselves."
+  },
+  {
+    code:"Auto (no code)",
+    title:"Sibling Discount — 10% Off",
+    expires:"Ongoing",
+    proactive:false,
+    rules:"10% off tuition for the second child (and third/fourth) for the first full 3 months of enrollment only — Emler schools only. ICP applies this automatically in perpetuity for other brands. Valid toward continuous group classes only. See the SOP in Frequently Used Docs for help entering this."
+  },
+  {
+    code:"No code needed",
+    title:"Referral Promotion — $50 Credit",
+    expires:"Ongoing",
+    proactive:false,
+    rules:"Current family who refers a brand new family gets $50 credit per swimmer in the new family added to their account. The new family gets $50 off their first enrollment per child. New family MUST mention the referring family's name. You must find the current family in ICP to verify before honoring the promo. New family must enroll for continuous lessons — ODLs don't count."
+  },
+];
+
+const HUB_PARTNERS = [
+  {brand:"AQUAfin Swim School",locations:[
+    {name:"Fleming Island",current:"10112",queue:"10111",addr:"2276 Village Square Pkwy, Fleming Island, FL 32003"},
+    {name:"Mandarin",current:"10115",queue:"10114",addr:"3993 San Jose Park Dr, Jacksonville, FL 32217"},
+    {name:"Ponte Vedra (Nocatee)",current:"10117",queue:"10116",addr:"820 Commed Blvd, Orange City, FL 32763"},
+    {name:"St. Augustine",current:"10119",queue:"10118",addr:"130 Center Place Way, St. Augustine, FL 32095"},
+    {name:"St. Johns Bluff",current:"10121",queue:"10120",addr:"2006 St. Johns Bluff Rd S, Jacksonville, FL 32246"},
+  ]},
+  {brand:"AQua Wave Swim School",locations:[
+    {name:"Lake Forest",current:"10077",queue:"10078",addr:"27025 Burbank, Lake Forest, CA 92610"},
+  ]},
+  {brand:"Charlotte Swim Academy",locations:[
+    {name:"Charlotte",current:"10107",queue:"10106",addr:"9315-A Monroe Rd, Charlotte, NC 28270"},
+  ]},
+  {brand:"King's Swim Academy",locations:[
+    {name:"San Carlos",current:"2107",queue:"1207",addr:"1119 Industrial Rd, San Carlos, CA 94070"},
+    {name:"San Mateo",current:"1607",queue:"1107",addr:"57 E 40th Ave, San Mateo, CA 94403"},
+  ]},
+  {brand:"Little Flippers",locations:[
+    {name:"Natick",current:"2607",queue:"3207",addr:"7 Strathmore Rd, Natick, MA 01760"},
+    {name:"Winchester",current:"8007",queue:"2307",addr:"29 East St, Winchester, MA 01890"},
+  ]},
+  {brand:"Njswim",locations:[
+    {name:"Brick",current:"10080",queue:"10079",addr:"Laurel Square Shopping Center, 1930 Route 88, Brick, NJ 08724"},
+    {name:"Florham Park",current:"10094",queue:"10093",addr:"Brooklake Country Club, 139 Brooklake Rd, Florham Park, NJ 07932"},
+    {name:"Lakeside-Roxbury",current:"10082",queue:"10081",addr:"143 Lakeside Blvd, Landing, NJ 07850"},
+    {name:"Manasquan",current:"10098",queue:"10097",addr:"The Atlantic Club, 1904 Atlantic Ave, Manasquan, NJ 08736"},
+    {name:"Sparta",current:"10084",queue:"10083",addr:"350 Sparta Ave, Sparta, NJ 07871"},
+    {name:"Turnersville",current:"10086",queue:"10085",addr:"3501 NJ-42 Unit 420, Turnersville, NJ 08012"},
+  ]},
+  {brand:"Planet Gymnastics",locations:[
+    {name:"Natick",current:"1507",queue:"4007",addr:"7 Strathmore Rd, Natick, MA 01760"},
+  ]},
+  {brand:"SwimKids",locations:[
+    {name:"Gainesville",current:"10048",queue:"10047",addr:"13555 Wellington Center Cir Unit 109, Gainesville, VA 20155"},
+    {name:"Leesburg",current:"1407",queue:"7007",addr:"681 Potomac Station Dr, Leesburg, VA 20176"},
+    {name:"Woodbridge",current:"10045",queue:"10044",addr:"14531 Potomac Mills Rd, Woodbridge, VA 22192"},
+  ]},
+  {brand:"Swim To Shore",locations:[
+    {name:"Murrieta",current:"10130",queue:"10129",addr:"25395 Madison Ave #101, Murrieta, CA 92562"},
+  ]},
+];
+
+const HUB_TEAM = [
+  {name:"Joe Huffman",ext:"1098"},
+  {name:"Andrea Dow-Johnson",ext:"9313"},
+  {name:"Gontsi Sambane",ext:"9329"},
+  {name:"Andrea Burtman",ext:"1080"},
+  {name:"Leah Lopez",ext:"1088"},
+  {name:"Rebecca Jaffier",ext:"9044"},
+  {name:"Jordan DiDonato",ext:"9299"},
+  {name:"Heather Baker",ext:"9307"},
+  {name:"Amanda Beydoun",ext:"9308"},
+  {name:"Kelly Perez",ext:"9314"},
+  {name:"Marcel Matthee",ext:"9316"},
+  {name:"Deonte Epps",ext:"9320"},
+  {name:"Lungile Cewu",ext:"9330"},
+  {name:"Darryl Shipman",ext:"9331"},
+  {name:"Rickey Jones",ext:"9337"},
+  {name:"Likhona Nyumbeka",ext:"9340"},
+  {name:"Mike Slobin",ext:"9338"},
+  {name:"Shadrack Kondile",ext:"9339"},
+  {name:"Pamela Martin",ext:"9346"},
+];
+
+const HUB_EVENTS = [
+  {name:"Greenville site opens",date:"May 16, 2026",note:""},
+  {name:"Solon site opens",date:"Jul 11, 2026",note:"Tentative"},
+  {name:"Kirkland site opens",date:"Aug/Sept 2026",note:""},
+  {name:"Wexford site opens",date:"TBD",note:"Date not confirmed"},
+];
+
+const HUB_DOCS = [
+  {name:"ESC Schedule",url:"#"},
+  {name:"ESC Location Info",url:"#"},
+  {name:"Call Script",url:"#"},
+  {name:"Level Assessment Guide",url:"#"},
+  {name:"Guide to Class Levels & Skills",url:"#"},
+  {name:"Lesson Pricing 2026",url:"#"},
+  {name:"Overcoming Objections Script",url:"#"},
+  {name:"Birthday Party SOP",url:"#"},
+  {name:"SOP: 3 Month Sibling Discount",url:"#"},
+  {name:"Frequently Asked Questions (FAQs)",url:"#"},
+  {name:"HubSpot Login Page",url:"#"},
+  {name:"iClassPro Enterprise Portal",url:"#"},
+  {name:"iClassPro Regions Guide",url:"#"},
+  {name:"Eval/L1O Appointment How-To",url:"#"},
+  {name:"Zip Code Location Finder",url:"#"},
+  {name:"Class Unavailability Workflow",url:"#"},
+  {name:"MAX Availability Codes",url:"#"},
+  {name:"ICP Declined Payment Codes",url:"#"},
+  {name:"Hope Floats Reference Guide",url:"#"},
+  {name:"Emler Retail Link",url:"#"},
+];
+
+// ── HUB VIEW ──────────────────────────────────────────────────────────
+function HubView() {
+  const [q, setQ] = useState("");
+  const [section, setSection] = useState("search");
+  const [expandedPromo, setExpandedPromo] = useState(null);
+  const [expandedPartner, setExpandedPartner] = useState(null);
+  const term = q.toLowerCase().trim();
+
+  const matchLoc = HUB_LOCATIONS.filter(l=>!term||(l.name+l.region+l.ext+l.addr).toLowerCase().includes(term));
+  const matchPromo = HUB_PROMOS.filter(p=>!term||(p.title+p.code+p.rules).toLowerCase().includes(term));
+  const matchTeam = HUB_TEAM.filter(t=>!term||(t.name+t.ext).toLowerCase().includes(term));
+  const matchPartner = HUB_PARTNERS.filter(p=>!term||p.brand.toLowerCase().includes(term)||p.locations.some(l=>(l.name+l.current+l.queue+l.addr).toLowerCase().includes(term)));
+  const matchDocs = HUB_DOCS.filter(d=>!term||d.name.toLowerCase().includes(term));
+
+  const totalResults = matchLoc.length + matchPromo.length + matchTeam.length + matchPartner.reduce((a,p)=>a+p.locations.filter(l=>!term||(l.name+l.current+l.queue).toLowerCase().includes(term)).length,0);
+
+  const card = {background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 13px",marginBottom:7};
+  const badge = (label,color="#1a5c35",bg="#eafaf1") => (
+    <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:bg,color,fontWeight:700,letterSpacing:0.3}}>{label}</span>
+  );
+
+  const sections = ["search","locations","promos","team","partners","events","docs"];
+  const sectionLabels = {search:`Search${term?` (${totalResults})`:""}`,locations:"Locations",promos:"Promos",team:"Team",partners:"Partners",events:"Events",docs:"Docs"};
+
+  return (
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#003087,#0057b8)",padding:"20px 18px 16px",color:"#fff"}}>
+        <p style={{margin:"0 0 2px",fontSize:10,opacity:.6,letterSpacing:2,textTransform:"uppercase"}}>ESC Hub</p>
+        <h1 style={{margin:"0 0 12px",fontSize:21,fontWeight:800}}>🏊 Emler Knowledge Hub</h1>
+        <div style={{position:"relative"}}>
+          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>🔍</span>
+          <input
+            value={q} onChange={e=>{setQ(e.target.value);setSection("search");}}
+            placeholder="Search locations, promos, extensions…"
+            style={{width:"100%",boxSizing:"border-box",padding:"11px 12px 11px 38px",borderRadius:12,border:"none",fontSize:14,outline:"none",background:"rgba(255,255,255,.95)"}}
+          />
+          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#aaa"}}>✕</button>}
+        </div>
+        {term&&<p style={{margin:"8px 0 0",fontSize:11,opacity:.7}}>{totalResults} result{totalResults!==1?"s":""} across all sections</p>}
+      </div>
+
+      {/* Section tabs */}
+      <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb",overflowX:"auto"}}>
+        <div style={{display:"flex",padding:"0 14px",minWidth:"max-content"}}>
+          {sections.map(s=>(
+            <button key={s} onClick={()=>setSection(s)} style={{padding:"10px 12px",border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:section===s?700:500,color:section===s?"#003087":"#999",borderBottom:section===s?"2.5px solid #003087":"2.5px solid transparent",marginBottom:-1.5,whiteSpace:"nowrap",transition:"all .15s",textTransform:"capitalize"}}>{sectionLabels[s]}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"14px 14px",maxWidth:640,margin:"0 auto"}}>
+
+        {/* SEARCH RESULTS */}
+        {section==="search"&&(
+          <div>
+            {!term&&(
+              <div style={{textAlign:"center",padding:"30px 0 20px"}}>
+                <p style={{fontSize:28,margin:"0 0 8px"}}>🔍</p>
+                <p style={{fontWeight:600,fontSize:15,color:"#555",margin:"0 0 4px"}}>Search everything</p>
+                <p style={{fontSize:13,color:"#aaa",margin:0}}>Locations, extensions, promos, team members, partners</p>
+              </div>
+            )}
+            {term&&matchLoc.length>0&&(
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>📍 Locations ({matchLoc.length})</p>
+                {matchLoc.slice(0,5).map((l,i)=><LocationCard key={i} loc={l} badge={badge}/>)}
+                {matchLoc.length>5&&<p style={{fontSize:12,color:"#aaa",textAlign:"center",cursor:"pointer"}} onClick={()=>setSection("locations")}>+{matchLoc.length-5} more — see all locations →</p>}
+              </div>
+            )}
+            {term&&matchPromo.length>0&&(
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:"0 0 8px",fontWeight:700}}>🎯 Promotions ({matchPromo.length})</p>
+                {matchPromo.map((p,i)=><PromoCard key={i} promo={p} expanded={expandedPromo===i} onToggle={()=>setExpandedPromo(expandedPromo===i?null:i)} badge={badge}/>)}
+              </div>
+            )}
+            {term&&matchTeam.length>0&&(
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 8px",fontWeight:700}}>👤 Team ({matchTeam.length})</p>
+                {matchTeam.map((t,i)=><TeamCard key={i} member={t}/>)}
+              </div>
+            )}
+            {term&&matchPartner.length>0&&(
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 8px",fontWeight:700}}>🤝 Partners</p>
+                {matchPartner.map((p,i)=>(
+                  <div key={i}>
+                    {p.locations.filter(l=>!term||(l.name+l.current+l.queue+l.addr+p.brand).toLowerCase().includes(term)).map((l,j)=>(
+                      <PartnerLocCard key={j} brand={p.brand} loc={l} badge={badge}/>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            {term&&totalResults===0&&(
+              <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
+                <p style={{fontSize:28,margin:"0 0 8px"}}>🤔</p>
+                <p style={{fontWeight:600,fontSize:14,color:"#888"}}>No results for "{q}"</p>
+                <p style={{fontSize:12,color:"#aaa"}}>Try a location name, extension number, or promo code</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* LOCATIONS */}
+        {section==="locations"&&(
+          <div>
+            {Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
+              <div key={region} style={{marginBottom:18}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>{region} ({locs.length})</p>
+                {locs.map((l,i)=><LocationCard key={i} loc={l} badge={badge}/>)}
+              </div>
+            ))}
+            {matchLoc.length===0&&<p style={{textAlign:"center",color:"#aaa",padding:"30px 0"}}>No locations match "{q}"</p>}
+          </div>
+        )}
+
+        {/* PROMOS */}
+        {section==="promos"&&(
+          <div>
+            <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:10,padding:"10px 13px",marginBottom:14}}>
+              <p style={{margin:0,fontSize:12,color:"#856404",fontWeight:600}}>⚡ Always check expiry dates. When in doubt ask your manager before applying a promo.</p>
+            </div>
+            {matchPromo.map((p,i)=><PromoCard key={i} promo={p} expanded={expandedPromo===i} onToggle={()=>setExpandedPromo(expandedPromo===i?null:i)} badge={badge}/>)}
+          </div>
+        )}
+
+        {/* TEAM */}
+        {section==="team"&&(
+          <div>
+            <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 10px",fontWeight:700}}>ESC Team Extensions</p>
+            {matchTeam.map((t,i)=><TeamCard key={i} member={t}/>)}
+          </div>
+        )}
+
+        {/* PARTNERS */}
+        {section==="partners"&&(
+          <div>
+            {HUB_PARTNERS.filter(p=>!term||p.brand.toLowerCase().includes(term)||p.locations.some(l=>(l.name+l.current+l.queue).toLowerCase().includes(term))).map((p,i)=>(
+              <div key={i} style={{marginBottom:16}}>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 7px",fontWeight:700}}>{p.brand}</p>
+                {p.locations.filter(l=>!term||(l.name+l.current+l.queue+p.brand).toLowerCase().includes(term)).map((l,j)=>(
+                  <PartnerLocCard key={j} brand={p.brand} loc={l} badge={badge}/>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* EVENTS */}
+        {section==="events"&&(
+          <div>
+            <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#e07b00",margin:"0 0 10px",fontWeight:700}}>Upcoming Events & Openings</p>
+            {HUB_EVENTS.map((e,i)=>(
+              <div key={i} style={{...card,display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:24}}>🏊</span>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontWeight:600,fontSize:13}}>{e.name}</p>
+                  <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{e.date}{e.note?` · ${e.note}`:""}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* DOCS */}
+        {section==="docs"&&(
+          <div>
+            <div style={{background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:10,padding:"10px 13px",marginBottom:14}}>
+              <p style={{margin:0,fontSize:12,color:"#1a4a8a"}}>📎 These links go to external documents. They will be brought into this hub over time.</p>
+            </div>
+            {matchDocs.map((d,i)=>(
+              <div key={i} style={{...card,display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:18}}>📄</span>
+                <p style={{margin:0,flex:1,fontWeight:500,fontSize:13,color:"#1a1a1a"}}>{d.name}</p>
+                <span style={{fontSize:11,color:"#aaa"}}>Link pending</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+function LocationCard({loc,badge}) {
+  const [copied,setCopied]=useState(false);
+  const copy=(text)=>{navigator.clipboard?.writeText(text);setCopied(true);setTimeout(()=>setCopied(false),1500);};
+  return (
+    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 13px",marginBottom:7}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+            <span style={{fontWeight:700,fontSize:14,color:"#1a1a1a"}}>{loc.name}</span>
+            {badge(loc.region,"#003087","#e8f0fe")}
+            {badge(loc.pool,loc.pool==="Salt"?"#856404":"#0d6efd",loc.pool==="Salt"?"#fff3cd":"#e8f4fd")}
+            {loc.privates&&badge("20min Privates","#1a5c35","#eafaf1")}
+          </div>
+          <p style={{margin:"0 0 3px",fontSize:12,color:"#888"}}>📍 {loc.addr}</p>
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <p style={{margin:"0 0 4px",fontSize:20,fontWeight:800,color:"#003087",letterSpacing:1}}>{loc.ext}</p>
+          <button onClick={()=>copy(loc.ext)} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:copied?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copied?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copied?"Copied!":"Copy ext"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PromoCard({promo,expanded,onToggle,badge}) {
+  return (
+    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${promo.expires!=="Ongoing"?"#f0c080":"#efefef"}`,padding:"12px 13px",marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,cursor:"pointer"}} onClick={onToggle}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+            <span style={{fontWeight:700,fontSize:13}}>{promo.title}</span>
+            {promo.proactive&&badge("Offer proactively","#1a5c35","#eafaf1")}
+            {!promo.proactive&&badge("Customer mentions only","#c0392b","#fdf0ee")}
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <span style={{fontSize:12,fontWeight:700,color:"#003087",background:"#e8f0fe",padding:"3px 8px",borderRadius:6,letterSpacing:0.5}}>{promo.code}</span>
+            {promo.expires!=="Ongoing"&&<span style={{fontSize:11,color:"#856404",background:"#fff3cd",padding:"2px 7px",borderRadius:5,fontWeight:600}}>Exp: {promo.expires}</span>}
+          </div>
+        </div>
+        <span style={{fontSize:16,color:"#aaa",marginTop:2}}>{expanded?"▲":"▼"}</span>
+      </div>
+      {expanded&&(
+        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f5f5f5"}}>
+          <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#555",letterSpacing:0.5,textTransform:"uppercase"}}>Full Rules</p>
+          <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.7,whiteSpace:"pre-line"}}>{promo.rules}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamCard({member}) {
+  const [copied,setCopied]=useState(false);
+  const copy=()=>{navigator.clipboard?.writeText(member.ext);setCopied(true);setTimeout(()=>setCopied(false),1500);};
+  return (
+    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:34,height:34,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{avatar(member.name)}</div>
+      <p style={{margin:0,flex:1,fontWeight:600,fontSize:13}}>{member.name}</p>
+      <span style={{fontSize:16,fontWeight:800,color:"#1a5c35",marginRight:8}}>{member.ext}</span>
+      <button onClick={copy} style={{padding:"4px 9px",borderRadius:7,border:"1.5px solid #1a5c35",background:copied?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:11,color:copied?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s"}}>{copied?"✓":"Copy"}</button>
+    </div>
+  );
+}
+
+function PartnerLocCard({brand,loc,badge}) {
+  const [copied,setCopied]=useState(false);
+  const copy=(text)=>{navigator.clipboard?.writeText(text);setCopied(true);setTimeout(()=>setCopied(false),1500);};
+  return (
+    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+        <div style={{flex:1}}>
+          <p style={{margin:"0 0 3px",fontWeight:600,fontSize:13}}>{loc.name}</p>
+          <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{loc.addr}</p>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:"#003087"}}>{loc.current}</strong></span>
+            <span style={{fontSize:11,color:"#888"}}>New queue: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
+          </div>
+        </div>
+        <button onClick={()=>copy(loc.current)} style={{padding:"4px 9px",borderRadius:7,border:"1.5px solid #ddd",background:copied?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:copied?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{copied?"✓":"Copy"}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState("login");
   const [currentRep, setCurrentRep] = useState(null);
