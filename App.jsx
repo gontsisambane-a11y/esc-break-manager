@@ -158,7 +158,7 @@ const sbPost  = (tbl,d)    => sb(tbl,{method:"POST",body:JSON.stringify(d)});
 const sbDel   = (tbl,id)   => sb(`${tbl}?id=eq.${id}`,{method:"DELETE"});
 
 async function loadAll() {
-  const [reps,settArr,adHoc,swaps,activeBreaks,todayPTO] = await Promise.all([
+  const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue,todayPTO] = await Promise.all([
     sb("rep_status?select=*&order=id"),
     sb("app_settings?id=eq.1"),
     sb("adhoc_lunch_requests?status=eq.pending&order=created_at.desc"),
@@ -192,7 +192,7 @@ async function loadAll() {
       r.status="pto"; r.ooo_note="PTO";
     }
   }
-  return { reps, settings, adHoc, swaps, activeBreaks };
+  return { reps, settings, adHoc, swaps, activeBreaks, breakQueue:breakQueue||[] };
 }
 
 async function loadReportData(start, end) {
