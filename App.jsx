@@ -50,6 +50,12 @@ const TZ_C = {
 
 // ── UTILS ─────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().split('T')[0];
+const RESET_HOUR_UTC = 4; // Reset at 4am UTC (6am SA) — safely after 3am SA shift end
+const businessDayStr = (isoDate) => {
+  const d = new Date(isoDate || Date.now());
+  const adjusted = new Date(d.getTime() - RESET_HOUR_UTC * 3600 * 1000);
+  return adjusted.toISOString().split('T')[0];
+};
 const todayDay = () => DAYS[new Date().getDay()];
 const todayLabel = () => { const now=new Date(); const tz=Intl.DateTimeFormat().resolvedOptions().timeZone; const city=tz.split('/').pop().replace(/_/g,' '); return now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' · '+city; };
 const fmtTime = s => { if(s<=0)return"0:00"; return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; };
@@ -180,10 +186,10 @@ async function loadAll() {
     } catch(e) { console.warn("PTO seed error",e); }
   }
   // daily reset
-  const today = todayStr();
+  const today = businessDayStr();
   const todayPTONames = todayPTO.map(p=>p.rep_name);
   for(const r of reps) {
-    if(r.updated_at && !r.updated_at.startsWith(today) && (r.health_breaks_today>0||r.health_time_banked>0)) {
+    if(r.updated_at && businessDayStr(r.updated_at) !== today && (r.health_breaks_today>0||r.health_time_banked>0)) {
       await sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_today:0,health_time_banked:0,last_break_returned_at:null});
       r.health_breaks_today=0; r.health_time_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
     }
@@ -437,9 +443,14 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     const newBanked = (rep.health_time_banked||0) + durSec;
     const updates = { status:"available", updated_at: new Date().toISOString() };
     if(rep.status==="health") {
-      updates.health_time_banked = newBanked;
-      if(newBanked >= HEALTH_MAX_SEC) updates.last_break_returned_at = new Date().toISOString();
-      if(newBanked>=HEALTH_MAX_SEC&&(rep.health_breaks_today||0)+1>=HEALTH_PER_DAY) fire("warn",`⚠️ ${rep.name} has banked all ${HEALTH_PER_DAY} × 10 min today`);
+      if(newBanked >= HEALTH_MAX_SEC) {
+        updates.health_time_banked = HEALTH_MAX_SEC; // mark as full
+        updates.last_break_returned_at = new Date().toISOString();
+        updates.health_breaks_today = (rep.health_breaks_today||0)+1;
+        if((rep.health_breaks_today||0)+1>=HEALTH_PER_DAY) fire("warn",`⚠️ ${rep.name} has used all ${HEALTH_PER_DAY} full breaks today`);
+      } else {
+        updates.health_time_banked = newBanked;
+      }
     }
     if(ab) {
       await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
@@ -692,7 +703,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
       {reps.map(rep=>{
         const cfg=ST[rep.status]||ST.available;
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
-        const cooldownActive = !!(rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
+        const cooldownActive = !!(rep.health_time_banked>=HEALTH_MAX_SEC && rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
         const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(rep.last_break_returned_at) : 0;
         return (
           <div key={rep.id} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
@@ -1353,8 +1364,9 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         reload(); return;
       }
     }
+    const bankedReset = type==="health" && myRep.health_time_banked>=HEALTH_MAX_SEC && !cooldownActive;
     const updates = {status:type,updated_at:new Date().toISOString()};
-    // health_breaks_today incremented on RETURN only if full 10 min taken
+    if(bankedReset) updates.health_time_banked = 0; // start fresh cycle after cooldown expired
     await sbPatch("rep_status",repInfo.id,updates);
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:type});
     fire("approved",`Enjoy your ${type==="lunch"?"lunch 🥗":"health break 🌿"}!`);
@@ -1364,12 +1376,17 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const returnFromBreak = async () => {
     const ab = activeBreaks.find(b=>b.rep_id===repInfo.id);
     const durSec = ab ? elapsedSec(ab.started_at) : 0;
-    const newBanked = myRep.status==="health" ? durSec : 0; // per-break only, not cumulative
+    const newBanked = myRep.status==="health" ? (myRep.health_time_banked||0)+durSec : 0;
     const updates = {status:"available",updated_at:new Date().toISOString()};
     if(myRep.status==="health") {
-      updates.health_time_banked = newBanked;
-      if(newBanked>=HEALTH_MAX_SEC) updates.last_break_returned_at = new Date().toISOString();
-      if(newBanked>=HEALTH_MAX_SEC) fire("info","Full 10 min break taken — 2-hour cooldown now active 🕐");
+      if(newBanked >= HEALTH_MAX_SEC) {
+        updates.health_time_banked = HEALTH_MAX_SEC; // mark as full
+        updates.last_break_returned_at = new Date().toISOString();
+        updates.health_breaks_today = (myRep.health_breaks_today||0)+1;
+        fire("info","10 min banked — 2-hour cooldown now active 🕐");
+      } else {
+        updates.health_time_banked = newBanked;
+      }
     }
     if(ab) await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
     await sbPatch("rep_status",repInfo.id,updates);
@@ -1539,7 +1556,7 @@ function RepTeam({ reps, myId, activeBreaks }) {
         {reps.map(rep=>{
           const cfg=ST[rep.status]||ST.available;
           const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
-          const cooldownActive=!!(rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
+          const cooldownActive=!!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
           const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
           const isMe=rep.id===myId;
           return (
