@@ -2937,16 +2937,17 @@ function HubEventModal({item,onClose,onSave,onDelete}) {
 
 // ── QUOTE CALCULATOR ──────────────────────────────────────────────────
 const LESSON_TYPES = [
-  {key:"group_mf",   label:"Group (M–F)",        priceKey:"price_mf",  continuous:true,  group:true},
-  {key:"group_ss",   label:"Group (Sa–Su)",       priceKey:"price_ss",  continuous:true,  group:true},
-  {key:"swim_tm_mf", label:"Swim Team (M–F)",     priceKey:"price_mf",  continuous:true,  group:true},  // approx — no separate swim team col yet
-  {key:"swim_tm_ss", label:"Swim Team (Sa–Su)",   priceKey:"price_ss",  continuous:true,  group:true},
-  {key:"private_30", label:"Private (30 min)",    priceKey:"price_priv",continuous:true,  group:false},
-  {key:"semi",       label:"Semi-Private (30m)",  priceKey:"price_semi",continuous:true,  group:false},
-  {key:"private_20", label:"Private (20 min)",    priceKey:"price_priv20",continuous:true,group:false},
-  {key:"odl_mf",     label:"ODL (M–F)",           priceKey:"price_odl", continuous:false, group:false},
-  {key:"odl_ss",     label:"ODL (Sa–Su)",         priceKey:"price_odl", continuous:false, group:false},
-  {key:"clinic",     label:"Swim Clinic (per wk)",priceKey:"price_mf",  continuous:false, group:false},
+  {key:"group_mf",   label:"Group (M–F)",          priceKey:"price_mf",       continuous:true,  group:true},
+  {key:"group_ss",   label:"Group (Sa–Su)",         priceKey:"price_ss",       continuous:true,  group:true},
+  {key:"swim_tm_mf", label:"Swim Team (M–F)",       priceKey:"price_st_mf",    continuous:true,  group:true},
+  {key:"swim_tm_ss", label:"Swim Team (Sa–Su)",     priceKey:"price_st_ss",    continuous:true,  group:true},
+  {key:"private_30", label:"Private (30 min)",      priceKey:"price_priv",     continuous:true,  group:false},
+  {key:"semi",       label:"Semi-Private (30m)",    priceKey:"price_semi",     continuous:true,  group:false},
+  {key:"adaptive",   label:"Private Adaptive",      priceKey:"price_adaptive", continuous:true,  group:false},
+  {key:"private_20", label:"Private (20 min)",      priceKey:"price_priv20",   continuous:true,  group:false},
+  {key:"odl_mf",     label:"ODL (M–F)",             priceKey:"price_odl",      continuous:false, group:false},
+  {key:"odl_ss",     label:"ODL (Sa–Su)",           priceKey:"price_odl_ss",   continuous:false, group:false},
+  {key:"clinic",     label:"Swim Clinic (per wk)",  priceKey:"price_clinic",   continuous:false, group:false},
 ];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 // FIX 1+10: SwimKids IS a partner brand — added to list
