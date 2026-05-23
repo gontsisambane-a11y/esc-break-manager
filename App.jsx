@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "2024";
-const HUB_ENABLED = True; // flip to true when approved
+const HUB_ENABLED = true; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
