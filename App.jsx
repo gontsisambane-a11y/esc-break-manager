@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "2024";
-const HUB_ENABLED = true; // flip to true when approved
+const HUB_ENABLED = True; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
@@ -356,6 +356,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
     {k:"reports",l:"Reports"},
     {k:"settings",l:"Settings"},
     {k:"enrolment",l:"📋 Enrolment"},
+    {k:"pipeline",l:"📞 Pipeline"},
     ...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[]),
   ];
 
@@ -428,6 +429,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
         {tab==="enrolment"&&<EnrolmentBoard reps={reps} reload={reload} fire={fire} currentRepId={null} isManager={true}/>}
+        {tab==="pipeline"&&<MgrPipeline reps={reps}/>}
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
       </div>
     </div>
@@ -527,11 +529,96 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     );
   }
 
+  // ── Lunch schedule analysis for today ─────────────────────────────
+  const todayKey = todayDay();
+
+  // Detect viewer's timezone from browser offset and map to app TZ label
+  const viewerOffsetMin = -(new Date().getTimezoneOffset()); // e.g. +120 for SAST
+  const viewerTz = Object.entries(TZ_OFFSET).reduce((best,[label,offset])=>
+    Math.abs(offset-viewerOffsetMin) < Math.abs((TZ_OFFSET[best]??Infinity)-viewerOffsetMin) ? label : best
+  , "Central");
+
+  const lunchSlots = reps
+    .filter(r => isRepOnShift(r) && !["off","pto","sick"].includes(r.status))
+    .map(r => {
+      const sched = (r.lunch_schedule||{})[todayKey];
+      if(!sched?.time && !sched?.start) return null;
+      const repTz = r.timezone||"Central";
+      const converted = sched?.time ? convertLunchTime(sched.time, repTz, viewerTz) : null;
+      const shiftStart = sched?.start ? convertLunchTime(sched.start, repTz, viewerTz) : null;
+      const shiftEnd   = sched?.end   ? convertLunchTime(sched.end,   repTz, viewerTz) : null;
+      return { rep: r, time: converted, shiftStart, shiftEnd, rawTime: sched?.time, repTz, duration: sched?.duration||60 };
+    })
+    .filter(Boolean);
+
+  // Group by converted time to find conflicts (times now all in viewer's tz)
+  const slotGroups = lunchSlots.reduce((acc, x) => {
+    acc[x.time] = acc[x.time] || [];
+    acc[x.time].push(x);
+    return acc;
+  }, {});
+  const conflictSlots = Object.entries(slotGroups).filter(([,group]) => group.length >= LUNCH_LIMIT);
+
   return (
     <div style={{marginTop:16}}>
       {oooModal&&(
         <OOOModal rep={oooModal} onClose={()=>setOooModal(null)} onMark={handleMarkOOO}/>
       )}
+
+      {/* Lunch conflict warnings */}
+      {conflictSlots.length>0&&(
+        <div style={{background:"#fff8ee",border:"1.5px solid #e07b00",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+          <p style={{margin:"0 0 8px",fontSize:12,fontWeight:800,color:"#b85c00"}}>⚠️ Lunch Conflicts Today</p>
+          {conflictSlots.map(([time, group])=>(
+            <div key={time} style={{marginBottom:6}}>
+              <span style={{fontSize:11,fontWeight:700,color:"#b85c00"}}>{fmt12h(time)} {viewerTz} — {group.length} reps scheduled ({LUNCH_LIMIT} max): </span>
+              <span style={{fontSize:11,color:"#888"}}>{group.map(x=>x.rep.name).join(", ")}</span>
+            </div>
+          ))}
+          <p style={{margin:"8px 0 0",fontSize:10,color:"#aaa"}}>Ad hoc requests during these windows will push you over the limit.</p>
+        </div>
+      )}
+
+      {/* Today's lunch schedule strip */}
+      {lunchSlots.length>0&&(
+        <div style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+          <p style={{margin:"0 0 2px",fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>🥗 Today's Lunch Schedule</p>
+          <p style={{margin:"0 0 10px",fontSize:10,color:"#ccc"}}>Times shown in your timezone: <strong style={{color:"#aaa"}}>{viewerTz}</strong></p>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {[...lunchSlots].sort((a,b)=>(a.shiftStart||a.time||"").localeCompare(b.shiftStart||b.time||"")).map(({rep,time,shiftStart,shiftEnd,repTz,duration})=>{
+              const sameSlotCount = time ? (slotGroups[time]?.length||1) : 1;
+              const isConflict = sameSlotCount >= LUNCH_LIMIT;
+              const diffTz = repTz !== viewerTz;
+              return (
+                <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 8px",borderRadius:8,background:isConflict?"#fff8ee":"#f9f9f9",border:`1px solid ${isConflict?"#f0a500":"#eee"}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7}}>
+                    <div style={{width:24,height:24,borderRadius:"50%",background:rep.status==="lunch"?"#e07b00":"#eafaf1",color:rep.status==="lunch"?"#fff":"#1a5c35",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:12,fontWeight:600,color:rep.status==="lunch"?"#e07b00":"#333"}}>{rep.name}</span>
+                        {diffTz&&<span style={{fontSize:9,color:"#ccc"}}>{repTz}</span>}
+                        {rep.status==="lunch"&&<span style={{fontSize:9,background:"#fdebd0",color:"#9c5a00",padding:"1px 5px",borderRadius:4,fontWeight:700}}>ON LUNCH</span>}
+                      </div>
+                      {(shiftStart||shiftEnd)&&<div style={{fontSize:10,color:"#aaa",marginTop:1}}>Shift: {shiftStart?fmt12h(shiftStart):"?"} – {shiftEnd?fmt12h(shiftEnd):"?"}</div>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+                    {isConflict&&<span style={{fontSize:9,color:"#b85c00",fontWeight:700}}>⚠️ {sameSlotCount} at once</span>}
+                    {time&&<span style={{fontSize:12,fontWeight:700,color:isConflict?"#b85c00":"#555"}}>🥗 {fmt12h(time)} <span style={{fontSize:10,fontWeight:400,color:"#aaa"}}>{duration===30?"30m":"1hr"}</span></span>}
+                    {!time&&<span style={{fontSize:10,color:"#ccc"}}>No lunch set</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {(() => {
+            const onShiftCount = reps.filter(r=>isRepOnShift(r)&&!["off","pto","sick"].includes(r.status)).length;
+            const noSchedule = onShiftCount - lunchSlots.length;
+            return noSchedule > 0 ? <p style={{margin:"8px 0 0",fontSize:10,color:"#ccc"}}>{noSchedule} rep(s) have no schedule set for today.</p> : null;
+          })()}
+        </div>
+      )}
+
       {onBreak.length>0&&<Section title="🌿🥗 On Break" items={onBreak} Row={RepRow} color="#2980b9"/>}
       {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
       {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
@@ -612,6 +699,8 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
     }
   };
 
+  const onLunchNow = reps.filter(r=>r.status==="lunch").length;
+
   return (
     <div style={{marginTop:16}}>
       {adHoc.length===0&&swaps.length===0&&(
@@ -624,7 +713,18 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
         <div style={{marginBottom:20}}>
           <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#e07b00",margin:"0 0 8px",fontWeight:700}}>🥗 Ad Hoc Lunch Requests ({adHoc.length})</p>
           {adHoc.map(r=>(
-            <div key={r.id} style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+            <div key={r.id} style={{background:"#fff8ee",border:`1.5px solid ${onLunchNow>=LUNCH_LIMIT?"#e74c3c":"#f0c080"}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+              {onLunchNow>=LUNCH_LIMIT&&(
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,background:"#fdf0ee",borderRadius:8,padding:"6px 10px"}}>
+                  <span style={{fontSize:12}}>🚨</span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#c0392b"}}>{onLunchNow}/{LUNCH_LIMIT} reps already on lunch — approving this will exceed the limit</span>
+                </div>
+              )}
+              {onLunchNow>0&&onLunchNow<LUNCH_LIMIT&&(
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,background:"#fff3e0",borderRadius:8,padding:"6px 10px"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#b85c00"}}>⚠️ {onLunchNow}/{LUNCH_LIMIT} reps currently on lunch</span>
+                </div>
+              )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
                 <div>
                   <p style={{margin:0,fontWeight:600,fontSize:14}}>{r.rep_name}</p>
@@ -633,7 +733,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
                 </div>
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={()=>handleAdHoc(r,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
-                  <button onClick={()=>handleAdHoc(r,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Approve</button>
+                  <button onClick={()=>handleAdHoc(r,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:onLunchNow>=LUNCH_LIMIT?"#c0392b":"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>{onLunchNow>=LUNCH_LIMIT?"⚠️ Approve Anyway":"Approve"}</button>
                 </div>
               </div>
             </div>
@@ -1436,10 +1536,47 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     reload();
   };
 
+  // ── Callback due notifications ────────────────────────────────────
+  const [dueCallbacks, setDueCallbacks] = useState([]);
+  const [dismissedCbs, setDismissedCbs] = useState(new Set());
+
+  const checkDueCallbacks = useCallback(async () => {
+    try {
+      const now = new Date();
+      const todayDate = now.toISOString().slice(0,10);
+      const nowTime = now.toTimeString().slice(0,5); // "HH:MM"
+      const data = await sb(`callbacks?rep_id=eq.${repInfo.id}&status=eq.pending&callback_date=lte.${todayDate}`);
+      const due = (data||[]).filter(cb => cb.callback_date < todayDate || (cb.callback_date === todayDate && cb.callback_time <= nowTime));
+      setDueCallbacks(due);
+    } catch(e) {}
+  }, [repInfo.id]);
+
+  useEffect(()=>{
+    checkDueCallbacks();
+    const t = setInterval(checkDueCallbacks, 60000);
+    return ()=>clearInterval(t);
+  },[checkDueCallbacks]);
+
+  const dismissCallback = (id) => setDismissedCbs(prev => new Set([...prev, id]));
+  const visibleDue = dueCallbacks.filter(cb => !dismissedCbs.has(cb.id));
+
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+
+      {/* Callback due banners */}
+      {visibleDue.map(cb=>(
+        <div key={cb.id} style={{background:"#1a3a5c",color:"#fff",padding:"12px 16px",borderBottom:"2px solid #f0c040",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+          <div style={{flex:1}}>
+            <p style={{margin:"0 0 2px",fontSize:12,fontWeight:800,color:"#f0c040"}}>📞 Callback Due Now</p>
+            <p style={{margin:"0 0 2px",fontSize:14,fontWeight:700}}>{cb.parent_name} · {cb.phone}</p>
+            {cb.notes&&<p style={{margin:0,fontSize:11,opacity:.8,lineHeight:1.4}}>"{cb.notes}"</p>}
+            <p style={{margin:"4px 0 0",fontSize:10,opacity:.55}}>Scheduled {cb.callback_date===new Date().toISOString().slice(0,10)?"today":cb.callback_date} at {fmt12h(cb.callback_time)}</p>
+          </div>
+          <button onClick={()=>dismissCallback(cb.id)} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:11,flexShrink:0}}>Dismiss</button>
+        </div>
+      ))}
 
       <div style={{background:"#1a5c35",padding:"20px 18px 16px",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -1473,7 +1610,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       {/* Rep Tabs */}
       <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb"}}>
         <div style={{display:"flex",padding:"0 16px"}}>
-          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(hasEnrolAccess?[{k:"enrolment",l:"📋 Enrolment"}]:[]),...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
+          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},{k:"callbacks",l:"📞 Callbacks"},...(hasEnrolAccess?[{k:"enrolment",l:"📋 Enrolment"}]:[]),...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.k?700:500,color:tab===t.k?"#1a5c35":mySwaps.length>0&&t.k==="swaps"?"#e07b00":"#999",borderBottom:tab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,transition:"all .15s"}}>{t.l}</button>
           ))}
         </div>
@@ -1485,6 +1622,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks} centreOpen={centreOpen}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
+        {tab==="callbacks"&&<RepCallbacks repInfo={repInfo} fire={fire}/>}
         {tab==="enrolment"&&<EnrolmentBoard reps={reps} reload={reload} fire={fire} currentRepId={repInfo.id} isManager={false}/>}
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={false}/>}
       </div>
@@ -3532,6 +3670,354 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ── MANAGER PIPELINE ──────────────────────────────────────────────────────
+function MgrPipeline({ reps }) {
+  const [callbacks, setCallbacks] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [filterRep, setFilterRep] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("pending");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await sb(`callbacks?order=callback_date.asc,callback_time.asc`);
+      setCallbacks(data||[]);
+    } catch(e) {}
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const todayStr2 = () => new Date().toISOString().slice(0,10);
+  const isOverdue = cb => cb.status==="pending" && (cb.callback_date < todayStr2() || (cb.callback_date===todayStr2() && cb.callback_time < new Date().toTimeString().slice(0,5)));
+
+  const STATUS_CFG = {
+    pending:   {label:"Pending",   bg:"#f0faf4", border:"#b7dfca", dot:"#1a7a45"},
+    no_answer: {label:"No Answer", bg:"#fff8ee", border:"#f0c080", dot:"#b85c00"},
+    done:      {label:"Done",      bg:"#f5f5f5", border:"#e0e0e0", dot:"#aaa"},
+  };
+
+  const repNames = [...new Set(callbacks.map(c=>c.rep_name))].sort();
+  const filtered = callbacks.filter(c =>
+    (filterRep==="all" || c.rep_name===filterRep) &&
+    (filterStatus==="all" || c.status===filterStatus)
+  );
+
+  const pending   = callbacks.filter(c=>c.status==="pending").length;
+  const noAnswer  = callbacks.filter(c=>c.status==="no_answer").length;
+  const overdueN  = callbacks.filter(isOverdue).length;
+  const doneN     = callbacks.filter(c=>c.status==="done").length;
+
+  // Group by rep for summary
+  const byRep = reps.filter(r=>callbacks.some(c=>c.rep_id===r.id)).map(r=>({
+    rep: r,
+    pending: callbacks.filter(c=>c.rep_id===r.id&&c.status==="pending").length,
+    noAnswer: callbacks.filter(c=>c.rep_id===r.id&&c.status==="no_answer").length,
+    overdue: callbacks.filter(c=>c.rep_id===r.id&&isOverdue(c)).length,
+    done: callbacks.filter(c=>c.rep_id===r.id&&c.status==="done").length,
+  }));
+
+  return (
+    <div style={{paddingTop:16}}>
+      {/* Summary stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+        {[
+          {n:pending,  l:"Pending",    c:"#1a7a45"},
+          {n:overdueN, l:"Overdue",    c:"#c0392b"},
+          {n:noAnswer, l:"No Answer",  c:"#b85c00"},
+          {n:doneN,    l:"Done",       c:"#aaa"},
+        ].map(s=>(
+          <div key={s.l} style={{background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1.5px solid #efefef"}}>
+            <p style={{margin:0,fontSize:20,fontWeight:800,color:s.c}}>{s.n}</p>
+            <p style={{margin:0,fontSize:9,color:"#aaa",fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>{s.l}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Rep summary cards */}
+      {byRep.length>0&&(
+        <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:16}}>
+          <p style={{margin:"0 0 10px",fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>By Rep</p>
+          {byRep.map(({rep,pending,noAnswer,overdue,done})=>(
+            <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #f5f5f5"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"#eafaf1",color:"#1a5c35",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{rep.avatar||avatar(rep.name)}</div>
+                <span style={{fontSize:13,fontWeight:600}}>{rep.name}</span>
+              </div>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                {overdue>0&&<span style={{fontSize:11,color:"#c0392b",fontWeight:700}}>⚠️ {overdue} overdue</span>}
+                {pending>0&&<span style={{fontSize:11,color:"#1a7a45"}}>{pending} pending</span>}
+                {noAnswer>0&&<span style={{fontSize:11,color:"#b85c00"}}>{noAnswer} no answer</span>}
+                {done>0&&<span style={{fontSize:11,color:"#aaa"}}>{done} done</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <select value={filterRep} onChange={e=>setFilterRep(e.target.value)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff",flex:1}}>
+          <option value="all">All reps</option>
+          {repNames.map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff",flex:1}}>
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="no_answer">No Answer</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+
+      {loading&&<p style={{textAlign:"center",color:"#bbb",padding:"30px 0"}}>Loading…</p>}
+
+      {!loading&&filtered.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
+          <p style={{fontSize:32,margin:"0 0 8px"}}>📞</p>
+          <p style={{fontWeight:600,fontSize:14,color:"#888"}}>No callbacks match this filter</p>
+        </div>
+      )}
+
+      {!loading&&filtered.map(cb=>{
+        const cfg = STATUS_CFG[cb.status]||STATUS_CFG.pending;
+        const overdue = isOverdue(cb);
+        const dateLabel = cb.callback_date===todayStr2()?"Today":new Date(cb.callback_date+"T12:00:00").toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+        return (
+          <div key={cb.id} style={{background:overdue?"#fff4f4":cfg.bg,border:`1.5px solid ${overdue?"#f5b7b1":cfg.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:2}}>
+                  <span style={{fontWeight:700,fontSize:14}}>{cb.parent_name}</span>
+                  {overdue&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>OVERDUE</span>}
+                  {cb.status==="done"&&<span style={{fontSize:9,background:"#f5f5f5",color:"#aaa",padding:"2px 6px",borderRadius:4,fontWeight:700}}>DONE</span>}
+                  {cb.status==="no_answer"&&<span style={{fontSize:9,background:"#fff8ee",color:"#b85c00",padding:"2px 6px",borderRadius:4,fontWeight:700}}>NO ANSWER</span>}
+                </div>
+                <span style={{fontSize:12,color:"#1a5c35",fontWeight:600}}>📞 {cb.phone}</span>
+                <div style={{display:"flex",gap:8,marginTop:3,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:overdue?"#c0392b":"#555",fontWeight:overdue?700:400}}>🗓 {dateLabel} 🕐 {fmt12h(cb.callback_time)}</span>
+                </div>
+                {cb.notes&&<p style={{margin:"5px 0 0",fontSize:11,color:"#888",lineHeight:1.4}}>{cb.notes}</p>}
+              </div>
+              <div style={{fontSize:11,color:"#aaa",textAlign:"right",flexShrink:0}}>
+                <div style={{fontWeight:600,color:"#555"}}>{cb.rep_name}</div>
+                <div style={{fontSize:10}}>Rep</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── CALLBACKS ─────────────────────────────────────────────────────────────
+function RepCallbacks({ repInfo, fire }) {
+  const [callbacks, setCallbacks] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [showAdd, setShowAdd]     = useState(false);
+  const [editing, setEditing]     = useState(null); // callback obj
+  const [saving, setSaving]       = useState(false);
+
+  const blank = { parent_name:"", phone:"", callback_time:"", callback_date:"", notes:"", status:"pending" };
+  const [form, setForm] = useState(blank);
+  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await sb(`callbacks?rep_id=eq.${repInfo.id}&order=callback_date.asc,callback_time.asc`);
+      setCallbacks(data||[]);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const openAdd = () => { setForm(blank); setEditing(null); setShowAdd(true); };
+  const openEdit = (cb) => { setForm({...cb}); setEditing(cb); setShowAdd(true); };
+
+  const save = async () => {
+    if(!form.parent_name.trim()||!form.phone.trim()||!form.callback_date||!form.callback_time){
+      fire("declined","Please fill in name, phone, date and time"); return;
+    }
+    setSaving(true);
+    try {
+      if(editing) {
+        await sbPatch("callbacks", editing.id, {...form, updated_at:new Date().toISOString()});
+        fire("approved","Callback updated");
+      } else {
+        await sbPost("callbacks", {...form, rep_id:repInfo.id, rep_name:repInfo.name, created_at:new Date().toISOString()});
+        fire("approved","Callback added to your pipeline");
+      }
+      setShowAdd(false); load();
+    } catch(e) { fire("declined","Error saving — does the callbacks table exist?"); }
+    setSaving(false);
+  };
+
+  const updateStatus = async (cb, status) => {
+    await sbPatch("callbacks", cb.id, {status, updated_at:new Date().toISOString()});
+    fire("info", status==="done"?"✅ Marked as done":status==="no_answer"?"📵 Marked no answer":"↩️ Moved back to pending");
+    load();
+  };
+
+  const remove = async (cb) => {
+    await sb(`callbacks?id=eq.${cb.id}`,{method:"DELETE"});
+    fire("info","Removed from pipeline");
+    load();
+  };
+
+  const todayStr2 = () => new Date().toISOString().slice(0,10);
+  const isOverdue = cb => cb.status==="pending" && (cb.callback_date < todayStr2() || (cb.callback_date===todayStr2() && cb.callback_time < new Date().toTimeString().slice(0,5)));
+
+  const pending   = callbacks.filter(c=>c.status==="pending");
+  const noAnswer  = callbacks.filter(c=>c.status==="no_answer");
+  const done      = callbacks.filter(c=>c.status==="done");
+
+  const STATUS_CFG = {
+    pending:   {label:"Pending",   bg:"#f0faf4", border:"#b7dfca", dot:"#1a7a45"},
+    no_answer: {label:"No Answer", bg:"#fff8ee", border:"#f0c080", dot:"#b85c00"},
+    done:      {label:"Done",      bg:"#f5f5f5", border:"#e0e0e0", dot:"#aaa"},
+  };
+
+  if(showAdd) return (
+    <div style={{paddingTop:16}}>
+      <button onClick={()=>setShowAdd(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#1a5c35",fontWeight:700,fontSize:13,marginBottom:14,padding:0}}>← Back</button>
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+        <p style={{margin:"0 0 14px",fontSize:14,fontWeight:800,color:"#1a1a1a"}}>{editing?"Edit Callback":"New Callback"}</p>
+
+        <div style={{display:"flex",flexDirection:"column",gap:11}}>
+          <div>
+            <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>PARENT NAME</label>
+            <input value={form.parent_name} onChange={e=>set("parent_name",e.target.value)} placeholder="e.g. Sarah Johnson" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>PHONE NUMBER</label>
+            <input value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="e.g. 082 555 0123" type="tel" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>CALL BACK DATE</label>
+              <input value={form.callback_date} onChange={e=>set("callback_date",e.target.value)} type="date" min={todayStr2()} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>CALL BACK TIME</label>
+              <input value={form.callback_time} onChange={e=>set("callback_time",e.target.value)} type="time" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
+            </div>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>NOTES <span style={{fontWeight:400,color:"#bbb"}}>(optional)</span></label>
+            <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="e.g. Mum needs to check with husband — interested in Tuesday swim class, Level 2" rows={3} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical",fontFamily:"inherit"}}/>
+          </div>
+          {editing&&(
+            <div>
+              <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>STATUS</label>
+              <div style={{display:"flex",gap:8}}>
+                {["pending","no_answer","done"].map(s=>(
+                  <div key={s} onClick={()=>set("status",s)} style={{flex:1,padding:"8px 0",textAlign:"center",borderRadius:9,border:`1.5px solid ${form.status===s?STATUS_CFG[s].dot:"#ddd"}`,background:form.status===s?STATUS_CFG[s].bg:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,color:form.status===s?STATUS_CFG[s].dot:"#aaa"}}>
+                    {STATUS_CFG[s].label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            <button onClick={()=>setShowAdd(false)} style={{flex:1,padding:"11px 0",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#aaa",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancel</button>
+            <button onClick={save} disabled={saving} style={{flex:2,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?.6:1}}>{saving?"Saving…":editing?"Save Changes":"Add to Pipeline"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const CallbackCard = ({cb}) => {
+    const cfg = STATUS_CFG[cb.status]||STATUS_CFG.pending;
+    const overdue = isOverdue(cb);
+    const dateLabel = cb.callback_date===todayStr2()?"Today":new Date(cb.callback_date+"T12:00:00").toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+    return (
+      <div style={{background:overdue?"#fff4f4":cfg.bg,border:`1.5px solid ${overdue?"#f5b7b1":cfg.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <span style={{fontWeight:700,fontSize:14,color:"#1a1a1a"}}>{cb.parent_name}</span>
+              {overdue&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>OVERDUE</span>}
+              {cb.status==="done"&&<span style={{fontSize:9,background:"#f5f5f5",color:"#aaa",padding:"2px 6px",borderRadius:4,fontWeight:700}}>DONE</span>}
+              {cb.status==="no_answer"&&<span style={{fontSize:9,background:"#fff8ee",color:"#b85c00",padding:"2px 6px",borderRadius:4,fontWeight:700}}>NO ANSWER</span>}
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
+              <span style={{fontSize:13,color:"#1a5c35",fontWeight:600}}>📞 {cb.phone}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:3,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,color:overdue?"#c0392b":"#555",fontWeight:overdue?700:400}}>🗓 {dateLabel}</span>
+              <span style={{fontSize:12,color:overdue?"#c0392b":"#555",fontWeight:overdue?700:400}}>🕐 {fmt12h(cb.callback_time)}</span>
+            </div>
+            {cb.notes&&<p style={{margin:"6px 0 0",fontSize:11,color:"#888",lineHeight:1.4}}>{cb.notes}</p>}
+          </div>
+          <button onClick={()=>openEdit(cb)} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",fontSize:11,color:"#888",fontWeight:600,cursor:"pointer",flexShrink:0}}>Edit</button>
+        </div>
+        {cb.status!=="done"&&(
+          <div style={{display:"flex",gap:6,marginTop:10}}>
+            {cb.status==="pending"&&<button onClick={()=>updateStatus(cb,"no_answer")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f0c080",background:"#fff8ee",cursor:"pointer",fontSize:11,color:"#b85c00",fontWeight:600}}>📵 No Answer</button>}
+            {cb.status==="no_answer"&&<button onClick={()=>updateStatus(cb,"pending")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #ddd",background:"#f9f9f9",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>↩ Reschedule</button>}
+            <button onClick={()=>updateStatus(cb,"done")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:700}}>✅ Done</button>
+            <button onClick={()=>remove(cb)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b",fontWeight:600}}>🗑</button>
+          </div>
+        )}
+        {cb.status==="done"&&(
+          <div style={{display:"flex",gap:6,marginTop:10}}>
+            <button onClick={()=>updateStatus(cb,"pending")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #ddd",background:"#f9f9f9",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>↩ Reopen</button>
+            <button onClick={()=>remove(cb)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b",fontWeight:600}}>🗑</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const overdueCount = pending.filter(isOverdue).length;
+
+  return (
+    <div style={{paddingTop:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div>
+          <p style={{margin:0,fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>📞 My Callbacks</p>
+          {overdueCount>0&&<p style={{margin:"2px 0 0",fontSize:11,color:"#c0392b",fontWeight:600}}>⚠️ {overdueCount} overdue</p>}
+        </div>
+        <button onClick={openAdd} style={{padding:"7px 14px",borderRadius:9,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Add Callback</button>
+      </div>
+
+      {loading&&<p style={{textAlign:"center",color:"#bbb",padding:"30px 0"}}>Loading…</p>}
+
+      {!loading&&callbacks.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
+          <p style={{fontSize:32,margin:"0 0 8px"}}>📞</p>
+          <p style={{fontWeight:600,fontSize:15,color:"#888"}}>No callbacks yet</p>
+          <p style={{fontSize:12,color:"#bbb",margin:"4px 0 0"}}>Add parents who need to confirm with their spouse before booking.</p>
+        </div>
+      )}
+
+      {!loading&&pending.length>0&&(
+        <div style={{marginBottom:16}}>
+          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a7a45",fontWeight:700,margin:"0 0 8px"}}>Pending ({pending.length})</p>
+          {pending.sort((a,b)=>a.callback_date.localeCompare(b.callback_date)||a.callback_time.localeCompare(b.callback_time)).map(cb=><CallbackCard key={cb.id} cb={cb}/>)}
+        </div>
+      )}
+
+      {!loading&&noAnswer.length>0&&(
+        <div style={{marginBottom:16}}>
+          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#b85c00",fontWeight:700,margin:"0 0 8px"}}>No Answer — Reschedule ({noAnswer.length})</p>
+          {noAnswer.map(cb=><CallbackCard key={cb.id} cb={cb}/>)}
+        </div>
+      )}
+
+      {!loading&&done.length>0&&(
+        <div style={{marginBottom:16}}>
+          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb",fontWeight:700,margin:"0 0 8px"}}>Done ({done.length})</p>
+          {done.map(cb=><CallbackCard key={cb.id} cb={cb}/>)}
+        </div>
+      )}
+    </div>
   );
 }
 
