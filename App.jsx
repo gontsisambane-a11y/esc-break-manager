@@ -849,7 +849,7 @@ function AddRepModal({ onClose, onAdd }) {
         )}
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <Btn label="Cancel" onClick={onClose} outline color="#888" small/>
-          <Btn label="Add Rep" onClick={()=>{if(!form.name.trim()){return;}onAdd({...form,avatar:avatar(form.name),id:Date.now()});}}/>
+          <Btn label="Add Rep" onClick={()=>{if(!form.name.trim()){return;}const{id:_,...d}=form;onAdd({...d,avatar:avatar(form.name)});}}/>
         </div>
       </div>
     </Modal>
@@ -3678,7 +3678,7 @@ function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
 
         {/* All reps — assign either role */}
         <p style={{...s.label,marginTop:enrollers.length>0?18:0}}>All Reps — assign roles</p>
-        {reps.filter(r=>!["off","pto","sick"].includes(r.status)).map(r=>(
+        {reps.map(r=>(
           <div key={r.id} style={{...s.card,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{width:30,height:30,borderRadius:"50%",background:"#e8f4ee",color:"#1a5c35",fontWeight:700,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
