@@ -355,6 +355,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
     {k:"pto",l:"PTO"},
     {k:"reports",l:"Reports"},
     {k:"settings",l:"Settings"},
+    {k:"enrolment",l:"📋 Enrolment"},
     ...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[]),
   ];
 
@@ -426,6 +427,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="reports"   &&<MgrReports reps={reps}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
+        {tab==="enrolment"&&<EnrolmentBoard reps={reps} reload={reload} fire={fire} currentRepId={null} isManager={true}/>}
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
       </div>
     </div>
@@ -666,6 +668,9 @@ function MgrTeam({ reps, settings, reload, fire }) {
   const [addModal, setAddModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [extraDayModal, setExtraDayModal] = useState(null); // rep
+
+  const today = DAYS[new Date().getDay()]; // e.g. "Mon"
 
   const handleDelete = async () => {
     if(deleteConfirm!==deleteModal.name){fire("declined","Name doesn't match");return;}
@@ -683,6 +688,15 @@ function MgrTeam({ reps, settings, reload, fire }) {
     reload();
   };
 
+  const handleAddExtraDay = async (rep) => {
+    const existing = rep.shift_days||[];
+    if(existing.includes(today)){fire("info",`${rep.name} already has ${today} scheduled`);setExtraDayModal(null);return;}
+    const updated = [...existing, today];
+    await sbPatch("rep_status",rep.id,{shift_days:updated,updated_at:new Date().toISOString()});
+    fire("approved",`${rep.name} added for ${today} — they'll count as on-shift today`);
+    setExtraDayModal(null); reload();
+  };
+
   return (
     <div style={{marginTop:16}}>
       {addModal&&<AddRepModal onClose={()=>setAddModal(false)} onAdd={async(d)=>{await sbPost("rep_status",d);fire("approved",`${d.name} added`);setAddModal(false);reload();}}/>}
@@ -696,6 +710,20 @@ function MgrTeam({ reps, settings, reload, fire }) {
           </div>
         </Modal>
       )}
+      {extraDayModal&&(
+        <Modal title={`Add extra day for ${extraDayModal.name}?`} sub="EXTRA DAY WORKED" onClose={()=>setExtraDayModal(null)}>
+          <p style={{fontSize:13,color:"#666",marginBottom:6}}>
+            This will add <strong>{today}</strong> to {extraDayModal.name}'s scheduled days so they count as on-shift today and their time is tracked correctly.
+          </p>
+          <p style={{fontSize:11,color:"#aaa",marginBottom:16}}>
+            Current schedule: <strong>{(extraDayModal.shift_days||[]).join(", ")||"None set"}</strong>
+          </p>
+          <div style={{display:"flex",gap:8}}>
+            <Btn label="Cancel" onClick={()=>setExtraDayModal(null)} outline color="#888" small/>
+            <Btn label={`Add ${today} for ${extraDayModal.name}`} onClick={()=>handleAddExtraDay(extraDayModal)} color="#1a5c35"/>
+          </div>
+        </Modal>
+      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>Team ({reps.length})</p>
         <button onClick={()=>setAddModal(true)} style={{padding:"6px 14px",borderRadius:8,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Rep</button>
@@ -705,6 +733,8 @@ function MgrTeam({ reps, settings, reload, fire }) {
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
         const cooldownActive = !!(rep.health_time_banked>=HEALTH_MAX_SEC && rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
         const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(rep.last_break_returned_at) : 0;
+        const scheduledToday = (rep.shift_days||[]).includes(today);
+        const onShift = isRepOnShift(rep);
         return (
           <div key={rep.id} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
@@ -715,6 +745,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
                   <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
                   <StatusDot status={rep.status}/>
                   <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
+                  {!onShift&&!["off","pto","sick"].includes(rep.status)&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#f5f5f5",color:"#bbb",fontWeight:700}}>OFF SHIFT</span>}
                 </div>
                 <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
                   <span style={{fontSize:10,color:"#aaa"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} today</span>
@@ -722,7 +753,10 @@ function MgrTeam({ reps, settings, reload, fire }) {
                   {(rep.health_time_banked||0)>0&&<span style={{fontSize:10,color:"#888"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
                 </div>
               </div>
-              <div style={{display:"flex",gap:5,flexShrink:0}}>
+              <div style={{display:"flex",gap:5,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                {!scheduledToday&&!["off","pto","sick"].includes(rep.status)&&(
+                  <button onClick={()=>setExtraDayModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:10,color:"#1a5c35",fontWeight:600}}>+ Extra day</button>
+                )}
                 <button onClick={()=>handleLogCalloff(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b",fontWeight:600}}>Call-off</button>
                 <button onClick={()=>setDeleteModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Delete</button>
               </div>
@@ -1278,6 +1312,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
+  const hasEnrolAccess = !!(myRep?.enrol_role === "enroller" || reps.some(r=>r.enrol_role==="enroller"&&(r.enrol_visible_to||[]).includes(repInfo.id)));
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const onLunch = reps.filter(r=>r.status==="lunch").length;
   const onHealth = reps.filter(r=>r.status==="health").length;
@@ -1438,7 +1473,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       {/* Rep Tabs */}
       <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb"}}>
         <div style={{display:"flex",padding:"0 16px"}}>
-          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
+          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(hasEnrolAccess?[{k:"enrolment",l:"📋 Enrolment"}]:[]),...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.k?700:500,color:tab===t.k?"#1a5c35":mySwaps.length>0&&t.k==="swaps"?"#e07b00":"#999",borderBottom:tab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,transition:"all .15s"}}>{t.l}</button>
           ))}
         </div>
@@ -1448,8 +1483,9 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         {tab==="my"&&(
           <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak}/>
         )}
-        {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
+        {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks} centreOpen={centreOpen}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
+        {tab==="enrolment"&&<EnrolmentBoard reps={reps} reload={reload} fire={fire} currentRepId={repInfo.id} isManager={false}/>}
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={false}/>}
       </div>
     </div>
@@ -1548,39 +1584,62 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
   );
 }
 
-function RepTeam({ reps, myId, activeBreaks }) {
+function RepTeam({ reps, myId, activeBreaks, centreOpen }) {
+  const [showOffShift, setShowOffShift] = useState(false);
+
+  // Split reps: exclude permanently off/pto/sick, then split by shift
+  const activeReps = reps.filter(r => !["off","pto","sick"].includes(r.status));
+  const onShift  = activeReps.filter(r => isRepOnShift(r));
+  const offShift = activeReps.filter(r => !isRepOnShift(r));
+
+  const RepCard = ({ rep }) => {
+    const cfg = ST[rep.status]||ST.available;
+    const ab = activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
+    const cooldownActive = !!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
+    const cooldownLeft = cooldownActive ? COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()) : 0;
+    const isMe = rep.id===myId;
+    return (
+      <div style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+              <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{rep.name}{isMe?" (you)":""}</span>
+              <StatusDot status={rep.status}/>
+              <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+              <span style={{fontSize:10,color:"#888"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
+              {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
+              {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:"#aaa"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
+            </div>
+            {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>Team Balances</p>
-      <div style={{display:"flex",flexDirection:"column",gap:7}}>
-        {reps.map(rep=>{
-          const cfg=ST[rep.status]||ST.available;
-          const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
-          const cooldownActive=!!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
-          const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
-          const isMe=rep.id===myId;
-          return (
-            <div key={rep.id} style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:9}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{rep.name}{isMe?" (you)":""}</span>
-                    <StatusDot status={rep.status}/>
-                    <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
-                  </div>
-                  <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                    <span style={{fontSize:10,color:"#888"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
-                    {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
-                    {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:"#aaa"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
-                  </div>
-                  {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>On Shift ({onShift.length})</p>
+      {onShift.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"16px 0"}}>No reps currently on shift.</p>}
+      <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14}}>
+        {onShift.map(rep=><RepCard key={rep.id} rep={rep}/>)}
       </div>
+
+      {offShift.length>0&&(
+        <>
+          <button onClick={()=>setShowOffShift(v=>!v)} style={{width:"100%",padding:"8px 12px",borderRadius:9,border:"1.5px solid #eee",background:"#f9f9f9",cursor:"pointer",fontSize:11,fontWeight:700,color:"#aaa",textAlign:"left",marginBottom:8}}>
+            {showOffShift?"▾":"▸"} Off Shift ({offShift.length})
+          </button>
+          {showOffShift&&(
+            <div style={{display:"flex",flexDirection:"column",gap:7,opacity:.7}}>
+              {offShift.map(rep=><RepCard key={rep.id} rep={rep}/>)}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -3005,28 +3064,37 @@ function QuoteCalculator({locations}) {
     const lines = student.lessons.map((lesson, li) => {
       const lt    = LESSON_TYPES.find(t=>t.key===lesson.type);
       const rate  = getRate(lesson.type);
-      // ODL/clinic billed per class not per month
       const monthly = lt?.continuous ? rate * weeks : rate * (lesson.type==="clinic" ? 5 : 1);
-      // FIX 7: multi-class only applies to continuous lessons
       const canMulti = li > 0 && lt?.continuous;
       const multiDisc = canMulti ? monthly * 0.10 : 0;
-      return {lt, rate, monthly, multiDisc, net: monthly - multiDisc, continuous: lt?.continuous, group: lt?.group};
+      const afterMulti = monthly - multiDisc;
+      // Per-line promo: only continuous non-clinic non-ODL lessons eligible for % promo
+      const promoEligible = !!(lt?.continuous && lt?.key !== "clinic");
+      return {lt, rate, monthly, multiDisc, afterMulti, promoEligible, net: afterMulti, continuous: lt?.continuous, group: lt?.group};
     });
 
     const grossMonthly = lines.reduce((s,l)=>s+l.net, 0);
 
-    // FIX 4,5,6: sibling discount ONLY on continuous GROUP lessons
+    // Sibling discount ONLY on continuous GROUP lessons
     const groupContinuousTotal = lines.filter(l=>l.group&&l.continuous).reduce((s,l)=>s+l.net,0);
     const sibDisc = (si>0 && canSibDiscount) ? groupContinuousTotal * 0.10 : 0;
     const afterSib = grossMonthly - sibDisc;
 
-    // FIX 2,3: DIVEIN40 only on continuous non-clinic, non-ODL lessons
-    const eligibleForDIVEIN40 = lines.filter(l=>l.continuous&&l.lt?.key!=="clinic").reduce((s,l)=>s+l.net, 0) - sibDisc;
-    // FIX 11: pick highest % promo, don't double stack pct promos
-    let pctPromoDisc = 0, pctPromoLabel = "";
-    if(promoChecked.includes("DIVEIN40")){pctPromoDisc = eligibleForDIVEIN40*0.40; pctPromoLabel="DIVEIN40";}
-    else if(promoChecked.includes("DAY28")){pctPromoDisc = eligibleForDIVEIN40*0.20; pctPromoLabel="Day28";} // continuous lessons only, same as DIVEIN40
+    // % promo per eligible line (not a lump sum — transparent to rep)
+    let pctPromoLabel = "";
+    const pctRate = promoChecked.includes("DIVEIN40") ? 0.40
+                  : promoChecked.includes("DAY28")    ? 0.20 : 0;
+    if(pctRate > 0) pctPromoLabel = promoChecked.includes("DIVEIN40") ? "DIVEIN40" : "Day28";
 
+    // Build per-line promo discounts (shown per lesson in breakdown)
+    const linesWithPromo = lines.map((l,li)=>{
+      const sibLineDisc = (l.group && l.continuous && si>0 && canSibDiscount) ? l.net * 0.10 : 0;
+      const netAfterSib = l.net - sibLineDisc;
+      const promoLineDisc = l.promoEligible ? netAfterSib * pctRate : 0;
+      return {...l, sibLineDisc, netAfterSib, promoLineDisc, finalNet: netAfterSib - promoLineDisc};
+    });
+
+    const pctPromoDisc = linesWithPromo.reduce((s,l)=>s+l.promoLineDisc, 0);
     const referralDisc = promoChecked.includes("REFERRAL") ? 50 : 0;
     const totalPromoDisc = pctPromoDisc + referralDisc;
     const promoLabel = [pctPromoLabel, promoChecked.includes("REFERRAL")?"Referral":""].filter(Boolean).join(" + ");
@@ -3041,7 +3109,7 @@ function QuoteCalculator({locations}) {
     const ongoing1to3 = afterSib;  // with sibling discount
     const ongoing4plus = grossMonthly; // sibling discount ends after 3 months
 
-    return {lines, grossMonthly, groupContinuousTotal, sibDisc, afterSib, pctPromoDisc, referralDisc, totalPromoDisc, promoLabel, regFee, dueToday, ongoing1to3, ongoing4plus, hasSibDisc: sibDisc > 0};
+    return {linesWithPromo, lines, grossMonthly, groupContinuousTotal, sibDisc, afterSib, pctPromoDisc, pctRate, referralDisc, totalPromoDisc, promoLabel, regFee, dueToday, creditNote, ongoing1to3, ongoing4plus, hasSibDisc: sibDisc > 0};
   };
 
   const calcs = students.map((s,i)=>calcStudent(s,i));
@@ -3055,26 +3123,29 @@ function QuoteCalculator({locations}) {
 
   const genScript = () => {
     const mo = MONTHS[enrollMo];
-    const lines = [`"Today\'s total is ${fmt(grandToday)}, which includes:"`];
+    const out = ["\"Today\'s total is " + fmt(grandToday) + ", which includes:\""];
     calcs.forEach((c,i)=>{
       const name = students[i].name||`Child ${i+1}`;
-      if(c.regFee>0) lines.push(`  • $${REG_FEE} annual registration for ${name}`);
-      c.lines.forEach((l,li)=>{
+      if(c.regFee>0) out.push(`  • $${REG_FEE} annual registration for ${name}`);
+      if(c.regFee===0&&regUsed+i>=2) out.push(`  • Registration fee waived for ${name} — family max reached`);
+      c.linesWithPromo.forEach((l,li)=>{
         const lbl = l.lt?.label||"";
-        let line = `  • ${fmt(l.net)} ${mo} tuition for ${name} (${lbl})`;
-        if(li>0&&l.continuous) line+=` — 10% multi-class discount applied`;
-        lines.push(line);
+        const baseAmt = l.afterMulti||l.net;
+        out.push(`  • ${fmt(baseAmt)} ${mo} tuition for ${name} (${lbl}${li>0&&l.continuous?" — 10% multi-class":""})`);
+        if((l.sibLineDisc||0)>0) out.push(`    minus ${fmt(l.sibLineDisc)} sibling discount — first 3 full months`);
+        if((l.promoLineDisc||0)>0) out.push(`    minus ${fmt(l.promoLineDisc)} ${c.promoLabel} discount — continuous lessons only`);
+        if(!(l.promoEligible)&&c.pctRate>0) out.push(`    (promo does not apply to ${l.lt?.key==="clinic"?"clinics":"ODL"})`);
       });
-      if(c.sibDisc>0) lines.push(`  • Minus ${fmt(c.sibDisc)} sibling discount for ${name} (first 3 full months)`);
-      if(c.totalPromoDisc>0) lines.push(`  • Minus ${fmt(c.totalPromoDisc)} ${c.promoLabel} discount`);
+      if(c.referralDisc>0) out.push(`  • Minus $50 Referral discount for ${name}`);
+      if((c.creditNote||0)>0) out.push(`  • Note: discount exceeds tuition — ${fmt(c.creditNote)} credit added to account`);
     });
-    lines.push(`""`);
-    if(hasSibDisc) {
-      lines.push(`"For the first 3 months you will be billed ${fmt(grandOngoing13)} on the 20th. From month 4 onwards your billing will be ${fmt(grandOngoing4)}."`);
+    out.push("");
+    if(hasSibDisc){
+      out.push(`"For the first 3 months you will be billed ${fmt(grandOngoing13)} on the 20th. From month 4 onwards your billing will be ${fmt(grandOngoing4)}."`);
     } else {
-      lines.push(`"Going forward you will be billed ${fmt(grandOngoing13)} on the 20th of each month for the following month. Months with 5 weeks will be slightly higher."`);
+      out.push(`"Going forward you will be billed ${fmt(grandOngoing13)} on the 20th of each month. Months with 5 classes will be slightly higher."`);
     }
-    return lines.join("\n");
+    return out.join("\n");
   };
 
   const copyScript = ()=>{navigator.clipboard?.writeText(genScript().replace(/\\n/g,"\n"));setCopied(true);setTimeout(()=>setCopied(false),2000);};
@@ -3209,22 +3280,17 @@ function QuoteCalculator({locations}) {
           {calcs.map((c,i)=>(
             <div key={students[i].id} style={{marginBottom:12,paddingBottom:12,borderBottom:i<calcs.length-1?"1px solid #f5f5f5":"none"}}>
               <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13}}>{students[i].name||`Child ${i+1}`}</p>
-              {c.lines.map((l,li)=>(
-                <div key={li} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginBottom:3,paddingLeft:8}}>
-                  <span>{l.lt?.label} ({weeks} × {fmt(l.rate)}){li>0&&l.continuous?" — 10% multi-class":""}{li>0&&!l.continuous?" — no discount (ODL/clinic)":""}</span>
-                  <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.net)}</span>
+              {c.linesWithPromo.map((l,li)=>(
+                <div key={li} style={{marginBottom:5,paddingLeft:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}>
+                    <span>{l.lt?.label} ({l.lt?.continuous?`${weeks} × ${fmt(l.rate)}`:`${fmt(l.rate)}/class`}){li>0&&l.continuous?" — 10% multi-class":""}</span>
+                    <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.afterMulti)}</span>
+                  </div>
+                  {l.sibLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>Sibling discount −10% (mo 1–3)</span><span>−{fmt(l.sibLineDisc)}</span></div>}
+                  {l.promoLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>{c.promoLabel.includes("DIVEIN40")?"DIVEIN40":"Day28"} −{c.promoLabel.includes("DIVEIN40")?"40":"20"}% (eligible lesson)</span><span>−{fmt(l.promoLineDisc)}</span></div>}
+                  {!l.promoEligible&&c.pctRate>0&&<div style={{fontSize:10,color:"#e07b00",paddingLeft:8}}>⚠️ Promo does not apply to {l.lt?.key==="clinic"?"clinics":"ODL"}</div>}
                 </div>
               ))}
-              {c.sibDisc>0&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
-                  <span>Sibling discount −10% (months 1–3 only)</span><span>−{fmt(c.sibDisc)}</span>
-                </div>
-              )}
-              {c.pctPromoDisc>0&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
-                  <span>{c.promoLabel.includes("DIVEIN40")?"DIVEIN40 −40%":"Day28 −20%"} (first month)</span><span>−{fmt(c.pctPromoDisc)}</span>
-                </div>
-              )}
               {c.referralDisc>0&&(
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
                   <span>Referral $50 off</span><span>−{fmt(c.referralDisc)}</span>
@@ -3286,9 +3352,14 @@ function QuoteCalculator({locations}) {
                 <div key={i} style={{marginBottom:8,paddingLeft:8}}>
                   {c.regFee>0&&<p style={{margin:"0 0 3px"}}>• ${REG_FEE} annual registration for {name}</p>}
                   {c.regFee===0&&regUsed+i>=2&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Registration fee waived for {name} — family max reached</p>}
-                  {c.lines.map((l,li)=><p key={li} style={{margin:"0 0 3px"}}>• {fmt(l.net)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.continuous?" — 10% multi-class discount":""})</p>)}
-                  {c.sibDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus {fmt(c.sibDisc)} sibling discount for {name} — first 3 full months</p>}
-                  {c.totalPromoDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus {fmt(c.totalPromoDisc)} {c.promoLabel} discount</p>}
+                  {c.linesWithPromo.map((l,li)=>(
+                    <div key={li}>
+                      <p style={{margin:"0 0 2px"}}>• {fmt(l.afterMulti)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.continuous?" — 10% multi-class":""})</p>
+                      {l.sibLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.sibLineDisc)} sibling discount — first 3 full months</p>}
+                      {l.promoLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.promoLineDisc)} {c.promoLabel} — continuous lessons only</p>}
+                    </div>
+                  ))}
+                  {c.referralDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus $50 Referral discount for {name}</p>}
                 </div>
               );
             })}
@@ -3461,6 +3532,185 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ── ENROLMENT BOARD ───────────────────────────────────────────────────────
+function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
+  const [saving, setSaving] = useState(false);
+  const [editingEnroller, setEditingEnroller] = useState(null); // {id, name, enrol_visible_to:[]}
+  const [pendingVisible, setPendingVisible] = useState([]);
+
+  const myRep = reps.find(r => r.id === currentRepId);
+  const amIEnroller = myRep?.enrol_role === "enroller";
+  const enrollers = reps.filter(r => r.enrol_role === "enroller");
+  const closers = reps.filter(r => r.enrol_role === "closer");
+  const myEnrollers = enrollers.filter(r => (r.enrol_visible_to||[]).includes(currentRepId));
+
+  const promoteToEnroller = async (rep) => {
+    setSaving(true);
+    await sbPatch("rep_status", rep.id, { enrol_role:"enroller", enrol_visible_to:[], enrol_ready:false, updated_at:new Date().toISOString() });
+    await reload();
+    setSaving(false);
+    fire("ok", `${rep.name} is now an Enroller`);
+  };
+
+  const removeRole = async (rep) => {
+    setSaving(true);
+    await sbPatch("rep_status", rep.id, { enrol_role:null, enrol_visible_to:[], enrol_ready:false, updated_at:new Date().toISOString() });
+    await reload();
+    setSaving(false);
+    fire("ok", `${rep.name} role removed`);
+  };
+
+  const openEdit = (enroller) => {
+    setEditingEnroller(enroller);
+    setPendingVisible(enroller.enrol_visible_to||[]);
+  };
+
+  const saveVisibility = async () => {
+    setSaving(true);
+    await sbPatch("rep_status", editingEnroller.id, { enrol_visible_to: pendingVisible, updated_at:new Date().toISOString() });
+    await reload();
+    setSaving(false);
+    setEditingEnroller(null);
+    fire("ok","Access updated");
+  };
+
+  const toggleReady = async () => {
+    if(!myRep) return;
+    setSaving(true);
+    await sbPatch("rep_status", myRep.id, { enrol_ready: !myRep.enrol_ready, updated_at:new Date().toISOString() });
+    await reload();
+    setSaving(false);
+  };
+
+  const transferToEnroller = async (enroller) => {
+    if(!enroller.enrol_ready) return;
+    setSaving(true);
+    await sbPatch("rep_status", enroller.id, { enrol_ready:false, updated_at:new Date().toISOString() });
+    await reload();
+    setSaving(false);
+    fire("ok", `Transferred to ${enroller.name}`);
+  };
+
+  const s = {card:{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,.07)"},label:{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.8,marginBottom:8},chip:(c)=>({display:"inline-block",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:c==="ready"?"#e8f8f0":c==="busy"?"#fdf0f0":"#f2f2f2",color:c==="ready"?"#1a7a45":c==="busy"?"#c0392b":"#777"})};
+
+  // ── Edit visibility screen ──────────────────────────────────────────
+  if(editingEnroller) {
+    const allClosers = reps.filter(r => r.enrol_role !== "enroller");
+    return (
+      <div style={{paddingTop:16}}>
+        <button onClick={()=>setEditingEnroller(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#1a5c35",fontWeight:700,fontSize:13,marginBottom:12,padding:0}}>← Back</button>
+        <div style={s.card}>
+          <p style={{...s.label,marginBottom:4}}>Who can see {editingEnroller.name}?</p>
+          <p style={{fontSize:12,color:"#aaa",marginBottom:12}}>Select the closers who are allowed to transfer calls to this enroller.</p>
+          {allClosers.map(c=>(
+            <div key={c.id} onClick={()=>setPendingVisible(v=>v.includes(c.id)?v.filter(x=>x!==c.id):[...v,c.id])} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:9,marginBottom:6,cursor:"pointer",background:pendingVisible.includes(c.id)?"#e8f8f0":"#f7f7f7",border:pendingVisible.includes(c.id)?"1.5px solid #27ae60":"1.5px solid #eee"}}>
+              <div style={{width:18,height:18,borderRadius:4,border:"2px solid",borderColor:pendingVisible.includes(c.id)?"#27ae60":"#ccc",background:pendingVisible.includes(c.id)?"#27ae60":"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {pendingVisible.includes(c.id)&&<span style={{color:"#fff",fontSize:11,fontWeight:900}}>✓</span>}
+              </div>
+              <span style={{fontSize:13,fontWeight:600,color:"#222"}}>{c.name}</span>
+            </div>
+          ))}
+          {allClosers.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"20px 0"}}>No reps assigned as closers yet.</p>}
+          <button onClick={saveVisibility} disabled={saving} style={{width:"100%",marginTop:8,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?.6:1}}>
+            {saving?"Saving…":"Save access"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Manager view ───────────────────────────────────────────────────
+  if(isManager) {
+    const noRole = reps.filter(r=>!r.enrol_role&&!["off","pto","sick"].includes(r.status));
+    return (
+      <div style={{paddingTop:16}}>
+        {/* Enrollers */}
+        <p style={s.label}>Enrollers ({enrollers.length})</p>
+        {enrollers.map(r=>(
+          <div key={r.id} style={s.card}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
+                <div>
+                  <p style={{margin:0,fontSize:13,fontWeight:700}}>{r.name}</p>
+                  <span style={s.chip(r.enrol_ready?"ready":"busy")}>{r.enrol_ready?"🟢 Ready":"🔴 Busy"}</span>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>openEdit(r)} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#fff",color:"#1a5c35",fontSize:11,fontWeight:700,cursor:"pointer"}}>Edit access</button>
+                <button onClick={()=>removeRole(r)} disabled={saving} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #e74c3c",background:"#fff",color:"#e74c3c",fontSize:11,fontWeight:700,cursor:"pointer"}}>Remove</button>
+              </div>
+            </div>
+            {(r.enrol_visible_to||[]).length===0&&<p style={{margin:0,fontSize:11,color:"#e07b00",background:"#fff8ee",borderRadius:7,padding:"5px 10px"}}>⚠️ No closers assigned yet — hit Edit access to set who can transfer here.</p>}
+            {(r.enrol_visible_to||[]).length>0&&<p style={{margin:0,fontSize:11,color:"#666"}}>Visible to: {reps.filter(x=>(r.enrol_visible_to||[]).includes(x.id)).map(x=>x.name).join(", ")}</p>}
+          </div>
+        ))}
+        {enrollers.length===0&&<div style={{...s.card,textAlign:"center",color:"#bbb",fontSize:13,padding:"20px 0"}}>No enrollers set up yet.</div>}
+
+        {/* All reps — promote */}
+        <p style={{...s.label,marginTop:18}}>Reps — assign enroller role ({noRole.length})</p>
+        {noRole.map(r=>(
+          <div key={r.id} style={{...s.card,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:30,height:30,borderRadius:"50%",background:"#e8f4ee",color:"#1a5c35",fontWeight:700,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
+              <span style={{fontSize:13,fontWeight:600}}>{r.name}</span>
+            </div>
+            <button onClick={()=>promoteToEnroller(r)} disabled={saving} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#1a5c35",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Make Enroller</button>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Enroller view (toggle ready) ───────────────────────────────────
+  if(amIEnroller) {
+    return (
+      <div style={{paddingTop:16}}>
+        <div style={s.card}>
+          <p style={{...s.label,marginBottom:4}}>Your enrolment status</p>
+          <p style={{fontSize:12,color:"#888",marginBottom:14}}>Toggle ready when you can take a transfer. Closers will see your status in real time.</p>
+          <button onClick={toggleReady} disabled={saving} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:myRep?.enrol_ready?"#c0392b":"#27ae60",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",opacity:saving?.6:1}}>
+            {saving?"…":myRep?.enrol_ready?"🔴 Mark as Busy":"🟢 Go Ready"}
+          </button>
+          <p style={{margin:"10px 0 0",textAlign:"center",fontSize:12,color:"#aaa"}}>{myRep?.enrol_ready?"Closers can see you're available and can transfer now.":"You're marked busy — closers won't transfer to you."}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Closer view ────────────────────────────────────────────────────
+  const readyEnrollers = myEnrollers.filter(r=>r.enrol_ready);
+  return (
+    <div style={{paddingTop:16}}>
+      <div style={{...s.card,background:readyEnrollers.length>0?"#e8f8f0":"#fdf0f0",border:`1.5px solid ${readyEnrollers.length>0?"#27ae60":"#e74c3c"}`}}>
+        <p style={{margin:0,fontSize:15,fontWeight:800,color:readyEnrollers.length>0?"#1a7a45":"#c0392b",marginBottom:2}}>
+          {readyEnrollers.length>0?`✅ ${readyEnrollers.length} enroller${readyEnrollers.length>1?"s":""} ready — transfer the call now`:"🔴 No enrollers available — handle it yourself"}
+        </p>
+        <p style={{margin:"4px 0 0",fontSize:11,color:"#888"}}>{readyEnrollers.length>0?"Tap Transfer after the sale is locked in.":"Check back in a moment or complete the enrolment yourself."}</p>
+      </div>
+      {myEnrollers.map(r=>(
+        <div key={r.id} style={s.card}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:r.enrol_ready?"#1a5c35":"#ddd",color:r.enrol_ready?"#fff":"#888",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
+              <div>
+                <p style={{margin:0,fontSize:13,fontWeight:700}}>{r.name}</p>
+                <span style={s.chip(r.enrol_ready?"ready":"busy")}>{r.enrol_ready?"🟢 Ready":"🔴 Busy"}</span>
+              </div>
+            </div>
+            {r.enrol_ready&&(
+              <button onClick={()=>transferToEnroller(r)} disabled={saving} style={{padding:"8px 16px",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:saving?.6:1}}>
+                Transfer →
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+      {myEnrollers.length===0&&<div style={{...s.card,textAlign:"center",color:"#bbb",fontSize:13,padding:"20px 0"}}>No enrollers have been assigned to you yet. Ask your manager to set this up.</div>}
+    </div>
   );
 }
 
