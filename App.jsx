@@ -1899,6 +1899,7 @@ function HubView({ isManager }) {
     {k:"home",l:"🏠 Home"},
     {k:"locations",l:"📍 Locations"},
     {k:"levels",l:"🏊 Level Tool"},
+    {k:"calc",l:"🧮 Calculator"},
     {k:"docs",l:"📄 Docs"},
     {k:"reminders",l:"📋 Reminders"},
   ];
@@ -2141,22 +2142,7 @@ function HubView({ isManager }) {
             {HUB_PARTNERS.map((p,i)=>(
               <div key={i} style={{marginBottom:16}}>
                 <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 8px",fontWeight:700}}>{p.brand}</p>
-                {p.locations.map((l,j)=>{
-                  const [cop,setCop]=useState(false);
-                  return (
-                    <div key={j} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
-                      <div style={{flex:1}}>
-                        <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{l.name}</p>
-                        <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{l.addr}</p>
-                        <div style={{display:"flex",gap:10}}>
-                          <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:"#003087"}}>{l.current}</strong></span>
-                          <span style={{fontSize:11,color:"#888"}}>New: <strong style={{color:"#8e44ad"}}>{l.queue}</strong></span>
-                        </div>
-                      </div>
-                      <button onClick={()=>{navigator.clipboard?.writeText(l.current);setCop(true);setTimeout(()=>setCop(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #ddd",background:cop?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:cop?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{cop?"✓":"Copy"}</button>
-                    </div>
-                  );
-                })}
+                {p.locations.map((l,j)=><PartnerLocRow key={j} loc={l}/>)}
               </div>
             ))}
           </div>
@@ -2176,6 +2162,9 @@ function HubView({ isManager }) {
             ))}
           </div>
         )}
+
+        {/* CALCULATOR */}
+        {tab==="calc"&&<QuoteCalculator locations={locations} activePromos={promos}/>}
 
         {/* REMINDERS — rep view */}
         {tab==="reminders"&&(
@@ -2681,6 +2670,24 @@ function HubDocCard({doc,isManager,onEdit}) {
   );
 }
 
+
+function PartnerLocRow({loc}) {
+  const [cop,setCop]=useState(false);
+  return (
+    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+      <div style={{flex:1}}>
+        <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{loc.name}</p>
+        <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{loc.addr}</p>
+        <div style={{display:"flex",gap:10}}>
+          <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:"#003087"}}>{loc.current}</strong></span>
+          <span style={{fontSize:11,color:"#888"}}>New: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
+        </div>
+      </div>
+      <button onClick={()=>{navigator.clipboard?.writeText(loc.current);setCop(true);setTimeout(()=>setCop(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #ddd",background:cop?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:cop?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{cop?"✓":"Copy"}</button>
+    </div>
+  );
+}
+
 function HubTeamCard({member}) {
   const [copied,setCopied]=useState(false);
   return (
@@ -2926,6 +2933,378 @@ function HubEventModal({item,onClose,onSave,onDelete}) {
 }
 
 
+
+
+// ── QUOTE CALCULATOR ──────────────────────────────────────────────────
+const LESSON_TYPES = [
+  {key:"group_mf",   label:"Group (M–F)",        priceKey:"price_mf",  continuous:true,  group:true},
+  {key:"group_ss",   label:"Group (Sa–Su)",       priceKey:"price_ss",  continuous:true,  group:true},
+  {key:"swim_tm_mf", label:"Swim Team (M–F)",     priceKey:"price_mf",  continuous:true,  group:true},  // approx — no separate swim team col yet
+  {key:"swim_tm_ss", label:"Swim Team (Sa–Su)",   priceKey:"price_ss",  continuous:true,  group:true},
+  {key:"private_30", label:"Private (30 min)",    priceKey:"price_priv",continuous:true,  group:false},
+  {key:"semi",       label:"Semi-Private (30m)",  priceKey:"price_semi",continuous:true,  group:false},
+  {key:"private_20", label:"Private (20 min)",    priceKey:"price_priv20",continuous:true,group:false},
+  {key:"odl_mf",     label:"ODL (M–F)",           priceKey:"price_odl", continuous:false, group:false},
+  {key:"odl_ss",     label:"ODL (Sa–Su)",         priceKey:"price_odl", continuous:false, group:false},
+  {key:"clinic",     label:"Swim Clinic (per wk)",priceKey:"price_mf",  continuous:false, group:false},
+];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// FIX 1+10: SwimKids IS a partner brand — added to list
+const PARTNER_REGIONS = ["AQUAfin","AQua Wave","Charlotte Swim","King","Little Flippers","Njswim","Swim To Shore","SwimKids"];
+const SIBLING_EXEMPT_LOCS = ["Gig Harbor","Henderson","Olympia"]; // ICP auto-applies here
+const REG_FEE = 35;
+
+function QuoteCalculator({locations}) {
+  const [locId,    setLocId]    = useState("");
+  const [custType, setCustType] = useState("lead");
+  const [regUsed,  setRegUsed]  = useState(0);
+  // FIX 8: global weeks selector (all lessons same month)
+  const [weeks,    setWeeks]    = useState(4);
+  const [enrollMo, setEnrollMo] = useState(new Date().getMonth());
+  const [students, setStudents] = useState([{id:1,name:"Child 1",lessons:[{id:1,type:"group_mf"}]}]);
+  const [promoChecked, setPromoChecked] = useState([]);
+
+  const loc = locations.find(l=>l.id===locId);
+  // FIX 10: isEmler checks partner regions
+  const isPartner = loc && PARTNER_REGIONS.some(b=>loc.region?.includes(b)||loc.name?.includes(b));
+  const isEmler = !!loc && !isPartner;
+  const sibExempt = loc && SIBLING_EXEMPT_LOCS.some(n=>loc.name?.includes(n));
+  // Sibling discount applies: Emler only, not exempt locations
+  const canSibDiscount = isEmler && !sibExempt;
+
+  const getRate = (type) => {
+    if(!loc) return 0;
+    const lt = LESSON_TYPES.find(t=>t.key===type);
+    return lt ? (parseFloat(loc[lt.priceKey])||0) : 0;
+  };
+
+  // Student management
+  const addStudent  = ()    => setStudents(s=>[...s,{id:Date.now(),name:`Child ${s.length+1}`,lessons:[{id:Date.now(),type:"group_mf"}]}]);
+  const remStudent  = (sid) => setStudents(s=>s.filter(st=>st.id!==sid));
+  const updStudent  = (sid,f,v) => setStudents(s=>s.map(st=>st.id===sid?{...st,[f]:v}:st));
+  const addLesson   = (sid) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:[...st.lessons,{id:Date.now(),type:"group_mf"}]}:st));
+  const remLesson   = (sid,lid) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:st.lessons.filter(l=>l.id!==lid)}:st));
+  const updLesson   = (sid,lid,f,v) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:st.lessons.map(l=>l.id===lid?{...l,[f]:v}:l)}:st));
+
+  // ── AVAILABLE PROMOS ──────────────────────────────────────────────
+  // FIX 1: DIVEIN40 excludes SwimKids (isEmler = false for SwimKids)
+  // FIX 11: Day28 and DIVEIN40 both reduce first month — only show one or the other
+  const promos = [];
+  if(isEmler && enrollMo===5 && custType!=="active")
+    promos.push({code:"DIVEIN40",label:"40% Off June Tuition (DIVEIN40)",pct:40,note:"Continuous lessons only — no ODLs or clinics"});
+  if(custType!=="active")
+    promos.push({code:"REFERRAL",label:"Referral — $50 off per student",fixed:50,note:"New family must mention referrer by name"});
+  if(custType==="lead" && !promoChecked.includes("DIVEIN40"))
+    promos.push({code:"DAY28",label:"Lead Day 28 — 20% off first month",pct:20,note:"Do NOT offer proactively — customer must mention"});
+
+  const togglePromo = (code) => setPromoChecked(p=>p.includes(code)?p.filter(c=>c!==code):[...p,code]);
+
+  // ── PER-STUDENT CALCULATION ───────────────────────────────────────
+  const calcStudent = (student, si) => {
+    const lines = student.lessons.map((lesson, li) => {
+      const lt    = LESSON_TYPES.find(t=>t.key===lesson.type);
+      const rate  = getRate(lesson.type);
+      // ODL/clinic billed per class not per month
+      const monthly = lt?.continuous ? rate * weeks : rate * (lesson.type==="clinic" ? 5 : 1);
+      // FIX 7: multi-class only applies to continuous lessons
+      const canMulti = li > 0 && lt?.continuous;
+      const multiDisc = canMulti ? monthly * 0.10 : 0;
+      return {lt, rate, monthly, multiDisc, net: monthly - multiDisc, continuous: lt?.continuous, group: lt?.group};
+    });
+
+    const grossMonthly = lines.reduce((s,l)=>s+l.net, 0);
+
+    // FIX 4,5,6: sibling discount ONLY on continuous GROUP lessons
+    const groupContinuousTotal = lines.filter(l=>l.group&&l.continuous).reduce((s,l)=>s+l.net,0);
+    const sibDisc = (si>0 && canSibDiscount) ? groupContinuousTotal * 0.10 : 0;
+    const afterSib = grossMonthly - sibDisc;
+
+    // FIX 2,3: DIVEIN40 only on continuous non-clinic, non-ODL lessons
+    const eligibleForDIVEIN40 = lines.filter(l=>l.continuous&&l.lt?.key!=="clinic").reduce((s,l)=>s+l.net, 0) - sibDisc;
+    // FIX 11: pick highest % promo, don't double stack pct promos
+    let pctPromoDisc = 0, pctPromoLabel = "";
+    if(promoChecked.includes("DIVEIN40")){pctPromoDisc = eligibleForDIVEIN40*0.40; pctPromoLabel="DIVEIN40";}
+    else if(promoChecked.includes("DAY28")){pctPromoDisc = eligibleForDIVEIN40*0.20; pctPromoLabel="Day28";} // continuous lessons only, same as DIVEIN40
+
+    const referralDisc = promoChecked.includes("REFERRAL") ? 50 : 0;
+    const totalPromoDisc = pctPromoDisc + referralDisc;
+    const promoLabel = [pctPromoLabel, promoChecked.includes("REFERRAL")?"Referral":""].filter(Boolean).join(" + ");
+
+    // Reg fee
+    const regFee = (regUsed + si) < 2 ? REG_FEE : 0;
+
+    const rawDueToday = regFee + afterSib - totalPromoDisc;
+    const dueToday = Math.max(0, rawDueToday);
+    const creditNote = rawDueToday < 0 ? Math.abs(rawDueToday) : 0; // credit applied to account
+    // FIX 9: two ongoing amounts — months 1-3 (with sibling) vs month 4+ (without)
+    const ongoing1to3 = afterSib;  // with sibling discount
+    const ongoing4plus = grossMonthly; // sibling discount ends after 3 months
+
+    return {lines, grossMonthly, groupContinuousTotal, sibDisc, afterSib, pctPromoDisc, referralDisc, totalPromoDisc, promoLabel, regFee, dueToday, ongoing1to3, ongoing4plus, hasSibDisc: sibDisc > 0};
+  };
+
+  const calcs = students.map((s,i)=>calcStudent(s,i));
+  const grandToday   = calcs.reduce((s,c)=>s+c.dueToday, 0);
+  const grandOngoing13 = calcs.reduce((s,c)=>s+c.ongoing1to3, 0);
+  const grandOngoing4  = calcs.reduce((s,c)=>s+c.ongoing4plus, 0);
+  const hasSibDisc = calcs.some(c=>c.hasSibDisc);
+
+  const fmt = (n) => `$${(n||0).toFixed(2)}`;
+  const [copied, setCopied] = useState(false);
+
+  const genScript = () => {
+    const mo = MONTHS[enrollMo];
+    const lines = [`"Today\'s total is ${fmt(grandToday)}, which includes:"`];
+    calcs.forEach((c,i)=>{
+      const name = students[i].name||`Child ${i+1}`;
+      if(c.regFee>0) lines.push(`  • $${REG_FEE} annual registration for ${name}`);
+      c.lines.forEach((l,li)=>{
+        const lbl = l.lt?.label||"";
+        let line = `  • ${fmt(l.net)} ${mo} tuition for ${name} (${lbl})`;
+        if(li>0&&l.continuous) line+=` — 10% multi-class discount applied`;
+        lines.push(line);
+      });
+      if(c.sibDisc>0) lines.push(`  • Minus ${fmt(c.sibDisc)} sibling discount for ${name} (first 3 full months)`);
+      if(c.totalPromoDisc>0) lines.push(`  • Minus ${fmt(c.totalPromoDisc)} ${c.promoLabel} discount`);
+    });
+    lines.push(`""`);
+    if(hasSibDisc) {
+      lines.push(`"For the first 3 months you will be billed ${fmt(grandOngoing13)} on the 20th. From month 4 onwards your billing will be ${fmt(grandOngoing4)}."`);
+    } else {
+      lines.push(`"Going forward you will be billed ${fmt(grandOngoing13)} on the 20th of each month for the following month. Months with 5 weeks will be slightly higher."`);
+    }
+    return lines.join("\n");
+  };
+
+  const copyScript = ()=>{navigator.clipboard?.writeText(genScript().replace(/\\n/g,"\n"));setCopied(true);setTimeout(()=>setCopied(false),2000);};
+
+  return (
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#003087,#0057b8)",borderRadius:14,padding:"16px",marginBottom:14,color:"#fff"}}>
+        <p style={{margin:"0 0 2px",fontSize:10,letterSpacing:1.5,textTransform:"uppercase",opacity:.7}}>Hub Tool</p>
+        <p style={{margin:0,fontSize:18,fontWeight:800}}>🧮 Quote Calculator</p>
+        <p style={{margin:"4px 0 0",fontSize:12,opacity:.7}}>Build an accurate quote — reads straight to the customer on the call</p>
+      </div>
+
+      {/* Step 1 */}
+      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+        <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>① Location & Customer</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location</label>
+            <select value={locId} onChange={e=>setLocId(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <option value="">Select location…</option>
+              {[...locations].sort((a,b)=>a.name.localeCompare(b.name)).map(l=>(
+                <option key={l.id} value={l.id}>{l.name}{l.region&&l.region!==l.name?` (${l.region})`:""}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Customer Type</label>
+            <select value={custType} onChange={e=>setCustType(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <option value="lead">New Lead (never enrolled)</option>
+              <option value="lapsed">Lapsed (was enrolled before)</option>
+              <option value="active">Active Customer</option>
+            </select>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Start Month</label>
+            <select value={enrollMo} onChange={e=>setEnrollMo(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              {MONTHS.map((m,i)=><option key={i} value={i}>{m} 2026</option>)}
+            </select>
+          </div>
+          <div>
+            {/* FIX 8: global weeks */}
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Weeks this month</label>
+            <select value={weeks} onChange={e=>setWeeks(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <option value={4}>4 weeks (standard)</option>
+              <option value={5}>5 weeks (higher month)</option>
+            </select>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Reg fees used this year</label>
+            <select value={regUsed} onChange={e=>setRegUsed(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <option value={0}>0 — new family</option>
+              <option value={1}>1 — one child already enrolled</option>
+              <option value={2}>2+ — max already reached</option>
+            </select>
+          </div>
+        </div>
+        {loc&&!loc.price_mf&&<div style={{marginTop:10,background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:"#856404"}}>⚠️ No pricing loaded for this location — run SQL_4_pricing.sql</p></div>}
+        {loc&&isPartner&&<div style={{marginTop:10,background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:"#003087"}}>ℹ️ Partner brand — sibling discount auto-applies via ICP. DIVEIN40 not available.</p></div>}
+      </div>
+
+      {/* Step 2: Students */}
+      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <p style={{margin:0,fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>② Students & Lessons</p>
+          <button onClick={addStudent} style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add Child</button>
+        </div>
+        {students.map((student,si)=>{
+          const calc = loc ? calcs[si] : null;
+          return (
+            <div key={student.id} style={{background:si>0?"#f8faf8":"#f8f9fa",borderRadius:10,padding:"12px",marginBottom:8,border:`1.5px solid ${si>0&&canSibDiscount?"#c8e6c9":"#efefef"}`}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                <input value={student.name} onChange={e=>updStudent(student.id,"name",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none"}} placeholder="Child name"/>
+                {si>0&&canSibDiscount&&<span style={{fontSize:10,background:"#eafaf1",color:"#1a5c35",padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>10% off group (3 mo)</span>}
+                {si>0&&!canSibDiscount&&isPartner&&<span style={{fontSize:10,background:"#e8f0fe",color:"#003087",padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>ICP auto-sibling</span>}
+                {si>0&&<button onClick={()=>remStudent(student.id)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b"}}>Remove</button>}
+              </div>
+              {student.lessons.map((lesson,li)=>{
+                const lt = LESSON_TYPES.find(t=>t.key===lesson.type);
+                const rate = getRate(lesson.type);
+                const canMultiHere = li>0 && lt?.continuous;
+                return (
+                  <div key={lesson.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                    <select value={lesson.type} onChange={e=>updLesson(student.id,lesson.id,"type",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1.5px solid ${canMultiHere?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",background:"#fff"}}>
+                      {LESSON_TYPES.map(t=>{
+                        const r = getRate(t.key);
+                        // FIX 14: show ⚠️ for lesson types with no price data
+                        if(!r && t.priceKey !== "price_mf") return <option key={t.key} value={t.key} disabled style={{color:"#aaa"}}>{t.label} — no price data</option>;
+                        return <option key={t.key} value={t.key}>{t.label}{r?` — $${r}/class`:""}</option>;
+                      })}
+                    </select>
+                    {canMultiHere&&<span style={{fontSize:10,color:"#1a5c35",fontWeight:700,whiteSpace:"nowrap"}}>−10%</span>}
+                    {!canMultiHere&&li>0&&<span style={{fontSize:10,color:"#aaa",whiteSpace:"nowrap"}}>no disc</span>}
+                    {li>0&&<button onClick={()=>remLesson(student.id,lesson.id)} style={{padding:"5px 7px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>✕</button>}
+                    {li===0&&<div style={{width:54}}/>}
+                  </div>
+                );
+              })}
+              <button onClick={()=>addLesson(student.id)} style={{marginTop:2,padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#e8f0fe",cursor:"pointer",fontSize:11,color:"#003087",fontWeight:600}}>+ Lesson</button>
+              {calc&&loc&&(
+                <p style={{margin:"8px 0 0",fontSize:11,color:"#888"}}>Monthly: {fmt(calc.ongoing1to3)}{calc.hasSibDisc?` (→ ${fmt(calc.ongoing4plus)} from month 4)`:""}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Step 3: Promos */}
+      {promos.length>0&&(
+        <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #f0c080",padding:"14px",marginBottom:10}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase",letterSpacing:.5}}>③ Available Promotions</p>
+          {promos.map(p=>(
+            <div key={p.code} onClick={()=>togglePromo(p.code)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 11px",borderRadius:9,border:`1.5px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#eafaf1":"#fff",cursor:"pointer",marginBottom:6}}>
+              <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                {promoChecked.includes(p.code)&&<span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span>}
+              </div>
+              <div>
+                <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.label}</p>
+                <p style={{margin:0,fontSize:10,color:"#888"}}>{p.note}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Step 4: Breakdown */}
+      {loc&&(
+        <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+          <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>④ Quote Breakdown</p>
+          {calcs.map((c,i)=>(
+            <div key={students[i].id} style={{marginBottom:12,paddingBottom:12,borderBottom:i<calcs.length-1?"1px solid #f5f5f5":"none"}}>
+              <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13}}>{students[i].name||`Child ${i+1}`}</p>
+              {c.lines.map((l,li)=>(
+                <div key={li} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginBottom:3,paddingLeft:8}}>
+                  <span>{l.lt?.label} ({weeks} × {fmt(l.rate)}){li>0&&l.continuous?" — 10% multi-class":""}{li>0&&!l.continuous?" — no discount (ODL/clinic)":""}</span>
+                  <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.net)}</span>
+                </div>
+              ))}
+              {c.sibDisc>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
+                  <span>Sibling discount −10% (months 1–3 only)</span><span>−{fmt(c.sibDisc)}</span>
+                </div>
+              )}
+              {c.pctPromoDisc>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
+                  <span>{c.promoLabel.includes("DIVEIN40")?"DIVEIN40 −40%":"Day28 −20%"} (first month)</span><span>−{fmt(c.pctPromoDisc)}</span>
+                </div>
+              )}
+              {c.referralDisc>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
+                  <span>Referral $50 off</span><span>−{fmt(c.referralDisc)}</span>
+                </div>
+              )}
+              {c.regFee>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginBottom:3,paddingLeft:8}}>
+                  <span>Annual registration fee</span><span>{fmt(c.regFee)}</span>
+                </div>
+              )}
+              {c.regFee===0&&regUsed+i>=2&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
+                  <span>Registration fee — waived (max 2/family reached)</span><span>$0.00</span>
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:"#003087",marginTop:5,paddingTop:5,borderTop:"1px solid #efefef"}}>
+                <span>Due today — {students[i].name||`Child ${i+1}`}</span><span>{fmt(c.dueToday)}</span>
+              </div>
+              {c.creditNote>0&&<div style={{fontSize:11,color:"#1a5c35",marginTop:3,fontStyle:"italic"}}>ℹ️ Discount exceeds tuition — {fmt(c.creditNote)} credit added to account balance</div>}
+            </div>
+          ))}
+          {/* Grand totals */}
+          <div style={{background:"#003087",borderRadius:10,padding:"14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>TOTAL DUE TODAY</span>
+              <span style={{fontSize:24,fontWeight:800,color:"#fff"}}>{fmt(grandToday)}</span>
+            </div>
+            <div style={{height:"1px",background:"rgba(255,255,255,.2)",marginBottom:8}}/>
+            {hasSibDisc ? (
+              <>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(255,255,255,.8)",marginBottom:4}}>
+                  <span>Monthly billing — months 1 to 3</span><span style={{fontWeight:700}}>{fmt(grandOngoing13)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(255,255,255,.6)"}}>
+                  <span>Monthly billing — month 4 onwards</span><span>{fmt(grandOngoing4)}</span>
+                </div>
+              </>
+            ) : (
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(255,255,255,.8)"}}>
+                <span>Monthly billing (on 20th)</span><span style={{fontWeight:700}}>{fmt(grandOngoing13)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Script */}
+      {loc&&students.length>0&&(
+        <div style={{background:"#f4fbf6",borderRadius:12,border:"1.5px solid #c8e6c9",padding:"14px",marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase",letterSpacing:.5}}>📢 Read to Customer</p>
+            <button onClick={copyScript} style={{padding:"5px 12px",borderRadius:8,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,transition:"background .2s"}}>{copied?"✓ Copied":"Copy Script"}</button>
+          </div>
+          <div style={{fontSize:13,color:"#2c3e50",lineHeight:1.9}}>
+            <p style={{margin:"0 0 6px",fontStyle:"italic"}}>"Today's total is <strong style={{color:"#003087"}}>{fmt(grandToday)}</strong>, which includes:"</p>
+            {calcs.map((c,i)=>{
+              const name = students[i].name||`Child ${i+1}`;
+              return (
+                <div key={i} style={{marginBottom:8,paddingLeft:8}}>
+                  {c.regFee>0&&<p style={{margin:"0 0 3px"}}>• ${REG_FEE} annual registration for {name}</p>}
+                  {c.regFee===0&&regUsed+i>=2&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Registration fee waived for {name} — family max reached</p>}
+                  {c.lines.map((l,li)=><p key={li} style={{margin:"0 0 3px"}}>• {fmt(l.net)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.continuous?" — 10% multi-class discount":""})</p>)}
+                  {c.sibDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus {fmt(c.sibDisc)} sibling discount for {name} — first 3 full months</p>}
+                  {c.totalPromoDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus {fmt(c.totalPromoDisc)} {c.promoLabel} discount</p>}
+                </div>
+              );
+            })}
+            {hasSibDisc ? (
+              <>
+                <p style={{margin:"8px 0 3px",fontStyle:"italic"}}>"For the first 3 months you will be billed <strong style={{color:"#003087"}}>{fmt(grandOngoing13)}</strong> on the 20th of each month."</p>
+                <p style={{margin:0,fontStyle:"italic"}}>"From month 4 onwards your monthly billing will be <strong style={{color:"#003087"}}>{fmt(grandOngoing4)}</strong>. Months with 5 classes will be slightly higher."</p>
+              </>
+            ) : (
+              <p style={{margin:"8px 0 0",fontStyle:"italic"}}>"Going forward you will be billed <strong style={{color:"#003087"}}>{fmt(grandOngoing13)}</strong> on the 20th of each month. Months with 5 classes will be slightly higher."</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── REMINDERS TAB ─────────────────────────────────────────────────────
 const CHECKLIST_ITEMS = [
