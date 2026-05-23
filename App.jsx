@@ -1638,6 +1638,14 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
   const isOOO = myRep.status==="pto"||myRep.status==="sick";
   const isOff = myRep.status==="off";
 
+  const todayKey = DAYS[new Date().getDay()];
+  const todaySched = (myRep.lunch_schedule||{})[todayKey];
+  const myLunchTime = todaySched?.time ? fmt12h(todaySched.time) : null;
+  const myLunchDur  = todaySched?.duration===30 ? "30m" : todaySched?.duration ? "1hr" : null;
+  const myShiftStart = todaySched?.start ? fmt12h(todaySched.start) : null;
+  const myShiftEnd   = todaySched?.end   ? fmt12h(todaySched.end)   : null;
+  const myTz = myRep.timezone || "Central";
+
   return (
     <div>
       {showBreakModal&&(
@@ -1645,7 +1653,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
-              {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
+              {key:"lunch",icon:"🥗",label:"Lunch Break",dur:myLunchTime?`${myLunchTime}${myLunchDur?` · ${myLunchDur}`:""}  (${myTz})`:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
             ].map(o=>(
               <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -1686,6 +1694,13 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
               <span style={{fontSize:11,color:"#888"}}>🌿 {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} full breaks · banked {fmtDur(myRep.health_time_banked||0)}/10m{cooldownActive?` · Cooldown: ${fmtTime(cooldownLeft)}`:""}</span>
               {cooldownActive&&<span style={{fontSize:11,color:"#e07b00",fontWeight:600}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
             </div>
+            {/* Today's schedule pill */}
+            {(myShiftStart||myLunchTime)&&(
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                {myShiftStart&&<span style={{fontSize:11,background:"#f0faf4",color:"#1a5c35",padding:"4px 10px",borderRadius:20,fontWeight:600,border:"1px solid #c8e6d6"}}>⏰ Shift {myShiftStart}{myShiftEnd?` – ${myShiftEnd}`:""} <span style={{opacity:.6,fontWeight:400}}>{myTz}</span></span>}
+                {myLunchTime&&<span style={{fontSize:11,background:"#fff8ee",color:"#b85c00",padding:"4px 10px",borderRadius:20,fontWeight:600,border:"1px solid #f0d0a0"}}>🥗 Lunch {myLunchTime}{myLunchDur?` · ${myLunchDur}`:""} <span style={{opacity:.6,fontWeight:400}}>{myTz}</span></span>}
+              </div>
+            )}
             {onBreak?(
               <button onClick={returnFromBreak} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
             ):(
@@ -3925,7 +3940,7 @@ function RepCallbacks({ repInfo, fire }) {
           )}
           <div style={{display:"flex",gap:8,marginTop:4}}>
             <button onClick={()=>setShowAdd(false)} style={{flex:1,padding:"11px 0",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#aaa",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancel</button>
-            <button onClick={save} disabled={saving} style={{flex:2,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?.6:1}}>{saving?"Saving…":editing?"Save Changes":"Add to Pipeline"}</button>
+            <button onClick={save} disabled={saving} style={{flex:2,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?0.6:1}}>{saving?"Saving…":editing?"Save Changes":"Add to Pipeline"}</button>
           </div>
         </div>
       </div>
@@ -4100,7 +4115,7 @@ function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
             </div>
           ))}
           {allClosers.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"20px 0"}}>No reps assigned as closers yet.</p>}
-          <button onClick={saveVisibility} disabled={saving} style={{width:"100%",marginTop:8,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?.6:1}}>
+          <button onClick={saveVisibility} disabled={saving} style={{width:"100%",marginTop:8,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?0.6:1}}>
             {saving?"Saving…":"Save access"}
           </button>
         </div>
@@ -4129,7 +4144,7 @@ function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
         <button
           onClick={()=>assignRole(rep, active ? null : role)}
           disabled={saving}
-          style={{padding:"4px 10px",borderRadius:7,border:`1.5px solid ${active?color:"#ddd"}`,background:active?color:"#fff",color:active?"#fff":"#aaa",fontSize:11,fontWeight:700,cursor:"pointer",opacity:saving?.6:1,transition:"all .15s"}}
+          style={{padding:"4px 10px",borderRadius:7,border:`1.5px solid ${active?color:"#ddd"}`,background:active?color:"#fff",color:active?"#fff":"#aaa",fontSize:11,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1,transition:"all .15s"}}
         >{active?"✓ ":""}{label}</button>
       );
     };
@@ -4187,7 +4202,7 @@ function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
         <div style={s.card}>
           <p style={{...s.label,marginBottom:4}}>Your enrolment status</p>
           <p style={{fontSize:12,color:"#888",marginBottom:14}}>Toggle ready when you can take a transfer. Closers will see your status in real time.</p>
-          <button onClick={toggleReady} disabled={saving} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:myRep?.enrol_ready?"#c0392b":"#27ae60",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",opacity:saving?.6:1}}>
+          <button onClick={toggleReady} disabled={saving} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:myRep?.enrol_ready?"#c0392b":"#27ae60",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",opacity:saving?0.6:1}}>
             {saving?"…":myRep?.enrol_ready?"🔴 Mark as Busy":"🟢 Go Ready"}
           </button>
           <p style={{margin:"10px 0 0",textAlign:"center",fontSize:12,color:"#aaa"}}>{myRep?.enrol_ready?"Closers can see you're available and can transfer now.":"You're marked busy — closers won't transfer to you."}</p>
@@ -4217,7 +4232,7 @@ function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
               </div>
             </div>
             {r.enrol_ready&&(
-              <button onClick={()=>transferToEnroller(r)} disabled={saving} style={{padding:"8px 16px",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:saving?.6:1}}>
+              <button onClick={()=>transferToEnroller(r)} disabled={saving} style={{padding:"8px 16px",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1}}>
                 Transfer →
               </button>
             )}
