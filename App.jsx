@@ -1312,7 +1312,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
-  const hasEnrolAccess = !!(myRep?.enrol_role === "enroller" || reps.some(r=>r.enrol_role==="enroller"&&(r.enrol_visible_to||[]).includes(repInfo.id)));
+  const hasEnrolAccess = !!(myRep?.enrol_role === "enroller" || myRep?.enrol_role === "closer" || reps.some(r=>r.enrol_role==="enroller"&&(r.enrol_visible_to||[]).includes(repInfo.id)));
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const onLunch = reps.filter(r=>r.status==="lunch").length;
   const onHealth = reps.filter(r=>r.status==="health").length;
@@ -3624,41 +3624,70 @@ function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
 
   // ── Manager view ───────────────────────────────────────────────────
   if(isManager) {
-    const noRole = reps.filter(r=>!r.enrol_role&&!["off","pto","sick"].includes(r.status));
+    const assignRole = async (rep, role) => {
+      setSaving(true);
+      await sbPatch("rep_status", rep.id, {
+        enrol_role: role,
+        enrol_visible_to: role === "enroller" ? (rep.enrol_visible_to||[]) : [],
+        enrol_ready: false,
+        updated_at: new Date().toISOString(),
+      });
+      await reload();
+      setSaving(false);
+      fire("ok", role ? `${rep.name} set as ${role}` : `${rep.name} role removed`);
+    };
+
+    const RoleBtn = ({rep, role, label, color}) => {
+      const active = rep.enrol_role === role;
+      return (
+        <button
+          onClick={()=>assignRole(rep, active ? null : role)}
+          disabled={saving}
+          style={{padding:"4px 10px",borderRadius:7,border:`1.5px solid ${active?color:"#ddd"}`,background:active?color:"#fff",color:active?"#fff":"#aaa",fontSize:11,fontWeight:700,cursor:"pointer",opacity:saving?.6:1,transition:"all .15s"}}
+        >{active?"✓ ":""}{label}</button>
+      );
+    };
+
     return (
       <div style={{paddingTop:16}}>
-        {/* Enrollers */}
-        <p style={s.label}>Enrollers ({enrollers.length})</p>
-        {enrollers.map(r=>(
-          <div key={r.id} style={s.card}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:34,height:34,borderRadius:"50%",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
-                <div>
-                  <p style={{margin:0,fontSize:13,fontWeight:700}}>{r.name}</p>
-                  <span style={s.chip(r.enrol_ready?"ready":"busy")}>{r.enrol_ready?"🟢 Ready":"🔴 Busy"}</span>
+        {/* Enrollers — with edit access */}
+        {enrollers.length>0&&(
+          <>
+            <p style={s.label}>Enrollers ({enrollers.length})</p>
+            {enrollers.map(r=>(
+              <div key={r.id} style={s.card}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:34,height:34,borderRadius:"50%",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
+                    <div>
+                      <p style={{margin:0,fontSize:13,fontWeight:700}}>{r.name}</p>
+                      <span style={s.chip(r.enrol_ready?"ready":"busy")}>{r.enrol_ready?"🟢 Ready":"🔴 Busy"}</span>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>openEdit(r)} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#fff",color:"#1a5c35",fontSize:11,fontWeight:700,cursor:"pointer"}}>Edit access</button>
+                    <button onClick={()=>assignRole(r,null)} disabled={saving} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #e74c3c",background:"#fff",color:"#e74c3c",fontSize:11,fontWeight:700,cursor:"pointer"}}>Remove</button>
+                  </div>
                 </div>
+                {(r.enrol_visible_to||[]).length===0&&<p style={{margin:0,fontSize:11,color:"#e07b00",background:"#fff8ee",borderRadius:7,padding:"5px 10px"}}>⚠️ No closers assigned yet — hit Edit access.</p>}
+                {(r.enrol_visible_to||[]).length>0&&<p style={{margin:0,fontSize:11,color:"#666"}}>Visible to: {reps.filter(x=>(r.enrol_visible_to||[]).includes(x.id)).map(x=>x.name).join(", ")}</p>}
               </div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>openEdit(r)} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#fff",color:"#1a5c35",fontSize:11,fontWeight:700,cursor:"pointer"}}>Edit access</button>
-                <button onClick={()=>removeRole(r)} disabled={saving} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #e74c3c",background:"#fff",color:"#e74c3c",fontSize:11,fontWeight:700,cursor:"pointer"}}>Remove</button>
-              </div>
-            </div>
-            {(r.enrol_visible_to||[]).length===0&&<p style={{margin:0,fontSize:11,color:"#e07b00",background:"#fff8ee",borderRadius:7,padding:"5px 10px"}}>⚠️ No closers assigned yet — hit Edit access to set who can transfer here.</p>}
-            {(r.enrol_visible_to||[]).length>0&&<p style={{margin:0,fontSize:11,color:"#666"}}>Visible to: {reps.filter(x=>(r.enrol_visible_to||[]).includes(x.id)).map(x=>x.name).join(", ")}</p>}
-          </div>
-        ))}
-        {enrollers.length===0&&<div style={{...s.card,textAlign:"center",color:"#bbb",fontSize:13,padding:"20px 0"}}>No enrollers set up yet.</div>}
+            ))}
+          </>
+        )}
 
-        {/* All reps — promote */}
-        <p style={{...s.label,marginTop:18}}>Reps — assign enroller role ({noRole.length})</p>
-        {noRole.map(r=>(
+        {/* All reps — assign either role */}
+        <p style={{...s.label,marginTop:enrollers.length>0?18:0}}>All Reps — assign roles</p>
+        {reps.filter(r=>!["off","pto","sick"].includes(r.status)).map(r=>(
           <div key={r.id} style={{...s.card,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{width:30,height:30,borderRadius:"50%",background:"#e8f4ee",color:"#1a5c35",fontWeight:700,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
               <span style={{fontSize:13,fontWeight:600}}>{r.name}</span>
             </div>
-            <button onClick={()=>promoteToEnroller(r)} disabled={saving} style={{padding:"5px 12px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#1a5c35",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Make Enroller</button>
+            <div style={{display:"flex",gap:6}}>
+              <RoleBtn rep={r} role="enroller" label="Enroller" color="#1a5c35"/>
+              <RoleBtn rep={r} role="closer" label="Closer" color="#2980b9"/>
+            </div>
           </div>
         ))}
       </div>
