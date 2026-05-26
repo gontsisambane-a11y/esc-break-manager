@@ -344,7 +344,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
   const [toast, setToast] = useState(null);
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
-  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status));
+  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
   const maxOut = settings.custom_limit ?? Math.floor(activeReps.length * 0.3);
   const totalOut = reps.filter(r=>["health","lunch"].includes(r.status)).length;
   const onHealth = reps.filter(r=>r.status==="health").length;
@@ -384,7 +384,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {!centreOpen&&<div style={{background:"rgba(255,200,0,.15)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#ffd700",fontWeight:600,textAlign:"center"}}>🌙 Centre closed — opens 2:00pm SAST · Showing next shift data</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
           {[
-            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)).length,l:"Available",c:"#27ae60"},
+            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)&&(r.rep_stage||"active")==="active").length,l:"Available",c:"#27ae60"},
             {n:centreOpen?onHealth:0,l:`Health (/${hLimit})`,c:onHealth>=hLimit?"#e74c3c":"#2980b9"},
             {n:centreOpen?onLunch:0,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?"#e74c3c":"#e07b00"},
             {n:reps.filter(r=>["pto","sick","off"].includes(r.status)).length,l:"Out",c:"#8e44ad"},
@@ -491,8 +491,9 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   };
 
   const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch") : [];
-  const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r));
-  const offShift = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)));
+  const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r) && (r.rep_stage||"active")==="active");
+  const offShift  = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)) && (r.rep_stage||"active")==="active");
+  const inTraining = reps.filter(r=>r.status==="available" && (r.rep_stage==="training"||r.rep_stage==="not_started"));
   const out = reps.filter(r=>["pto","sick","off"].includes(r.status));
 
   function RepRow({rep}) {
@@ -539,6 +540,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
       {onBreak.length>0&&<Section title="🌿🥗 On Break" items={onBreak} Row={RepRow} color="#2980b9"/>}
       {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
       {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
+      {inTraining.length>0&&<Section title="🎓 Training / Not Started" items={inTraining} Row={RepRow} color="#b85c00"/>}
       {out.length>0&&<Section title="Out Today" items={out} Row={RepRow} color="#8e44ad"/>}
     </div>
   );
@@ -1396,7 +1398,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const onLunch = reps.filter(r=>r.status==="lunch").length;
   const onHealth = reps.filter(r=>r.status==="health").length;
-  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status));
+  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
   const maxOut = settings.custom_limit ?? Math.floor(activeReps.length*0.3);
   const totalOut = reps.filter(r=>["health","lunch"].includes(r.status)).length;
   const hLimit = settings.peak_mode ? H_LIMIT_PEAK : H_LIMIT_NORMAL;
