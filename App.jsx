@@ -981,6 +981,31 @@ function MgrSchedules({ reps, reload, fire }) {
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
   const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}))
 
+  const todayKey = DAYS[new Date().getDay()];
+
+  // Viewer's timezone from browser offset
+  const viewerOffsetMin = -(new Date().getTimezoneOffset());
+  const viewerTz = Object.entries(TZ_OFFSET).reduce((best,[label,offset])=>
+    Math.abs(offset-viewerOffsetMin) < Math.abs((TZ_OFFSET[best]??Infinity)-viewerOffsetMin) ? label : best
+  , "Central");
+
+  const inToday = reps
+    .filter(r => (r.shift_days||[]).includes(todayKey) && !["off","pto","sick"].includes(r.status))
+    .map(r => {
+      const sched = (r.lunch_schedule||{})[todayKey];
+      const repTz = r.timezone||"Central";
+      const start = sched?.start ? convertLunchTime(sched.start, repTz, viewerTz) : null;
+      const end   = sched?.end   ? convertLunchTime(sched.end,   repTz, viewerTz) : null;
+      const lunch = sched?.time  ? convertLunchTime(sched.time,  repTz, viewerTz) : null;
+      return { rep:r, start, end, lunch, repTz, lunchDur: sched?.duration||60 };
+    })
+    .sort((a,b) => (a.start||"99:99").localeCompare(b.start||"99:99"));
+
+  const notInToday = reps.filter(r =>
+    !(r.shift_days||[]).includes(todayKey) && !["pto","sick","off"].includes(r.status)
+  );
+  const oooToday = reps.filter(r => ["pto","sick","off"].includes(r.status));
+
   return (
     <div style={{marginTop:16}}>
       {editing&&(
@@ -988,6 +1013,158 @@ function MgrSchedules({ reps, reload, fire }) {
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div>
+                <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:4}}>NAME</label>
+                <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:4}}>TIMEZONE</label>
+                <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                  {Object.keys(TZ_C).map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:6}}>SHIFT DAYS</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {DAYS.map(d=>(
+                  <div key={d} onClick={()=>toggleDay(d)} style={{padding:"5px 10px",borderRadius:7,border:`1.5px solid ${form.shift_days.includes(d)?"#1a5c35":"#ddd"}`,background:form.shift_days.includes(d)?"#eafaf1":"#fff",cursor:"pointer",fontSize:12,fontWeight:form.shift_days.includes(d)?700:400,color:form.shift_days.includes(d)?"#1a5c35":"#888"}}>{d}</div>
+                ))}
+              </div>
+            </div>
+            {form.shift_days.length>0&&(
+              <div>
+                <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:6}}>DAILY SCHEDULE <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
+                {form.shift_days.map(d=>(
+                  <div key={d} style={{background:"#f9f9f9",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+                    <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#555"}}>{d}</p>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontSize:10,color:"#aaa"}}>Start</span>
+                        <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                          <option value="">hh</option>{[...Array(24)].map((_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
+                        </select>
+                        <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                          <option value="">mm</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontSize:10,color:"#aaa"}}>End</span>
+                        <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                          <option value="">hh</option>{[...Array(24)].map((_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
+                        </select>
+                        <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                          <option value="">mm</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontSize:10,color:"#aaa"}}>Lunch</span>
+                        <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                          <option value="">hh</option>{[...Array(24)].map((_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
+                        </select>
+                        <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                          <option value="">mm</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
+                          <option value={30}>30m</option><option value={60}>1hr</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <Btn label="Cancel" onClick={()=>setEditing(null)} outline color="#888" small/>
+              <Btn label="Save Changes" onClick={save} color="#1a5c35"/>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── TODAY'S ROSTER ── */}
+      <div style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>📅 Today's Roster — {todayKey}</p>
+          <span style={{fontSize:10,color:"#ccc"}}>Your timezone: <strong style={{color:"#aaa"}}>{viewerTz}</strong></span>
+        </div>
+
+        {inToday.length===0&&<p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"10px 0"}}>Nobody scheduled for today.</p>}
+
+        {inToday.map(({rep,start,end,lunch,repTz,lunchDur})=>{
+          const cfg = ST[rep.status]||ST.available;
+          const tz = TZ_C[rep.timezone]||TZ_C.Central;
+          const diffTz = repTz !== viewerTz;
+          const noTimes = !start && !end;
+          return (
+            <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",color:"#1a5c35",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{fontSize:13,fontWeight:600}}>{rep.name}</span>
+                    {diffTz&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>}
+                    <StatusDot status={rep.status}/>
+                  </div>
+                  {lunch&&<span style={{fontSize:10,color:"#b85c00"}}>🥗 Lunch {fmt12h(lunch)}{lunchDur===30?" · 30m":" · 1hr"}</span>}
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                {!noTimes
+                  ? <span style={{fontSize:12,fontWeight:700,color:"#333"}}>{start?fmt12h(start):"?"} – {end?fmt12h(end):"?"}</span>
+                  : <span style={{fontSize:11,color:"#ccc"}}>No times set</span>
+                }
+              </div>
+            </div>
+          );
+        })}
+
+        {notInToday.length>0&&(
+          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
+            <p style={{margin:"0 0 6px",fontSize:10,color:"#ccc",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Not scheduled today ({notInToday.length})</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {notInToday.map(r=><span key={r.id} style={{fontSize:11,background:"#f5f5f5",color:"#aaa",padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
+            </div>
+          </div>
+        )}
+
+        {oooToday.length>0&&(
+          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
+            <p style={{margin:"0 0 6px",fontSize:10,color:"#c0392b",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Out today ({oooToday.length})</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {oooToday.map(r=><span key={r.id} style={{fontSize:11,background:"#fdf0ee",color:"#c0392b",padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── FULL SCHEDULE LIST ── */}
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>All Reps — tap to edit</p>
+      {reps.map(rep=>{
+        const tz=TZ_C[rep.timezone]||TZ_C.Central;
+        const days=(rep.shift_days||[]).join(", ")||"No days set";
+        const todaySched = (rep.lunch_schedule||{})[todayKey];
+        const repTz = rep.timezone||"Central";
+        const startConverted = todaySched?.start ? convertLunchTime(todaySched.start, repTz, viewerTz) : null;
+        const endConverted   = todaySched?.end   ? convertLunchTime(todaySched.end,   repTz, viewerTz) : null;
+        const scheduledToday = (rep.shift_days||[]).includes(todayKey);
+        return (
+          <div key={rep.id} onClick={()=>startEdit(rep)} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 14px",marginBottom:7,cursor:"pointer"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
+                  <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
+                  {scheduledToday&&<span style={{fontSize:9,background:"#eafaf1",color:"#1a5c35",padding:"2px 6px",borderRadius:4,fontWeight:700}}>IN TODAY</span>}
+                </div>
+                <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{days}</p>
+                {scheduledToday&&startConverted&&<p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Today: {fmt12h(startConverted)} – {endConverted?fmt12h(endConverted):"?"} <span style={{color:"#ccc"}}>({viewerTz})</span></p>}
+              </div>
+              <span style={{fontSize:12,color:"#bbb"}}>✏️</span>
+            </div>
+          </div>
+        );
+      })}
                 <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Name</label>
                 <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
               </div>
@@ -1065,27 +1242,6 @@ function MgrSchedules({ reps, reload, fire }) {
             </div>
           </div>
         </Modal>
-      )}
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>All Reps — click to edit</p>
-      {reps.map(rep=>{
-        const tz=TZ_C[rep.timezone]||TZ_C.Central;
-        const days=(rep.shift_days||[]).join(", ")||"No days set";
-        return (
-          <div key={rep.id} onClick={()=>startEdit(rep)} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 14px",marginBottom:7,cursor:"pointer"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
-                  <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
-                </div>
-                <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{days}</p>
-              </div>
-              <span style={{fontSize:12,color:"#bbb"}}>✏️</span>
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
