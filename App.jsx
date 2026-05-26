@@ -1968,7 +1968,16 @@ function HubView({ isManager }) {
   const getClosures = n => closureMap[n.toLowerCase()]||[];
 
   // CRUD
-  const savePromo=async(f)=>{ if(f.id)await sbPatch("hub_promos",f.id,{title:f.title,code:f.code,rules:f.rules,expires_on:f.expires_on||null,proactive:f.proactive,active:true}); else await sbPost("hub_promos",{title:f.title,code:f.code,rules:f.rules,expires_on:f.expires_on||null,proactive:f.proactive,active:true}); fire("approved","Promo saved"); setEditModal(null); reload(); };
+  const savePromo=async(f)=>{
+    const payload={title:f.title,code:f.code,rules:f.rules,expires_on:f.expires_on||null,proactive:f.proactive,active:true,
+      discount_pct:f.discount_pct||0,discount_fixed:f.discount_fixed||0,discount_type:f.discount_type||"pct",
+      applies_to:f.applies_to||"continuous",one_class_only:f.one_class_only||false,multi_class_still:f.multi_class_still!==false,
+      customer_types:f.customer_types||["lead","lapsed"],month_restriction:f.month_restriction||null,
+      requires_mention:f.requires_mention||false,show_scenarios:f.show_scenarios||false,
+    };
+    if(f.id) await sbPatch("hub_promos",f.id,payload); else await sbPost("hub_promos",payload);
+    fire("approved","Promo saved"); setEditModal(null); reload();
+  };
   const deletePromo=async(id)=>{ await sbPatch("hub_promos",id,{active:false}); fire("info","Promo removed"); reload(); };
   const saveClosure=async(f)=>{ if(f.id)await sbPatch("hub_closures",f.id,{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason}); else await sbPost("hub_closures",{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason}); fire("approved","Closure saved"); setEditModal(null); reload(); };
   const deleteClosure=async(id)=>{ await sbDel("hub_closures",id); fire("info","Closure removed"); reload(); };
@@ -2788,23 +2797,126 @@ function HubTeamCard({member}) {
 
 // ── HUB EDIT MODALS ───────────────────────────────────────────────────
 function HubPromoModal({item,onClose,onSave,onDelete}) {
-  const [f,setF]=useState({title:item?.title||"",code:item?.code||"",rules:item?.rules||"",expires_on:item?.expires_on||"",proactive:item?.proactive||false,id:item?.id});
+  const [f,setF]=useState({
+    title:         item?.title||"",
+    code:          item?.code||"",
+    rules:         item?.rules||"",
+    expires_on:    item?.expires_on||"",
+    proactive:     item?.proactive||false,
+    // Calculator caveats
+    discount_pct:      item?.discount_pct||0,          // e.g. 40 for 40%
+    discount_fixed:    item?.discount_fixed||0,         // e.g. 50 for $50 off
+    discount_type:     item?.discount_type||"pct",      // "pct" | "fixed" | "one_class_pct"
+    applies_to:        item?.applies_to||"continuous",  // "continuous" | "group" | "all"
+    one_class_only:    item?.one_class_only||false,      // true = only 1 class/week gets disc
+    multi_class_still: item?.multi_class_still||true,   // true = other classes still get 10%
+    customer_types:    item?.customer_types||["lead","lapsed"], // who can use it
+    month_restriction: item?.month_restriction||"",     // "" = any month, or "5" = June (0-indexed)
+    requires_mention:  item?.requires_mention||false,   // true = customer must bring it up
+    show_scenarios:    item?.show_scenarios||false,      // true = show 1/2/3 day selector in calc
+    id:            item?.id,
+  });
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const toggleCustType=(t)=>set("customer_types", f.customer_types.includes(t) ? f.customer_types.filter(x=>x!==t) : [...f.customer_types,t]);
+
+  const MONTHS_LIST = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
   return (
     <Modal title={item?"Edit Promo":"Add Promo"} sub="PROMO" onClose={onClose} wide>
-      <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Promo Code</label><input value={f.code} onChange={e=>set("code",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Full Rules</label><textarea value={f.rules} onChange={e=>set("rules",e.target.value)} rows={5} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6}}/></div>
+      <div style={{display:"flex",flexDirection:"column",gap:13}}>
+
+        {/* Basic info */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Expiry Date (leave blank = ongoing)</label><input type="date" value={f.expires_on} onChange={e=>set("expires_on",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-          <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:20}}>
-            <input type="checkbox" id="proactive" checked={f.proactive} onChange={e=>set("proactive",e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
-            <label htmlFor="proactive" style={{fontSize:13,cursor:"pointer"}}>May offer proactively</label>
+          <div><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>PROMO TITLE</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. June Dive In" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>PROMO CODE</label><input value={f.code} onChange={e=>set("code",e.target.value)} placeholder="e.g. DIVEIN40" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        </div>
+
+        {/* Discount settings */}
+        <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:10,padding:"12px 14px"}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase",letterSpacing:.5}}>💰 Discount Settings</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT TYPE</label>
+              <select value={f.discount_type} onChange={e=>set("discount_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+                <option value="pct">% off tuition</option>
+                <option value="one_class_pct">% off — 1 class/week only</option>
+                <option value="fixed">Fixed $ off per student</option>
+              </select>
+            </div>
+            <div>
+              {(f.discount_type==="pct"||f.discount_type==="one_class_pct")
+                ? <><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT %</label><input type="number" min={1} max={100} value={f.discount_pct} onChange={e=>set("discount_pct",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
+                : <><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT AMOUNT ($)</label><input type="number" min={1} value={f.discount_fixed} onChange={e=>set("discount_fixed",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
+              }
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>APPLIES TO</label>
+              <select value={f.applies_to} onChange={e=>set("applies_to",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+                <option value="continuous">Continuous classes only (no ODL/clinic)</option>
+                <option value="group">Group classes only</option>
+                <option value="all">All lesson types</option>
+              </select>
+            </div>
+            {f.discount_type==="one_class_pct"&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:18}}>
+                <input type="checkbox" id="multi_still" checked={f.multi_class_still} onChange={e=>set("multi_class_still",e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
+                <label htmlFor="multi_still" style={{fontSize:12,cursor:"pointer",lineHeight:1.4}}>Other classes still get 10% multi-class</label>
+              </div>
+            )}
+          </div>
+          {f.discount_type==="one_class_pct"&&(
+            <div style={{marginTop:10}}>
+              <input type="checkbox" id="show_scen" checked={f.show_scenarios} onChange={e=>set("show_scenarios",e.target.checked)} style={{width:16,height:16,cursor:"pointer",marginRight:8}}/>
+              <label htmlFor="show_scen" style={{fontSize:12,cursor:"pointer"}}>Show 1/2/3 class/week scenario selector in calculator</label>
+            </div>
+          )}
+        </div>
+
+        {/* Restrictions */}
+        <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:10,padding:"12px 14px"}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase",letterSpacing:.5}}>🔒 Restrictions</p>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:6}}>VALID FOR</label>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {[{k:"lead",l:"New leads"},{k:"lapsed",l:"Lapsed"},{k:"active",l:"Active"}].map(t=>(
+                <div key={t.k} onClick={()=>toggleCustType(t.k)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${f.customer_types.includes(t.k)?"#e07b00":"#ddd"}`,background:f.customer_types.includes(t.k)?"#fff8ee":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:f.customer_types.includes(t.k)?"#b85c00":"#888"}}>
+                  {f.customer_types.includes(t.k)?"✓ ":""}{t.l}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>MONTH RESTRICTION</label>
+              <select value={f.month_restriction} onChange={e=>set("month_restriction",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+                <option value="">Any month</option>
+                {MONTHS_LIST.map((m,i)=><option key={i} value={String(i)}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>EXPIRY DATE</label>
+              <input type="date" value={f.expires_on} onChange={e=>set("expires_on",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:16,marginTop:10,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <input type="checkbox" id="proactive2" checked={f.proactive} onChange={e=>set("proactive",e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
+              <label htmlFor="proactive2" style={{fontSize:12,cursor:"pointer"}}>May offer proactively</label>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <input type="checkbox" id="req_mention" checked={f.requires_mention} onChange={e=>set("requires_mention",e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
+              <label htmlFor="req_mention" style={{fontSize:12,cursor:"pointer"}}>Customer must mention it</label>
+            </div>
           </div>
         </div>
+
+        {/* Full rules text */}
+        <div><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>FULL RULES (shown when expanded)</label><textarea value={f.rules} onChange={e=>set("rules",e.target.value)} rows={4} placeholder="Full terms and conditions as stated in the promo brief…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6}}/></div>
+
         <div style={{display:"flex",gap:8,marginTop:4}}>
-          {item&&<Btn label="Remove Promo" onClick={()=>{onDelete(item.id);}} color="#e74c3c" small/>}
+          {item&&<Btn label="Remove Promo" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
           <div style={{flex:1}}/>
           <Btn label="Cancel" onClick={onClose} outline color="#888" small/>
           <Btn label="Save Promo" onClick={()=>onSave(f)} color="#003087" small/>
@@ -3040,22 +3152,20 @@ const PARTNER_REGIONS = ["AQUAfin","AQua Wave","Charlotte Swim","King","Little F
 const SIBLING_EXEMPT_LOCS = ["Gig Harbor","Henderson","Olympia"]; // ICP auto-applies here
 const REG_FEE = 35;
 
-function QuoteCalculator({locations}) {
+function QuoteCalculator({locations, activePromos=[]}) {
   const [locId,    setLocId]    = useState("");
   const [custType, setCustType] = useState("lead");
   const [regUsed,  setRegUsed]  = useState(0);
-  // FIX 8: global weeks selector (all lessons same month)
   const [weeks,    setWeeks]    = useState(4);
   const [enrollMo, setEnrollMo] = useState(new Date().getMonth());
   const [students, setStudents] = useState([{id:1,name:"Child 1",lessons:[{id:1,type:"group_mf"}]}]);
   const [promoChecked, setPromoChecked] = useState([]);
+  const [scenarioMap,  setScenarioMap]  = useState({}); // {code: scenarioKey}
 
   const loc = locations.find(l=>l.id===locId);
-  // FIX 10: isEmler checks partner regions
   const isPartner = loc && PARTNER_REGIONS.some(b=>loc.region?.includes(b)||loc.name?.includes(b));
   const isEmler = !!loc && !isPartner;
   const sibExempt = loc && SIBLING_EXEMPT_LOCS.some(n=>loc.name?.includes(n));
-  // Sibling discount applies: Emler only, not exempt locations
   const canSibDiscount = isEmler && !sibExempt;
 
   const getRate = (type) => {
@@ -3064,148 +3174,139 @@ function QuoteCalculator({locations}) {
     return lt ? (parseFloat(loc[lt.priceKey])||0) : 0;
   };
 
-  // Student management
-  const addStudent  = ()    => setStudents(s=>[...s,{id:Date.now(),name:`Child ${s.length+1}`,lessons:[{id:Date.now(),type:"group_mf"}]}]);
-  const remStudent  = (sid) => setStudents(s=>s.filter(st=>st.id!==sid));
-  const updStudent  = (sid,f,v) => setStudents(s=>s.map(st=>st.id===sid?{...st,[f]:v}:st));
-  const addLesson   = (sid) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:[...st.lessons,{id:Date.now(),type:"group_mf"}]}:st));
-  const remLesson   = (sid,lid) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:st.lessons.filter(l=>l.id!==lid)}:st));
-  const updLesson   = (sid,lid,f,v) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:st.lessons.map(l=>l.id===lid?{...l,[f]:v}:l)}:st));
+  // ── Filter eligible promos from DB ────────────────────────────────
+  const eligiblePromos = activePromos.filter(p => {
+    if(!p.discount_type) return false; // old-style promo without calculator fields
+    const custOk = !p.customer_types?.length || p.customer_types.includes(custType);
+    const moOk   = p.month_restriction===null || p.month_restriction===undefined || p.month_restriction==="" || String(p.month_restriction)===String(enrollMo);
+    const emlerOk = isEmler || p.applies_to==="all";
+    return custOk && moOk && emlerOk;
+  });
 
-  // ── AVAILABLE PROMOS ──────────────────────────────────────────────
-  // FIX 1: DIVEIN40 excludes SwimKids (isEmler = false for SwimKids)
-  // FIX 11: Day28 and DIVEIN40 both reduce first month — only show one or the other
-  // DIVEIN40 scenario state — tracks which classes get the discount
-  const [diveinScenario, setDiveinScenario] = useState(null); // null | "1day" | "2day_1disc" | "full"
-
-  const promos = [];
-  if(isEmler && enrollMo===5 && custType!=="active")
-    promos.push({code:"DIVEIN40",label:"40% Off June Tuition (DIVEIN40)",pct:40,note:"Continuous lessons only — 1 day/week discounted. Select scenario below."});
-  if(custType!=="active")
-    promos.push({code:"REFERRAL",label:"Referral — $50 off per student",fixed:50,note:"New family must mention referrer by name"});
-  if(custType==="lead" && !promoChecked.includes("DIVEIN40"))
-    promos.push({code:"DAY28",label:"Lead Day 28 — 20% off first month",pct:20,note:"Do NOT offer proactively — customer must mention"});
+  const SCENARIO_OPTIONS = [
+    {key:"1day",  label:"1 class/week",   sub:"Discount on that 1 class"},
+    {key:"2day",  label:"2 classes/week", sub:"1st class discounted · 2nd class: 10% multi-class"},
+    {key:"3day",  label:"3 classes/week", sub:"1st class discounted · 2nd & 3rd: 10% multi-class"},
+    {key:"full",  label:"Full month",     sub:"All classes discounted — confirm with manager"},
+  ];
 
   const togglePromo = (code) => {
     setPromoChecked(p=>p.includes(code)?p.filter(c=>c!==code):[...p,code]);
-    if(code==="DIVEIN40") setDiveinScenario(null);
+    setScenarioMap(m=>({...m,[code]:null}));
   };
+  const setScenario = (code, val) => setScenarioMap(m=>({...m,[code]:val}));
 
-  // DIVEIN40 scenarios shown when DIVEIN40 is checked
-  const DIVEIN_SCENARIOS = [
-    { key:"1day",       label:"1 class/week",   sub:"40% off that 1 class" },
-    { key:"2day_1disc", label:"2 classes/week",  sub:"1st class: 40% off · 2nd class: 10% multi-class" },
-    { key:"3day_1disc", label:"3 classes/week",  sub:"1st class: 40% off · 2nd & 3rd: 10% multi-class" },
-    { key:"full",       label:"Full month off",  sub:"Entire month 40% — confirm with manager" },
-  ];
+  // Student management
+  const addStudent  = ()      => setStudents(s=>[...s,{id:Date.now(),name:`Child ${s.length+1}`,lessons:[{id:Date.now(),type:"group_mf"}]}]);
+  const remStudent  = (sid)   => setStudents(s=>s.filter(st=>st.id!==sid));
+  const updStudent  = (sid,f,v) => setStudents(s=>s.map(st=>st.id===sid?{...st,[f]:v}:st));
+  const addLesson   = (sid)   => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:[...st.lessons,{id:Date.now(),type:"group_mf"}]}:st));
+  const remLesson   = (sid,lid) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:st.lessons.filter(l=>l.id!==lid)}:st));
+  const updLesson   = (sid,lid,f,v) => setStudents(s=>s.map(st=>st.id===sid?{...st,lessons:st.lessons.map(l=>l.id===lid?{...l,[f]:v}:l)}:st));
 
   // ── PER-STUDENT CALCULATION ───────────────────────────────────────
   const calcStudent = (student, si) => {
     const lines = student.lessons.map((lesson, li) => {
-      const lt    = LESSON_TYPES.find(t=>t.key===lesson.type);
-      const rate  = getRate(lesson.type);
+      const lt      = LESSON_TYPES.find(t=>t.key===lesson.type);
+      const rate    = getRate(lesson.type);
       const monthly = lt?.continuous ? rate * weeks : rate * (lesson.type==="clinic" ? 5 : 1);
-      const canMulti = li > 0 && lt?.continuous;
+      const canMulti  = li > 0 && lt?.continuous;
       const multiDisc = canMulti ? monthly * 0.10 : 0;
       const afterMulti = monthly - multiDisc;
-      // Per-line promo: only continuous non-clinic non-ODL lessons eligible for % promo
-      const promoEligible = !!(lt?.continuous && lt?.key !== "clinic");
-      return {lt, rate, monthly, multiDisc, afterMulti, promoEligible, net: afterMulti, continuous: lt?.continuous, group: lt?.group};
+      const isContinuous = !!lt?.continuous;
+      const isGroup      = !!lt?.group;
+      const isODL        = lesson.type.startsWith("odl");
+      const isClinic     = lesson.type==="clinic";
+      return {lt, rate, monthly, multiDisc, afterMulti, net:afterMulti, isContinuous, isGroup, isODL, isClinic};
     });
 
     const grossMonthly = lines.reduce((s,l)=>s+l.net, 0);
-
-    // Sibling discount ONLY on continuous GROUP lessons
-    const groupContinuousTotal = lines.filter(l=>l.group&&l.continuous).reduce((s,l)=>s+l.net,0);
-    const sibDisc = (si>0 && canSibDiscount) ? groupContinuousTotal * 0.10 : 0;
+    const groupContinuousTotal = lines.filter(l=>l.isGroup&&l.isContinuous).reduce((s,l)=>s+l.net,0);
+    const sibDisc  = (si>0 && canSibDiscount) ? groupContinuousTotal * 0.10 : 0;
     const afterSib = grossMonthly - sibDisc;
 
-    // % promo logic — DIVEIN40 applies to 1 week's worth of 1 class only (scenario-aware)
-    let pctPromoLabel = "";
-    const isDivein = promoChecked.includes("DIVEIN40") && diveinScenario;
-    const isDay28  = promoChecked.includes("DAY28");
-    const pctRate  = isDay28 ? 0.20 : 0; // DAY28 applies normally across all eligible lines
-    if(isDay28) pctPromoLabel = "Day28";
+    const activePromoObjs = eligiblePromos.filter(p=>promoChecked.includes(p.code));
 
-    // Build per-line promo discounts
+    const lineEligible = (p, l) => {
+      if(p.applies_to==="continuous") return l.isContinuous && !l.isClinic && !l.isODL;
+      if(p.applies_to==="group")      return l.isGroup && l.isContinuous;
+      return true;
+    };
+
     const linesWithPromo = lines.map((l,li)=>{
-      const sibLineDisc = (l.group && l.continuous && si>0 && canSibDiscount) ? l.net * 0.10 : 0;
+      const sibLineDisc = (l.isGroup && l.isContinuous && si>0 && canSibDiscount) ? l.net * 0.10 : 0;
       const netAfterSib = l.net - sibLineDisc;
 
-      // DAY28 — standard % across all eligible
-      const day28Disc = (isDay28 && l.promoEligible) ? netAfterSib * 0.20 : 0;
+      const promoDiscs = [];
+      activePromoObjs.forEach(p=>{
+        if(!lineEligible(p,l)) return;
+        const scenario = scenarioMap[p.code];
+        let disc = 0; let label = "";
 
-      // DIVEIN40 — applies only to 1 class per week (the first line only)
-      // subsequent classes already get 10% multi-class discount, not DIVEIN40
-      let diveinDisc = 0;
-      if(isDivein && l.promoEligible && li===0) {
-        if(diveinScenario === "full") {
-          diveinDisc = netAfterSib * 0.40;
-        } else {
-          // Discount = 1 class rate × 40% (one week's class, applied once)
-          diveinDisc = l.rate * 0.40;
+        if(p.discount_type==="fixed") {
+          if(li===0) { disc=+(p.discount_fixed||0); label=`$${disc} off (${p.code})`; }
+        } else if(p.discount_type==="pct") {
+          disc = netAfterSib * ((p.discount_pct||0)/100);
+          label = `${p.discount_pct}% off (${p.code})`;
+        } else if(p.discount_type==="one_class_pct") {
+          if(p.show_scenarios && !scenario) return;
+          if(scenario==="full" || !p.show_scenarios) {
+            disc = netAfterSib * ((p.discount_pct||0)/100);
+            label = `${p.discount_pct}% off (${p.code})`;
+          } else {
+            // Only first class gets the promo discount
+            if(li===0) { disc = l.rate * ((p.discount_pct||0)/100); label=`1 class × ${p.discount_pct}% (${p.code})`; }
+          }
         }
-      }
+        if(disc>0) promoDiscs.push({code:p.code, label, amount:disc});
+      });
 
-      const promoLineDisc = day28Disc + diveinDisc;
-      return {...l, sibLineDisc, netAfterSib, promoLineDisc, day28Disc, diveinDisc, finalNet: netAfterSib - promoLineDisc};
+      const totalPromoDisc = promoDiscs.reduce((s,d)=>s+d.amount,0);
+      return {...l, sibLineDisc, netAfterSib, promoDiscs, totalPromoDisc, finalNet:netAfterSib-totalPromoDisc};
     });
 
-    const pctPromoDisc = linesWithPromo.reduce((s,l)=>s+l.promoLineDisc, 0);
-    const referralDisc = promoChecked.includes("REFERRAL") ? 50 : 0;
-    const totalPromoDisc = pctPromoDisc + referralDisc;
-    const promoLabel = [isDivein?"DIVEIN40":null, isDay28?"Day28":null, promoChecked.includes("REFERRAL")?"Referral":null].filter(Boolean).join(" + ");
-
-    // Reg fee
+    const totalPromoDisc = linesWithPromo.reduce((s,l)=>s+l.totalPromoDisc,0);
     const regFee = (regUsed + si) < 2 ? REG_FEE : 0;
-
     const rawDueToday = regFee + afterSib - totalPromoDisc;
-    const dueToday = Math.max(0, rawDueToday);
-    const creditNote = rawDueToday < 0 ? Math.abs(rawDueToday) : 0;
-    const ongoing1to3 = afterSib;
-    const ongoing4plus = grossMonthly;
+    const dueToday    = Math.max(0, rawDueToday);
+    const creditNote  = rawDueToday < 0 ? Math.abs(rawDueToday) : 0;
+    const promoLabel  = activePromoObjs.map(p=>p.code).join(" + ");
 
-    return {linesWithPromo, lines, grossMonthly, groupContinuousTotal, sibDisc, afterSib, pctPromoDisc, isDivein, isDay28, pctRate, referralDisc, totalPromoDisc, promoLabel, regFee, dueToday, creditNote, ongoing1to3, ongoing4plus, hasSibDisc: sibDisc > 0};
+    return {linesWithPromo, grossMonthly, sibDisc, afterSib, totalPromoDisc, promoLabel, regFee, dueToday, creditNote, ongoing1to3:afterSib, ongoing4plus:grossMonthly, hasSibDisc:sibDisc>0};
   };
 
-  const calcs = students.map((s,i)=>calcStudent(s,i));
-  const grandToday   = calcs.reduce((s,c)=>s+c.dueToday, 0);
+  const calcs         = students.map((s,i)=>calcStudent(s,i));
+  const grandToday    = calcs.reduce((s,c)=>s+c.dueToday, 0);
   const grandOngoing13 = calcs.reduce((s,c)=>s+c.ongoing1to3, 0);
   const grandOngoing4  = calcs.reduce((s,c)=>s+c.ongoing4plus, 0);
-  const hasSibDisc = calcs.some(c=>c.hasSibDisc);
-
+  const hasSibDisc    = calcs.some(c=>c.hasSibDisc);
   const fmt = (n) => `$${(n||0).toFixed(2)}`;
   const [copied, setCopied] = useState(false);
 
   const genScript = () => {
     const mo = MONTHS[enrollMo];
-    const out = ["\"Today\'s total is " + fmt(grandToday) + ", which includes:\""];
+    const out = [`"Today's total is ${fmt(grandToday)}, which includes:"`];
     calcs.forEach((c,i)=>{
       const name = students[i].name||`Child ${i+1}`;
       if(c.regFee>0) out.push(`  • $${REG_FEE} annual registration for ${name}`);
-      if(c.regFee===0&&regUsed+i>=2) out.push(`  • Registration fee waived for ${name} — family max reached`);
+      if(c.regFee===0&&regUsed+i>=2) out.push(`  • Registration waived for ${name} — family max reached`);
       c.linesWithPromo.forEach((l,li)=>{
-        const lbl = l.lt?.label||"";
-        const baseAmt = l.afterMulti||l.net;
-        out.push(`  • ${fmt(baseAmt)} ${mo} tuition for ${name} (${lbl}${li>0&&l.continuous?" — 10% multi-class":""})`);
-        if((l.sibLineDisc||0)>0) out.push(`    minus ${fmt(l.sibLineDisc)} sibling discount — first 3 full months`);
-        if((l.diveinDisc||0)>0) out.push(`    minus ${fmt(l.diveinDisc)} DIVEIN40 — 1 class × 40%`);
-        if((l.day28Disc||0)>0) out.push(`    minus ${fmt(l.day28Disc)} Day28 20% discount`);
-        if(!(l.promoEligible)&&(c.isDivein||c.isDay28)) out.push(`    (promo does not apply to ${l.lt?.key==="clinic"?"clinics":"ODL"})`);
+        out.push(`  • ${fmt(l.afterMulti)} ${mo} tuition for ${name} (${l.lt?.label}${li>0&&l.isContinuous?" — 10% multi-class":""})`);
+        if(l.sibLineDisc>0) out.push(`    minus ${fmt(l.sibLineDisc)} sibling discount — first 3 months`);
+        l.promoDiscs?.forEach(d=>out.push(`    minus ${fmt(d.amount)} ${d.label}`));
       });
-      if(c.referralDisc>0) out.push(`  • Minus $50 Referral discount for ${name}`);
-      if((c.creditNote||0)>0) out.push(`  • Note: discount exceeds tuition — ${fmt(c.creditNote)} credit added to account`);
+      if(c.creditNote>0) out.push(`  • Note: discount exceeds tuition — ${fmt(c.creditNote)} credit applied to account`);
     });
     out.push("");
-    if(hasSibDisc){
-      out.push(`"For the first 3 months you will be billed ${fmt(grandOngoing13)} on the 20th. From month 4 onwards your billing will be ${fmt(grandOngoing4)}."`);
+    if(hasSibDisc) {
+      out.push(`"For the first 3 months you will be billed ${fmt(grandOngoing13)} on the 20th. From month 4 your billing will be ${fmt(grandOngoing4)}."`);
     } else {
       out.push(`"Going forward you will be billed ${fmt(grandOngoing13)} on the 20th of each month. Months with 5 classes will be slightly higher."`);
     }
     return out.join("\n");
   };
 
-  const copyScript = ()=>{navigator.clipboard?.writeText(genScript().replace(/\\n/g,"\n"));setCopied(true);setTimeout(()=>setCopied(false),2000);};
+  const copyScript = ()=>{navigator.clipboard?.writeText(genScript());setCopied(true);setTimeout(()=>setCopied(false),2000);};
 
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
@@ -3313,55 +3414,55 @@ function QuoteCalculator({locations}) {
       </div>
 
       {/* Step 3: Promos */}
-      {promos.length>0&&(
+      {eligiblePromos.length>0&&(
         <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #f0c080",padding:"14px",marginBottom:10}}>
           <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase",letterSpacing:.5}}>③ Available Promotions</p>
-          {promos.map(p=>(
+          {eligiblePromos.map(p=>(
             <div key={p.code}>
               <div onClick={()=>togglePromo(p.code)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 11px",borderRadius:9,border:`1.5px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#eafaf1":"#fff",cursor:"pointer",marginBottom:6}}>
                 <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
                   {promoChecked.includes(p.code)&&<span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span>}
                 </div>
-                <div>
-                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.label}</p>
-                  <p style={{margin:0,fontSize:10,color:"#888"}}>{p.note}</p>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.title} <span style={{fontSize:11,fontWeight:700,color:"#003087",background:"#e8f0fe",padding:"1px 6px",borderRadius:4}}>{p.code}</span></p>
+                  <p style={{margin:"2px 0 0",fontSize:10,color:"#888"}}>
+                    {p.discount_type==="fixed"?`$${p.discount_fixed} off per student`:p.discount_type==="one_class_pct"?`${p.discount_pct}% off 1 class/week`:`${p.discount_pct}% off`}
+                    {" · "}{p.applies_to==="continuous"?"Continuous only":p.applies_to==="group"?"Group only":"All lessons"}
+                    {p.requires_mention&&" · Customer must mention"}
+                    {p.proactive&&" · May offer proactively"}
+                  </p>
+                  {p.rules&&<p style={{margin:"3px 0 0",fontSize:10,color:"#aaa"}}>{p.rules.slice(0,100)}{p.rules.length>100?"…":""}</p>}
                 </div>
               </div>
-              {/* DIVEIN40 scenario selector — shown when checked */}
-              {p.code==="DIVEIN40"&&promoChecked.includes("DIVEIN40")&&(
+              {/* Scenario selector for one_class_pct promos */}
+              {p.discount_type==="one_class_pct"&&p.show_scenarios&&promoChecked.includes(p.code)&&(
                 <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:9,padding:"10px 12px",marginBottom:6,marginTop:-2}}>
-                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1a5c35"}}>📋 How many classes/week does the customer attend?</p>
+                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1a5c35"}}>📋 How many classes/week?</p>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    {DIVEIN_SCENARIOS.map(sc=>(
-                      <div key={sc.key} onClick={()=>setDiveinScenario(sc.key)}
-                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${diveinScenario===sc.key?"#1a5c35":"#ddd"}`,background:diveinScenario===sc.key?"#fff":"#fafafa",cursor:"pointer",transition:"all .15s"}}>
+                    {SCENARIO_OPTIONS.map(sc=>(
+                      <div key={sc.key} onClick={()=>setScenario(p.code,sc.key)}
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${scenarioMap[p.code]===sc.key?"#1a5c35":"#ddd"}`,background:scenarioMap[p.code]===sc.key?"#fff":"#fafafa",cursor:"pointer"}}>
                         <div>
-                          <span style={{fontSize:13,fontWeight:600,color:diveinScenario===sc.key?"#1a5c35":"#444"}}>{sc.label}</span>
+                          <span style={{fontSize:13,fontWeight:600,color:scenarioMap[p.code]===sc.key?"#1a5c35":"#444"}}>{sc.label}</span>
                           <span style={{fontSize:11,color:"#888",marginLeft:8}}>{sc.sub}</span>
                         </div>
-                        <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${diveinScenario===sc.key?"#1a5c35":"#ccc"}`,background:diveinScenario===sc.key?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          {diveinScenario===sc.key&&<div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
+                        <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${scenarioMap[p.code]===sc.key?"#1a5c35":"#ccc"}`,background:scenarioMap[p.code]===sc.key?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          {scenarioMap[p.code]===sc.key&&<div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
                         </div>
                       </div>
                     ))}
                   </div>
-                  {!diveinScenario&&<p style={{margin:"8px 0 0",fontSize:11,color:"#e07b00",fontWeight:600}}>⚠️ Select a scenario above to calculate the discount correctly</p>}
-                  {diveinScenario&&diveinScenario!=="full"&&(
-                    <div style={{marginTop:8,padding:"7px 10px",background:"#fff",borderRadius:7,border:"1px solid #c8e6c9"}}>
-                      <p style={{margin:0,fontSize:11,color:"#1a5c35"}}>
-                        <strong>1st class:</strong> 1 class rate × 40% off (DIVEIN40) · <strong>Additional classes:</strong> 10% multi-class discount applies as normal.
-                      </p>
-                    </div>
-                  )}
-                  {diveinScenario==="full"&&(
-                    <div style={{marginTop:8,padding:"7px 10px",background:"#fff3cd",borderRadius:7,border:"1px solid #f0c080"}}>
-                      <p style={{margin:0,fontSize:11,color:"#856404"}}>⚠️ Full month discount — confirm this scenario with your manager before applying.</p>
-                    </div>
-                  )}
+                  {!scenarioMap[p.code]&&<p style={{margin:"8px 0 0",fontSize:11,color:"#e07b00",fontWeight:600}}>⚠️ Select a scenario to calculate correctly</p>}
+                  {scenarioMap[p.code]==="full"&&<p style={{margin:"8px 0 0",fontSize:11,color:"#856404",background:"#fff3cd",padding:"6px 10px",borderRadius:7}}>⚠️ Full month discount — confirm with your manager before applying.</p>}
                 </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+      {eligiblePromos.length===0&&loc&&(
+        <div style={{background:"#f9f9f9",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
+          <p style={{margin:0,fontSize:12,color:"#aaa"}}>No active promotions apply to this customer / month combination.</p>
         </div>
       )}
 
@@ -3375,20 +3476,15 @@ function QuoteCalculator({locations}) {
               {c.linesWithPromo.map((l,li)=>(
                 <div key={li} style={{marginBottom:5,paddingLeft:8}}>
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}>
-                    <span>{l.lt?.label} ({l.lt?.continuous?`${weeks} × ${fmt(l.rate)}`:`${fmt(l.rate)}/class`}){li>0&&l.continuous?" — 10% multi-class":""}</span>
+                    <span>{l.lt?.label} ({l.isContinuous?`${weeks} × ${fmt(l.rate)}`:`${fmt(l.rate)}/class`}){li>0&&l.isContinuous?" — 10% multi-class":""}</span>
                     <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.afterMulti)}</span>
                   </div>
                   {l.sibLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>Sibling discount −10% (mo 1–3)</span><span>−{fmt(l.sibLineDisc)}</span></div>}
-                  {l.diveinDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>DIVEIN40 — 1 class × 40%{diveinScenario==="full"?" (full month)":""}</span><span>−{fmt(l.diveinDisc)}</span></div>}
-                  {l.day28Disc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>Day28 −20%</span><span>−{fmt(l.day28Disc)}</span></div>}
-                  {!l.promoEligible&&(c.isDivein||c.isDay28)&&<div style={{fontSize:10,color:"#e07b00",paddingLeft:8}}>⚠️ Promo does not apply to {l.lt?.key==="clinic"?"clinics":"ODL"}</div>}
+                  {l.promoDiscs?.map((d,di)=>(
+                    <div key={di} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>{d.label}</span><span>−{fmt(d.amount)}</span></div>
+                  ))}
                 </div>
               ))}
-              {c.referralDisc>0&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
-                  <span>Referral $50 off</span><span>−{fmt(c.referralDisc)}</span>
-                </div>
-              )}
               {c.regFee>0&&(
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginBottom:3,paddingLeft:8}}>
                   <span>Annual registration fee</span><span>{fmt(c.regFee)}</span>
@@ -3444,16 +3540,15 @@ function QuoteCalculator({locations}) {
               return (
                 <div key={i} style={{marginBottom:8,paddingLeft:8}}>
                   {c.regFee>0&&<p style={{margin:"0 0 3px"}}>• ${REG_FEE} annual registration for {name}</p>}
-                  {c.regFee===0&&regUsed+i>=2&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Registration fee waived for {name} — family max reached</p>}
+                  {c.regFee===0&&regUsed+i>=2&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Registration waived for {name} — family max reached</p>}
                   {c.linesWithPromo.map((l,li)=>(
                     <div key={li}>
-                      <p style={{margin:"0 0 2px"}}>• {fmt(l.afterMulti)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.continuous?" — 10% multi-class":""})</p>
-                      {l.sibLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.sibLineDisc)} sibling discount — first 3 full months</p>}
-                      {l.diveinDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.diveinDisc)} DIVEIN40 (1 class × 40%{diveinScenario==="full"?" full month":""})</p>}
-                      {l.day28Disc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.day28Disc)} Day28 20% discount</p>}
+                      <p style={{margin:"0 0 2px"}}>• {fmt(l.afterMulti)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.isContinuous?" — 10% multi-class":""})</p>
+                      {l.sibLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.sibLineDisc)} sibling discount — first 3 months</p>}
+                      {l.promoDiscs?.map((d,di)=><p key={di} style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(d.amount)} {d.label}</p>)}
                     </div>
                   ))}
-                  {c.referralDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus $50 Referral discount for {name}</p>}
+                  {c.creditNote>0&&<p style={{margin:"0 0 3px",color:"#1a5c35",fontStyle:"italic"}}>  Note: {fmt(c.creditNote)} credit applied to account</p>}
                 </div>
               );
             })}
