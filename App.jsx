@@ -355,8 +355,6 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
     {k:"pto",l:"PTO"},
     {k:"reports",l:"Reports"},
     {k:"settings",l:"Settings"},
-    {k:"enrolment",l:"📋 Enrolment"},
-    {k:"pipeline",l:"📞 Pipeline"},
     ...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[]),
   ];
 
@@ -428,8 +426,6 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="reports"   &&<MgrReports reps={reps}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
-        {tab==="enrolment"&&<EnrolmentBoard reps={reps} reload={reload} fire={fire} currentRepId={null} isManager={true}/>}
-        {tab==="pipeline"&&<MgrPipeline reps={reps}/>}
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
       </div>
     </div>
@@ -529,100 +525,11 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     );
   }
 
-  // ── Lunch schedule analysis for today ─────────────────────────────
-  const todayKey = todayDay();
-
-  // Detect viewer timezone using Intl, map to app label
-  const ianaZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const viewerTz = ianaZone.includes("Johannesburg")||ianaZone.includes("Africa") ? "SA"
-    : ianaZone.includes("Pacific") ? "Pacific"
-    : ianaZone.includes("Eastern") ? "Eastern"
-    : ianaZone.includes("Central") ? "Central"
-    : ianaZone.includes("London")||ianaZone.includes("GMT") ? "GMT"
-    : ianaZone.includes("Kolkata")||ianaZone.includes("India") ? "IST"
-    : "SA";
-
-  const lunchSlots = reps
-    .filter(r => isRepOnShift(r) && !["off","pto","sick"].includes(r.status))
-    .map(r => {
-      const sched = (r.lunch_schedule||{})[todayKey];
-      if(!sched?.time && !sched?.start) return null;
-      const repTz = r.timezone||"Central";
-      const converted = sched?.time ? convertLunchTime(sched.time, repTz, viewerTz) : null;
-      const shiftStart = sched?.start ? convertLunchTime(sched.start, repTz, viewerTz) : null;
-      const shiftEnd   = sched?.end   ? convertLunchTime(sched.end,   repTz, viewerTz) : null;
-      return { rep: r, time: converted, shiftStart, shiftEnd, rawTime: sched?.time, repTz, duration: sched?.duration||60 };
-    })
-    .filter(Boolean);
-
-  // Group by converted time to find conflicts (times now all in viewer's tz)
-  const slotGroups = lunchSlots.reduce((acc, x) => {
-    acc[x.time] = acc[x.time] || [];
-    acc[x.time].push(x);
-    return acc;
-  }, {});
-  const conflictSlots = Object.entries(slotGroups).filter(([,group]) => group.length >= LUNCH_LIMIT);
-
   return (
     <div style={{marginTop:16}}>
       {oooModal&&(
         <OOOModal rep={oooModal} onClose={()=>setOooModal(null)} onMark={handleMarkOOO}/>
       )}
-
-      {/* Lunch conflict warnings */}
-      {conflictSlots.length>0&&(
-        <div style={{background:"#fff8ee",border:"1.5px solid #e07b00",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-          <p style={{margin:"0 0 8px",fontSize:12,fontWeight:800,color:"#b85c00"}}>⚠️ Lunch Conflicts Today</p>
-          {conflictSlots.map(([time, group])=>(
-            <div key={time} style={{marginBottom:6}}>
-              <span style={{fontSize:11,fontWeight:700,color:"#b85c00"}}>{fmt12h(time)} {viewerTz} — {group.length} reps scheduled ({LUNCH_LIMIT} max): </span>
-              <span style={{fontSize:11,color:"#888"}}>{group.map(x=>x.rep.name).join(", ")}</span>
-            </div>
-          ))}
-          <p style={{margin:"8px 0 0",fontSize:10,color:"#aaa"}}>Ad hoc requests during these windows will push you over the limit.</p>
-        </div>
-      )}
-
-      {/* Today's lunch schedule strip */}
-      {lunchSlots.length>0&&(
-        <div style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-          <p style={{margin:"0 0 2px",fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>🥗 Today's Lunch Schedule</p>
-          <p style={{margin:"0 0 10px",fontSize:10,color:"#ccc"}}>Times shown in your timezone: <strong style={{color:"#aaa"}}>{viewerTz}</strong></p>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {[...lunchSlots].sort((a,b)=>(a.shiftStart||a.time||"").localeCompare(b.shiftStart||b.time||"")).map(({rep,time,shiftStart,shiftEnd,repTz,duration})=>{
-              const sameSlotCount = time ? (slotGroups[time]?.length||1) : 1;
-              const isConflict = sameSlotCount >= LUNCH_LIMIT;
-              const diffTz = repTz !== viewerTz;
-              return (
-                <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 8px",borderRadius:8,background:isConflict?"#fff8ee":"#f9f9f9",border:`1px solid ${isConflict?"#f0a500":"#eee"}`}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7}}>
-                    <div style={{width:24,height:24,borderRadius:"50%",background:rep.status==="lunch"?"#e07b00":"#eafaf1",color:rep.status==="lunch"?"#fff":"#1a5c35",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:5}}>
-                        <span style={{fontSize:12,fontWeight:600,color:rep.status==="lunch"?"#e07b00":"#333"}}>{rep.name}</span>
-                        {diffTz&&<span style={{fontSize:9,color:"#ccc"}}>{repTz}</span>}
-                        {rep.status==="lunch"&&<span style={{fontSize:9,background:"#fdebd0",color:"#9c5a00",padding:"1px 5px",borderRadius:4,fontWeight:700}}>ON LUNCH</span>}
-                      </div>
-                      {(shiftStart||shiftEnd)&&<div style={{fontSize:10,color:"#aaa",marginTop:1}}>Shift: {shiftStart?fmt12h(shiftStart):"?"} – {shiftEnd?fmt12h(shiftEnd):"?"}</div>}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
-                    {isConflict&&<span style={{fontSize:9,color:"#b85c00",fontWeight:700}}>⚠️ {sameSlotCount} at once</span>}
-                    {time&&<span style={{fontSize:12,fontWeight:700,color:isConflict?"#b85c00":"#555"}}>🥗 {fmt12h(time)} <span style={{fontSize:10,fontWeight:400,color:"#aaa"}}>{duration===30?"30m":"1hr"}</span></span>}
-                    {!time&&<span style={{fontSize:10,color:"#ccc"}}>No lunch set</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {(() => {
-            const onShiftCount = reps.filter(r=>isRepOnShift(r)&&!["off","pto","sick"].includes(r.status)).length;
-            const noSchedule = onShiftCount - lunchSlots.length;
-            return noSchedule > 0 ? <p style={{margin:"8px 0 0",fontSize:10,color:"#ccc"}}>{noSchedule} rep(s) have no schedule set for today.</p> : null;
-          })()}
-        </div>
-      )}
-
       {onBreak.length>0&&<Section title="🌿🥗 On Break" items={onBreak} Row={RepRow} color="#2980b9"/>}
       {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
       {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
@@ -703,8 +610,6 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
     }
   };
 
-  const onLunchNow = reps.filter(r=>r.status==="lunch").length;
-
   return (
     <div style={{marginTop:16}}>
       {adHoc.length===0&&swaps.length===0&&(
@@ -717,18 +622,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
         <div style={{marginBottom:20}}>
           <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#e07b00",margin:"0 0 8px",fontWeight:700}}>🥗 Ad Hoc Lunch Requests ({adHoc.length})</p>
           {adHoc.map(r=>(
-            <div key={r.id} style={{background:"#fff8ee",border:`1.5px solid ${onLunchNow>=LUNCH_LIMIT?"#e74c3c":"#f0c080"}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-              {onLunchNow>=LUNCH_LIMIT&&(
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,background:"#fdf0ee",borderRadius:8,padding:"6px 10px"}}>
-                  <span style={{fontSize:12}}>🚨</span>
-                  <span style={{fontSize:11,fontWeight:700,color:"#c0392b"}}>{onLunchNow}/{LUNCH_LIMIT} reps already on lunch — approving this will exceed the limit</span>
-                </div>
-              )}
-              {onLunchNow>0&&onLunchNow<LUNCH_LIMIT&&(
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,background:"#fff3e0",borderRadius:8,padding:"6px 10px"}}>
-                  <span style={{fontSize:11,fontWeight:600,color:"#b85c00"}}>⚠️ {onLunchNow}/{LUNCH_LIMIT} reps currently on lunch</span>
-                </div>
-              )}
+            <div key={r.id} style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
                 <div>
                   <p style={{margin:0,fontWeight:600,fontSize:14}}>{r.rep_name}</p>
@@ -737,7 +631,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
                 </div>
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={()=>handleAdHoc(r,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
-                  <button onClick={()=>handleAdHoc(r,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:onLunchNow>=LUNCH_LIMIT?"#c0392b":"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>{onLunchNow>=LUNCH_LIMIT?"⚠️ Approve Anyway":"Approve"}</button>
+                  <button onClick={()=>handleAdHoc(r,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Approve</button>
                 </div>
               </div>
             </div>
@@ -772,9 +666,6 @@ function MgrTeam({ reps, settings, reload, fire }) {
   const [addModal, setAddModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [extraDayModal, setExtraDayModal] = useState(null); // rep
-
-  const today = DAYS[new Date().getDay()]; // e.g. "Mon"
 
   const handleDelete = async () => {
     if(deleteConfirm!==deleteModal.name){fire("declined","Name doesn't match");return;}
@@ -792,15 +683,6 @@ function MgrTeam({ reps, settings, reload, fire }) {
     reload();
   };
 
-  const handleAddExtraDay = async (rep) => {
-    const existing = rep.shift_days||[];
-    if(existing.includes(today)){fire("info",`${rep.name} already has ${today} scheduled`);setExtraDayModal(null);return;}
-    const updated = [...existing, today];
-    await sbPatch("rep_status",rep.id,{shift_days:updated,updated_at:new Date().toISOString()});
-    fire("approved",`${rep.name} added for ${today} — they'll count as on-shift today`);
-    setExtraDayModal(null); reload();
-  };
-
   return (
     <div style={{marginTop:16}}>
       {addModal&&<AddRepModal onClose={()=>setAddModal(false)} onAdd={async(d)=>{await sbPost("rep_status",d);fire("approved",`${d.name} added`);setAddModal(false);reload();}}/>}
@@ -814,20 +696,6 @@ function MgrTeam({ reps, settings, reload, fire }) {
           </div>
         </Modal>
       )}
-      {extraDayModal&&(
-        <Modal title={`Add extra day for ${extraDayModal.name}?`} sub="EXTRA DAY WORKED" onClose={()=>setExtraDayModal(null)}>
-          <p style={{fontSize:13,color:"#666",marginBottom:6}}>
-            This will add <strong>{today}</strong> to {extraDayModal.name}'s scheduled days so they count as on-shift today and their time is tracked correctly.
-          </p>
-          <p style={{fontSize:11,color:"#aaa",marginBottom:16}}>
-            Current schedule: <strong>{(extraDayModal.shift_days||[]).join(", ")||"None set"}</strong>
-          </p>
-          <div style={{display:"flex",gap:8}}>
-            <Btn label="Cancel" onClick={()=>setExtraDayModal(null)} outline color="#888" small/>
-            <Btn label={`Add ${today} for ${extraDayModal.name}`} onClick={()=>handleAddExtraDay(extraDayModal)} color="#1a5c35"/>
-          </div>
-        </Modal>
-      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>Team ({reps.length})</p>
         <button onClick={()=>setAddModal(true)} style={{padding:"6px 14px",borderRadius:8,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Rep</button>
@@ -837,8 +705,6 @@ function MgrTeam({ reps, settings, reload, fire }) {
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
         const cooldownActive = !!(rep.health_time_banked>=HEALTH_MAX_SEC && rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
         const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(rep.last_break_returned_at) : 0;
-        const scheduledToday = (rep.shift_days||[]).includes(today);
-        const onShift = isRepOnShift(rep);
         return (
           <div key={rep.id} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
@@ -849,7 +715,6 @@ function MgrTeam({ reps, settings, reload, fire }) {
                   <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
                   <StatusDot status={rep.status}/>
                   <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
-                  {!onShift&&!["off","pto","sick"].includes(rep.status)&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#f5f5f5",color:"#bbb",fontWeight:700}}>OFF SHIFT</span>}
                 </div>
                 <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
                   <span style={{fontSize:10,color:"#aaa"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} today</span>
@@ -857,10 +722,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
                   {(rep.health_time_banked||0)>0&&<span style={{fontSize:10,color:"#888"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
                 </div>
               </div>
-              <div style={{display:"flex",gap:5,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                {!scheduledToday&&!["off","pto","sick"].includes(rep.status)&&(
-                  <button onClick={()=>setExtraDayModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:10,color:"#1a5c35",fontWeight:600}}>+ Extra day</button>
-                )}
+              <div style={{display:"flex",gap:5,flexShrink:0}}>
                 <button onClick={()=>handleLogCalloff(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b",fontWeight:600}}>Call-off</button>
                 <button onClick={()=>setDeleteModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Delete</button>
               </div>
@@ -953,7 +815,7 @@ function AddRepModal({ onClose, onAdd }) {
         )}
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <Btn label="Cancel" onClick={onClose} outline color="#888" small/>
-          <Btn label="Add Rep" onClick={()=>{if(!form.name.trim()){return;}const{id:_,...d}=form;onAdd({...d,avatar:avatar(form.name)});}}/>
+          <Btn label="Add Rep" onClick={()=>{if(!form.name.trim()){return;}onAdd({...form,avatar:avatar(form.name),id:Date.now()});}}/>
         </div>
       </div>
     </Modal>
@@ -983,11 +845,11 @@ function MgrSchedules({ reps, reload, fire }) {
 
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
-  const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}))
+  const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}));
 
   const todayKey = DAYS[new Date().getDay()];
 
-  // Detect viewer timezone using Intl, map to app label
+  // Detect viewer timezone using Intl
   const ianaZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const viewerTz = ianaZone.includes("Johannesburg")||ianaZone.includes("Africa") ? "SA"
     : ianaZone.includes("Pacific") ? "Pacific"
@@ -995,7 +857,7 @@ function MgrSchedules({ reps, reload, fire }) {
     : ianaZone.includes("Central") ? "Central"
     : ianaZone.includes("London")||ianaZone.includes("GMT") ? "GMT"
     : ianaZone.includes("Kolkata")||ianaZone.includes("India") ? "IST"
-    : "SA"; // fallback for this team
+    : "SA";
 
   const inToday = reps
     .filter(r => (r.shift_days||[]).includes(todayKey))
@@ -1009,10 +871,8 @@ function MgrSchedules({ reps, reload, fire }) {
     })
     .sort((a,b) => (a.start||"99:99").localeCompare(b.start||"99:99"));
 
-  const notInToday = reps.filter(r =>
-    !(r.shift_days||[]).includes(todayKey) && !["pto","sick","off"].includes(r.status)
-  );
-  const oooToday = reps.filter(r => ["pto","sick","off"].includes(r.status));
+  const notInToday = reps.filter(r => !(r.shift_days||[]).includes(todayKey) && !["pto","sick","off"].includes(r.status));
+  const oooToday   = reps.filter(r => ["pto","sick","off"].includes(r.status));
 
   return (
     <div style={{marginTop:16}}>
@@ -1021,62 +881,67 @@ function MgrSchedules({ reps, reload, fire }) {
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div>
-                <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:4}}>NAME</label>
-                <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Name</label>
+                <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
               </div>
               <div>
-                <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:4}}>TIMEZONE</label>
-                <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
-                  {Object.keys(TZ_C).map(t=><option key={t} value={t}>{t}</option>)}
+                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Timezone</label>
+                <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                  {TZLIST.map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:6}}>SHIFT DAYS</label>
+              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Working Days</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {DAYS.map(d=>(
-                  <div key={d} onClick={()=>toggleDay(d)} style={{padding:"5px 10px",borderRadius:7,border:`1.5px solid ${form.shift_days.includes(d)?"#1a5c35":"#ddd"}`,background:form.shift_days.includes(d)?"#eafaf1":"#fff",cursor:"pointer",fontSize:12,fontWeight:form.shift_days.includes(d)?700:400,color:form.shift_days.includes(d)?"#1a5c35":"#888"}}>{d}</div>
+                  <div key={d} onClick={()=>toggleDay(d)} style={{padding:"5px 10px",borderRadius:8,border:form.shift_days.includes(d)?"2px solid #1a5c35":"1.5px solid #ddd",background:form.shift_days.includes(d)?"#f0faf4":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:form.shift_days.includes(d)?"#1a5c35":"#555"}}>{d}</div>
                 ))}
               </div>
             </div>
             {form.shift_days.length>0&&(
               <div>
-                <label style={{fontSize:10,color:"#888",fontWeight:700,letterSpacing:1,display:"block",marginBottom:6}}>DAILY SCHEDULE <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
+                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
+                <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Lunch time</span>
+                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
+                </div>
                 {form.shift_days.map(d=>(
-                  <div key={d} style={{background:"#f9f9f9",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
-                    <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#555"}}>{d}</p>
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{fontSize:10,color:"#aaa"}}>Start</span>
-                        <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
-                          <option value="">hh</option>{[...Array(24)].map((_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
-                        </select>
-                        <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
-                          <option value="">mm</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{fontSize:10,color:"#aaa"}}>End</span>
-                        <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
-                          <option value="">hh</option>{[...Array(24)].map((_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
-                        </select>
-                        <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
-                          <option value="">mm</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{fontSize:10,color:"#aaa"}}>Lunch</span>
-                        <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
-                          <option value="">hh</option>{[...Array(24)].map((_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
-                        </select>
-                        <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
-                          <option value="">mm</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
-                        </select>
-                        <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
-                          <option value={30}>30m</option><option value={60}>1hr</option>
-                        </select>
-                      </div>
+                  <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
+                    <div style={{display:"flex",gap:2,alignItems:"center"}}>
+                      <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                        <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
+                      </select>
+                      <span style={{fontSize:11,color:"#bbb"}}>:</span>
+                      <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                        <option value="">MM</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
+                      </select>
                     </div>
+                    <div style={{display:"flex",gap:2,alignItems:"center"}}>
+                      <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                        <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
+                      </select>
+                      <span style={{fontSize:11,color:"#bbb"}}>:</span>
+                      <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                        <option value="">MM</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div style={{display:"flex",gap:2,alignItems:"center"}}>
+                      <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                        <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
+                      </select>
+                      <span style={{fontSize:11,color:"#bbb"}}>:</span>
+                      <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                        <option value="">MM</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
+                      <option value={30}>30m</option><option value={60}>1hr</option>
+                    </select>
                   </div>
                 ))}
               </div>
@@ -1093,36 +958,31 @@ function MgrSchedules({ reps, reload, fire }) {
       <div style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>📅 Today's Roster — {todayKey}</p>
-          <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:"#aaa"}}>{viewerTz}</strong> · {reps.filter(r=>(r.shift_days||[]).length>0).length}/{reps.length} reps have days set</span>
+          <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:"#aaa"}}>{viewerTz}</strong></span>
         </div>
 
         {inToday.length===0&&(
-          <div>
-            <p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"6px 0"}}>Nobody scheduled for today.</p>
-            <p style={{fontSize:10,color:"#ddd",textAlign:"center"}}>Today key: "{todayKey}" · {reps.filter(r=>(r.shift_days||[]).includes(todayKey)).length} reps have {todayKey} in shift_days</p>
-          </div>
+          <p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"8px 0"}}>Nobody scheduled for {todayKey}. ({reps.filter(r=>(r.shift_days||[]).includes(todayKey)).length} matched)</p>
         )}
 
         {inToday.map(({rep,start,end,lunch,repTz,lunchDur})=>{
-          const cfg = ST[rep.status]||ST.available;
           const tz = TZ_C[rep.timezone]||TZ_C.Central;
           const diffTz = repTz !== viewerTz;
-          const noTimes = !start && !end;
           return (
             <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",color:"#1a5c35",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <div>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
                     <span style={{fontSize:13,fontWeight:600}}>{rep.name}</span>
                     {diffTz&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>}
                     <StatusDot status={rep.status}/>
                   </div>
-                  {lunch&&<span style={{fontSize:10,color:"#b85c00"}}>🥗 Lunch {fmt12h(lunch)}{lunchDur===30?" · 30m":" · 1hr"}</span>}
+                  {lunch&&<span style={{fontSize:10,color:"#b85c00"}}>🥗 {fmt12h(lunch)}{lunchDur===30?" · 30m":" · 1hr"}</span>}
                 </div>
               </div>
               <div style={{textAlign:"right"}}>
-                {!noTimes
+                {(start||end)
                   ? <span style={{fontSize:12,fontWeight:700,color:"#333"}}>{start?fmt12h(start):"?"} – {end?fmt12h(end):"?"}</span>
                   : <span style={{fontSize:11,color:"#ccc"}}>No times set</span>
                 }
@@ -1139,7 +999,6 @@ function MgrSchedules({ reps, reload, fire }) {
             </div>
           </div>
         )}
-
         {oooToday.length>0&&(
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
             <p style={{margin:"0 0 6px",fontSize:10,color:"#c0392b",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Out today ({oooToday.length})</p>
@@ -1150,7 +1009,7 @@ function MgrSchedules({ reps, reload, fire }) {
         )}
       </div>
 
-      {/* ── FULL SCHEDULE LIST ── */}
+      {/* ── ALL REPS LIST ── */}
       <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>All Reps — tap to edit</p>
       {reps.map(rep=>{
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
@@ -1178,83 +1037,6 @@ function MgrSchedules({ reps, reload, fire }) {
           </div>
         );
       })}
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Name</label>
-                <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-              </div>
-              <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Timezone</label>
-                <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
-                  {TZLIST.map(t=><option key={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Working Days</label>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {DAYS.map(d=>(
-                  <div key={d} onClick={()=>toggleDay(d)} style={{padding:"5px 10px",borderRadius:8,border:form.shift_days.includes(d)?"2px solid #1a5c35":"1.5px solid #ddd",background:form.shift_days.includes(d)?"#f0faf4":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:form.shift_days.includes(d)?"#1a5c35":"#555"}}>{d}</div>
-                ))}
-              </div>
-            </div>
-            {form.shift_days.length>0&&(
-              <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
-                <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Lunch time</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
-                </div>
-                {form.shift_days.map(d=>(
-                  <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
-                    <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                    <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
-                      <option value="">HH</option>
-                      {Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
-                    </select>
-                    <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                    <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
-                      <option value="">MM</option>
-                      {["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                    <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                    <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
-                      <option value="">HH</option>
-                      {Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
-                    </select>
-                    <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                    <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
-                      <option value="">MM</option>
-                      {["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                    <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                    <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
-                      <option value="">HH</option>
-                      {Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
-                    </select>
-                    <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                    <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
-                      <option value="">MM</option>
-                      {["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                    <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
-                      <option value={30}>30m</option><option value={60}>1hr</option>
-                    </select>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{display:"flex",gap:8,marginTop:4}}>
-              <Btn label="Cancel" onClick={()=>setEditing(null)} outline color="#888" small/>
-              <Btn label="Save Changes" onClick={save} color="#1a5c35"/>
-            </div>
-          </div>
-        </Modal>
     </div>
   );
 }
@@ -1581,7 +1363,6 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
-  const hasEnrolAccess = !!(myRep?.enrol_role === "enroller" || myRep?.enrol_role === "closer" || reps.some(r=>r.enrol_role==="enroller"&&(r.enrol_visible_to||[]).includes(repInfo.id)));
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const onLunch = reps.filter(r=>r.status==="lunch").length;
   const onHealth = reps.filter(r=>r.status==="health").length;
@@ -1705,47 +1486,10 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     reload();
   };
 
-  // ── Callback due notifications ────────────────────────────────────
-  const [dueCallbacks, setDueCallbacks] = useState([]);
-  const [dismissedCbs, setDismissedCbs] = useState(new Set());
-
-  const checkDueCallbacks = useCallback(async () => {
-    try {
-      const now = new Date();
-      const todayDate = now.toISOString().slice(0,10);
-      const nowTime = now.toTimeString().slice(0,5); // "HH:MM"
-      const data = await sb(`callbacks?rep_id=eq.${repInfo.id}&status=eq.pending&callback_date=lte.${todayDate}`);
-      const due = (data||[]).filter(cb => cb.callback_date < todayDate || (cb.callback_date === todayDate && cb.callback_time <= nowTime));
-      setDueCallbacks(due);
-    } catch(e) {}
-  }, [repInfo.id]);
-
-  useEffect(()=>{
-    checkDueCallbacks();
-    const t = setInterval(checkDueCallbacks, 60000);
-    return ()=>clearInterval(t);
-  },[checkDueCallbacks]);
-
-  const dismissCallback = (id) => setDismissedCbs(prev => new Set([...prev, id]));
-  const visibleDue = dueCallbacks.filter(cb => !dismissedCbs.has(cb.id));
-
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-
-      {/* Callback due banners */}
-      {visibleDue.map(cb=>(
-        <div key={cb.id} style={{background:"#1a3a5c",color:"#fff",padding:"12px 16px",borderBottom:"2px solid #f0c040",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
-          <div style={{flex:1}}>
-            <p style={{margin:"0 0 2px",fontSize:12,fontWeight:800,color:"#f0c040"}}>📞 Callback Due Now</p>
-            <p style={{margin:"0 0 2px",fontSize:14,fontWeight:700}}>{cb.parent_name} · {cb.phone}</p>
-            {cb.notes&&<p style={{margin:0,fontSize:11,opacity:.8,lineHeight:1.4}}>"{cb.notes}"</p>}
-            <p style={{margin:"4px 0 0",fontSize:10,opacity:.55}}>Scheduled {cb.callback_date===new Date().toISOString().slice(0,10)?"today":cb.callback_date} at {fmt12h(cb.callback_time)}</p>
-          </div>
-          <button onClick={()=>dismissCallback(cb.id)} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:11,flexShrink:0}}>Dismiss</button>
-        </div>
-      ))}
 
       <div style={{background:"#1a5c35",padding:"20px 18px 16px",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -1779,7 +1523,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       {/* Rep Tabs */}
       <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb"}}>
         <div style={{display:"flex",padding:"0 16px"}}>
-          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},{k:"callbacks",l:"📞 Callbacks"},...(hasEnrolAccess?[{k:"enrolment",l:"📋 Enrolment"}]:[]),...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
+          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.k?700:500,color:tab===t.k?"#1a5c35":mySwaps.length>0&&t.k==="swaps"?"#e07b00":"#999",borderBottom:tab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,transition:"all .15s"}}>{t.l}</button>
           ))}
         </div>
@@ -1789,10 +1533,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         {tab==="my"&&(
           <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak}/>
         )}
-        {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks} centreOpen={centreOpen}/>}
+        {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
-        {tab==="callbacks"&&<RepCallbacks repInfo={repInfo} fire={fire}/>}
-        {tab==="enrolment"&&<EnrolmentBoard reps={reps} reload={reload} fire={fire} currentRepId={repInfo.id} isManager={false}/>}
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={false}/>}
       </div>
     </div>
@@ -1807,14 +1549,6 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
   const isOOO = myRep.status==="pto"||myRep.status==="sick";
   const isOff = myRep.status==="off";
 
-  const todayKey = DAYS[new Date().getDay()];
-  const todaySched = (myRep.lunch_schedule||{})[todayKey];
-  const myLunchTime = todaySched?.time ? fmt12h(todaySched.time) : null;
-  const myLunchDur  = todaySched?.duration===30 ? "30m" : todaySched?.duration ? "1hr" : null;
-  const myShiftStart = todaySched?.start ? fmt12h(todaySched.start) : null;
-  const myShiftEnd   = todaySched?.end   ? fmt12h(todaySched.end)   : null;
-  const myTz = myRep.timezone || "Central";
-
   return (
     <div>
       {showBreakModal&&(
@@ -1822,7 +1556,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
-              {key:"lunch",icon:"🥗",label:"Lunch Break",dur:myLunchTime?`${myLunchTime}${myLunchDur?` · ${myLunchDur}`:""}  (${myTz})`:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
+              {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
             ].map(o=>(
               <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -1863,13 +1597,6 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
               <span style={{fontSize:11,color:"#888"}}>🌿 {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} full breaks · banked {fmtDur(myRep.health_time_banked||0)}/10m{cooldownActive?` · Cooldown: ${fmtTime(cooldownLeft)}`:""}</span>
               {cooldownActive&&<span style={{fontSize:11,color:"#e07b00",fontWeight:600}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
             </div>
-            {/* Today's schedule pill */}
-            {(myShiftStart||myLunchTime)&&(
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                {myShiftStart&&<span style={{fontSize:11,background:"#f0faf4",color:"#1a5c35",padding:"4px 10px",borderRadius:20,fontWeight:600,border:"1px solid #c8e6d6"}}>⏰ Shift {myShiftStart}{myShiftEnd?` – ${myShiftEnd}`:""} <span style={{opacity:.6,fontWeight:400}}>{myTz}</span></span>}
-                {myLunchTime&&<span style={{fontSize:11,background:"#fff8ee",color:"#b85c00",padding:"4px 10px",borderRadius:20,fontWeight:600,border:"1px solid #f0d0a0"}}>🥗 Lunch {myLunchTime}{myLunchDur?` · ${myLunchDur}`:""} <span style={{opacity:.6,fontWeight:400}}>{myTz}</span></span>}
-              </div>
-            )}
             {onBreak?(
               <button onClick={returnFromBreak} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
             ):(
@@ -1906,62 +1633,39 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
   );
 }
 
-function RepTeam({ reps, myId, activeBreaks, centreOpen }) {
-  const [showOffShift, setShowOffShift] = useState(false);
-
-  // Split reps: exclude permanently off/pto/sick, then split by shift
-  const activeReps = reps.filter(r => !["off","pto","sick"].includes(r.status));
-  const onShift  = activeReps.filter(r => isRepOnShift(r));
-  const offShift = activeReps.filter(r => !isRepOnShift(r));
-
-  const RepCard = ({ rep }) => {
-    const cfg = ST[rep.status]||ST.available;
-    const ab = activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
-    const cooldownActive = !!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
-    const cooldownLeft = cooldownActive ? COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()) : 0;
-    const isMe = rep.id===myId;
-    return (
-      <div style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
-          <div style={{flex:1}}>
-            <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-              <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{rep.name}{isMe?" (you)":""}</span>
-              <StatusDot status={rep.status}/>
-              <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
-            </div>
-            <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:"#888"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
-              {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
-              {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:"#aaa"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
-            </div>
-            {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
+function RepTeam({ reps, myId, activeBreaks }) {
   return (
     <div>
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>On Shift ({onShift.length})</p>
-      {onShift.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"16px 0"}}>No reps currently on shift.</p>}
-      <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14}}>
-        {onShift.map(rep=><RepCard key={rep.id} rep={rep}/>)}
-      </div>
-
-      {offShift.length>0&&(
-        <>
-          <button onClick={()=>setShowOffShift(v=>!v)} style={{width:"100%",padding:"8px 12px",borderRadius:9,border:"1.5px solid #eee",background:"#f9f9f9",cursor:"pointer",fontSize:11,fontWeight:700,color:"#aaa",textAlign:"left",marginBottom:8}}>
-            {showOffShift?"▾":"▸"} Off Shift ({offShift.length})
-          </button>
-          {showOffShift&&(
-            <div style={{display:"flex",flexDirection:"column",gap:7,opacity:.7}}>
-              {offShift.map(rep=><RepCard key={rep.id} rep={rep}/>)}
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>Team Balances</p>
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {reps.map(rep=>{
+          const cfg=ST[rep.status]||ST.available;
+          const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
+          const cooldownActive=!!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
+          const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
+          const isMe=rep.id===myId;
+          return (
+            <div key={rep.id} style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:9}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{rep.name}{isMe?" (you)":""}</span>
+                    <StatusDot status={rep.status}/>
+                    <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
+                  </div>
+                  <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+                    <span style={{fontSize:10,color:"#888"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
+                    {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
+                    {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:"#aaa"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
+                  </div>
+                  {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
+                </div>
+              </div>
             </div>
-          )}
-        </>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -3854,562 +3558,6 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
         </div>
       </div>
     </Modal>
-  );
-}
-
-// ── MANAGER PIPELINE ──────────────────────────────────────────────────────
-function MgrPipeline({ reps }) {
-  const [callbacks, setCallbacks] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [filterRep, setFilterRep] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("pending");
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await sb(`callbacks?order=callback_date.asc,callback_time.asc`);
-      setCallbacks(data||[]);
-    } catch(e) {}
-    setLoading(false);
-  };
-
-  useEffect(()=>{ load(); },[]);
-
-  const todayStr2 = () => new Date().toISOString().slice(0,10);
-  const isOverdue = cb => cb.status==="pending" && (cb.callback_date < todayStr2() || (cb.callback_date===todayStr2() && cb.callback_time < new Date().toTimeString().slice(0,5)));
-
-  const STATUS_CFG = {
-    pending:   {label:"Pending",   bg:"#f0faf4", border:"#b7dfca", dot:"#1a7a45"},
-    no_answer: {label:"No Answer", bg:"#fff8ee", border:"#f0c080", dot:"#b85c00"},
-    done:      {label:"Done",      bg:"#f5f5f5", border:"#e0e0e0", dot:"#aaa"},
-  };
-
-  const repNames = [...new Set(callbacks.map(c=>c.rep_name))].sort();
-  const filtered = callbacks.filter(c =>
-    (filterRep==="all" || c.rep_name===filterRep) &&
-    (filterStatus==="all" || c.status===filterStatus)
-  );
-
-  const pending   = callbacks.filter(c=>c.status==="pending").length;
-  const noAnswer  = callbacks.filter(c=>c.status==="no_answer").length;
-  const overdueN  = callbacks.filter(isOverdue).length;
-  const doneN     = callbacks.filter(c=>c.status==="done").length;
-
-  // Group by rep for summary
-  const byRep = reps.filter(r=>callbacks.some(c=>c.rep_id===r.id)).map(r=>({
-    rep: r,
-    pending: callbacks.filter(c=>c.rep_id===r.id&&c.status==="pending").length,
-    noAnswer: callbacks.filter(c=>c.rep_id===r.id&&c.status==="no_answer").length,
-    overdue: callbacks.filter(c=>c.rep_id===r.id&&isOverdue(c)).length,
-    done: callbacks.filter(c=>c.rep_id===r.id&&c.status==="done").length,
-  }));
-
-  return (
-    <div style={{paddingTop:16}}>
-      {/* Summary stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
-        {[
-          {n:pending,  l:"Pending",    c:"#1a7a45"},
-          {n:overdueN, l:"Overdue",    c:"#c0392b"},
-          {n:noAnswer, l:"No Answer",  c:"#b85c00"},
-          {n:doneN,    l:"Done",       c:"#aaa"},
-        ].map(s=>(
-          <div key={s.l} style={{background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1.5px solid #efefef"}}>
-            <p style={{margin:0,fontSize:20,fontWeight:800,color:s.c}}>{s.n}</p>
-            <p style={{margin:0,fontSize:9,color:"#aaa",fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>{s.l}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Rep summary cards */}
-      {byRep.length>0&&(
-        <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:16}}>
-          <p style={{margin:"0 0 10px",fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>By Rep</p>
-          {byRep.map(({rep,pending,noAnswer,overdue,done})=>(
-            <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #f5f5f5"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:"#eafaf1",color:"#1a5c35",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{rep.avatar||avatar(rep.name)}</div>
-                <span style={{fontSize:13,fontWeight:600}}>{rep.name}</span>
-              </div>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                {overdue>0&&<span style={{fontSize:11,color:"#c0392b",fontWeight:700}}>⚠️ {overdue} overdue</span>}
-                {pending>0&&<span style={{fontSize:11,color:"#1a7a45"}}>{pending} pending</span>}
-                {noAnswer>0&&<span style={{fontSize:11,color:"#b85c00"}}>{noAnswer} no answer</span>}
-                {done>0&&<span style={{fontSize:11,color:"#aaa"}}>{done} done</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filters */}
-      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        <select value={filterRep} onChange={e=>setFilterRep(e.target.value)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff",flex:1}}>
-          <option value="all">All reps</option>
-          {repNames.map(n=><option key={n} value={n}>{n}</option>)}
-        </select>
-        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff",flex:1}}>
-          <option value="all">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="no_answer">No Answer</option>
-          <option value="done">Done</option>
-        </select>
-      </div>
-
-      {loading&&<p style={{textAlign:"center",color:"#bbb",padding:"30px 0"}}>Loading…</p>}
-
-      {!loading&&filtered.length===0&&(
-        <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
-          <p style={{fontSize:32,margin:"0 0 8px"}}>📞</p>
-          <p style={{fontWeight:600,fontSize:14,color:"#888"}}>No callbacks match this filter</p>
-        </div>
-      )}
-
-      {!loading&&filtered.map(cb=>{
-        const cfg = STATUS_CFG[cb.status]||STATUS_CFG.pending;
-        const overdue = isOverdue(cb);
-        const dateLabel = cb.callback_date===todayStr2()?"Today":new Date(cb.callback_date+"T12:00:00").toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
-        return (
-          <div key={cb.id} style={{background:overdue?"#fff4f4":cfg.bg,border:`1.5px solid ${overdue?"#f5b7b1":cfg.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:2}}>
-                  <span style={{fontWeight:700,fontSize:14}}>{cb.parent_name}</span>
-                  {overdue&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>OVERDUE</span>}
-                  {cb.status==="done"&&<span style={{fontSize:9,background:"#f5f5f5",color:"#aaa",padding:"2px 6px",borderRadius:4,fontWeight:700}}>DONE</span>}
-                  {cb.status==="no_answer"&&<span style={{fontSize:9,background:"#fff8ee",color:"#b85c00",padding:"2px 6px",borderRadius:4,fontWeight:700}}>NO ANSWER</span>}
-                </div>
-                <span style={{fontSize:12,color:"#1a5c35",fontWeight:600}}>📞 {cb.phone}</span>
-                <div style={{display:"flex",gap:8,marginTop:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:overdue?"#c0392b":"#555",fontWeight:overdue?700:400}}>🗓 {dateLabel} 🕐 {fmt12h(cb.callback_time)}</span>
-                </div>
-                {cb.notes&&<p style={{margin:"5px 0 0",fontSize:11,color:"#888",lineHeight:1.4}}>{cb.notes}</p>}
-              </div>
-              <div style={{fontSize:11,color:"#aaa",textAlign:"right",flexShrink:0}}>
-                <div style={{fontWeight:600,color:"#555"}}>{cb.rep_name}</div>
-                <div style={{fontSize:10}}>Rep</div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── CALLBACKS ─────────────────────────────────────────────────────────────
-function RepCallbacks({ repInfo, fire }) {
-  const [callbacks, setCallbacks] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [showAdd, setShowAdd]     = useState(false);
-  const [editing, setEditing]     = useState(null); // callback obj
-  const [saving, setSaving]       = useState(false);
-
-  const blank = { parent_name:"", phone:"", callback_time:"", callback_date:"", notes:"", status:"pending" };
-  const [form, setForm] = useState(blank);
-  const set = (k,v) => setForm(p=>({...p,[k]:v}));
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await sb(`callbacks?rep_id=eq.${repInfo.id}&order=callback_date.asc,callback_time.asc`);
-      setCallbacks(data||[]);
-    } catch(e) { console.error(e); }
-    setLoading(false);
-  };
-
-  useEffect(()=>{ load(); },[]);
-
-  const openAdd = () => { setForm(blank); setEditing(null); setShowAdd(true); };
-  const openEdit = (cb) => { setForm({...cb}); setEditing(cb); setShowAdd(true); };
-
-  const save = async () => {
-    if(!form.parent_name.trim()||!form.phone.trim()||!form.callback_date||!form.callback_time){
-      fire("declined","Please fill in name, phone, date and time"); return;
-    }
-    setSaving(true);
-    try {
-      if(editing) {
-        await sbPatch("callbacks", editing.id, {...form, updated_at:new Date().toISOString()});
-        fire("approved","Callback updated");
-      } else {
-        await sbPost("callbacks", {...form, rep_id:repInfo.id, rep_name:repInfo.name, created_at:new Date().toISOString()});
-        fire("approved","Callback added to your pipeline");
-      }
-      setShowAdd(false); load();
-    } catch(e) { fire("declined","Error saving — does the callbacks table exist?"); }
-    setSaving(false);
-  };
-
-  const updateStatus = async (cb, status) => {
-    await sbPatch("callbacks", cb.id, {status, updated_at:new Date().toISOString()});
-    fire("info", status==="done"?"✅ Marked as done":status==="no_answer"?"📵 Marked no answer":"↩️ Moved back to pending");
-    load();
-  };
-
-  const remove = async (cb) => {
-    await sb(`callbacks?id=eq.${cb.id}`,{method:"DELETE"});
-    fire("info","Removed from pipeline");
-    load();
-  };
-
-  const todayStr2 = () => new Date().toISOString().slice(0,10);
-  const isOverdue = cb => cb.status==="pending" && (cb.callback_date < todayStr2() || (cb.callback_date===todayStr2() && cb.callback_time < new Date().toTimeString().slice(0,5)));
-
-  const pending   = callbacks.filter(c=>c.status==="pending");
-  const noAnswer  = callbacks.filter(c=>c.status==="no_answer");
-  const done      = callbacks.filter(c=>c.status==="done");
-
-  const STATUS_CFG = {
-    pending:   {label:"Pending",   bg:"#f0faf4", border:"#b7dfca", dot:"#1a7a45"},
-    no_answer: {label:"No Answer", bg:"#fff8ee", border:"#f0c080", dot:"#b85c00"},
-    done:      {label:"Done",      bg:"#f5f5f5", border:"#e0e0e0", dot:"#aaa"},
-  };
-
-  if(showAdd) return (
-    <div style={{paddingTop:16}}>
-      <button onClick={()=>setShowAdd(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#1a5c35",fontWeight:700,fontSize:13,marginBottom:14,padding:0}}>← Back</button>
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
-        <p style={{margin:"0 0 14px",fontSize:14,fontWeight:800,color:"#1a1a1a"}}>{editing?"Edit Callback":"New Callback"}</p>
-
-        <div style={{display:"flex",flexDirection:"column",gap:11}}>
-          <div>
-            <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>PARENT NAME</label>
-            <input value={form.parent_name} onChange={e=>set("parent_name",e.target.value)} placeholder="e.g. Sarah Johnson" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>PHONE NUMBER</label>
-            <input value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="e.g. 082 555 0123" type="tel" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>CALL BACK DATE</label>
-              <input value={form.callback_date} onChange={e=>set("callback_date",e.target.value)} type="date" min={todayStr2()} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>CALL BACK TIME</label>
-              <input value={form.callback_time} onChange={e=>set("callback_time",e.target.value)} type="time" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
-            </div>
-          </div>
-          <div>
-            <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>NOTES <span style={{fontWeight:400,color:"#bbb"}}>(optional)</span></label>
-            <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="e.g. Mum needs to check with husband — interested in Tuesday swim class, Level 2" rows={3} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical",fontFamily:"inherit"}}/>
-          </div>
-          {editing&&(
-            <div>
-              <label style={{fontSize:11,color:"#888",fontWeight:600,display:"block",marginBottom:4}}>STATUS</label>
-              <div style={{display:"flex",gap:8}}>
-                {["pending","no_answer","done"].map(s=>(
-                  <div key={s} onClick={()=>set("status",s)} style={{flex:1,padding:"8px 0",textAlign:"center",borderRadius:9,border:`1.5px solid ${form.status===s?STATUS_CFG[s].dot:"#ddd"}`,background:form.status===s?STATUS_CFG[s].bg:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,color:form.status===s?STATUS_CFG[s].dot:"#aaa"}}>
-                    {STATUS_CFG[s].label}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div style={{display:"flex",gap:8,marginTop:4}}>
-            <button onClick={()=>setShowAdd(false)} style={{flex:1,padding:"11px 0",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#aaa",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancel</button>
-            <button onClick={save} disabled={saving} style={{flex:2,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?0.6:1}}>{saving?"Saving…":editing?"Save Changes":"Add to Pipeline"}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const CallbackCard = ({cb}) => {
-    const cfg = STATUS_CFG[cb.status]||STATUS_CFG.pending;
-    const overdue = isOverdue(cb);
-    const dateLabel = cb.callback_date===todayStr2()?"Today":new Date(cb.callback_date+"T12:00:00").toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
-    return (
-      <div style={{background:overdue?"#fff4f4":cfg.bg,border:`1.5px solid ${overdue?"#f5b7b1":cfg.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <span style={{fontWeight:700,fontSize:14,color:"#1a1a1a"}}>{cb.parent_name}</span>
-              {overdue&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>OVERDUE</span>}
-              {cb.status==="done"&&<span style={{fontSize:9,background:"#f5f5f5",color:"#aaa",padding:"2px 6px",borderRadius:4,fontWeight:700}}>DONE</span>}
-              {cb.status==="no_answer"&&<span style={{fontSize:9,background:"#fff8ee",color:"#b85c00",padding:"2px 6px",borderRadius:4,fontWeight:700}}>NO ANSWER</span>}
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}>
-              <span style={{fontSize:13,color:"#1a5c35",fontWeight:600}}>📞 {cb.phone}</span>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:3,flexWrap:"wrap"}}>
-              <span style={{fontSize:12,color:overdue?"#c0392b":"#555",fontWeight:overdue?700:400}}>🗓 {dateLabel}</span>
-              <span style={{fontSize:12,color:overdue?"#c0392b":"#555",fontWeight:overdue?700:400}}>🕐 {fmt12h(cb.callback_time)}</span>
-            </div>
-            {cb.notes&&<p style={{margin:"6px 0 0",fontSize:11,color:"#888",lineHeight:1.4}}>{cb.notes}</p>}
-          </div>
-          <button onClick={()=>openEdit(cb)} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",fontSize:11,color:"#888",fontWeight:600,cursor:"pointer",flexShrink:0}}>Edit</button>
-        </div>
-        {cb.status!=="done"&&(
-          <div style={{display:"flex",gap:6,marginTop:10}}>
-            {cb.status==="pending"&&<button onClick={()=>updateStatus(cb,"no_answer")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f0c080",background:"#fff8ee",cursor:"pointer",fontSize:11,color:"#b85c00",fontWeight:600}}>📵 No Answer</button>}
-            {cb.status==="no_answer"&&<button onClick={()=>updateStatus(cb,"pending")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #ddd",background:"#f9f9f9",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>↩ Reschedule</button>}
-            <button onClick={()=>updateStatus(cb,"done")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:700}}>✅ Done</button>
-            <button onClick={()=>remove(cb)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b",fontWeight:600}}>🗑</button>
-          </div>
-        )}
-        {cb.status==="done"&&(
-          <div style={{display:"flex",gap:6,marginTop:10}}>
-            <button onClick={()=>updateStatus(cb,"pending")} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #ddd",background:"#f9f9f9",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>↩ Reopen</button>
-            <button onClick={()=>remove(cb)} style={{padding:"7px 10px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b",fontWeight:600}}>🗑</button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const overdueCount = pending.filter(isOverdue).length;
-
-  return (
-    <div style={{paddingTop:16}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div>
-          <p style={{margin:0,fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",fontWeight:700}}>📞 My Callbacks</p>
-          {overdueCount>0&&<p style={{margin:"2px 0 0",fontSize:11,color:"#c0392b",fontWeight:600}}>⚠️ {overdueCount} overdue</p>}
-        </div>
-        <button onClick={openAdd} style={{padding:"7px 14px",borderRadius:9,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Add Callback</button>
-      </div>
-
-      {loading&&<p style={{textAlign:"center",color:"#bbb",padding:"30px 0"}}>Loading…</p>}
-
-      {!loading&&callbacks.length===0&&(
-        <div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}>
-          <p style={{fontSize:32,margin:"0 0 8px"}}>📞</p>
-          <p style={{fontWeight:600,fontSize:15,color:"#888"}}>No callbacks yet</p>
-          <p style={{fontSize:12,color:"#bbb",margin:"4px 0 0"}}>Add parents who need to confirm with their spouse before booking.</p>
-        </div>
-      )}
-
-      {!loading&&pending.length>0&&(
-        <div style={{marginBottom:16}}>
-          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a7a45",fontWeight:700,margin:"0 0 8px"}}>Pending ({pending.length})</p>
-          {pending.sort((a,b)=>a.callback_date.localeCompare(b.callback_date)||a.callback_time.localeCompare(b.callback_time)).map(cb=><CallbackCard key={cb.id} cb={cb}/>)}
-        </div>
-      )}
-
-      {!loading&&noAnswer.length>0&&(
-        <div style={{marginBottom:16}}>
-          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#b85c00",fontWeight:700,margin:"0 0 8px"}}>No Answer — Reschedule ({noAnswer.length})</p>
-          {noAnswer.map(cb=><CallbackCard key={cb.id} cb={cb}/>)}
-        </div>
-      )}
-
-      {!loading&&done.length>0&&(
-        <div style={{marginBottom:16}}>
-          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb",fontWeight:700,margin:"0 0 8px"}}>Done ({done.length})</p>
-          {done.map(cb=><CallbackCard key={cb.id} cb={cb}/>)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── ENROLMENT BOARD ───────────────────────────────────────────────────────
-function EnrolmentBoard({ reps, reload, fire, currentRepId, isManager }) {
-  const [saving, setSaving] = useState(false);
-  const [editingEnroller, setEditingEnroller] = useState(null); // {id, name, enrol_visible_to:[]}
-  const [pendingVisible, setPendingVisible] = useState([]);
-
-  const myRep = reps.find(r => r.id === currentRepId);
-  const amIEnroller = myRep?.enrol_role === "enroller";
-  const enrollers = reps.filter(r => r.enrol_role === "enroller");
-  const closers = reps.filter(r => r.enrol_role === "closer");
-  const myEnrollers = enrollers.filter(r => (r.enrol_visible_to||[]).includes(currentRepId));
-
-  const promoteToEnroller = async (rep) => {
-    setSaving(true);
-    await sbPatch("rep_status", rep.id, { enrol_role:"enroller", enrol_visible_to:[], enrol_ready:false, updated_at:new Date().toISOString() });
-    await reload();
-    setSaving(false);
-    fire("ok", `${rep.name} is now an Enroller`);
-  };
-
-  const removeRole = async (rep) => {
-    setSaving(true);
-    await sbPatch("rep_status", rep.id, { enrol_role:null, enrol_visible_to:[], enrol_ready:false, updated_at:new Date().toISOString() });
-    await reload();
-    setSaving(false);
-    fire("ok", `${rep.name} role removed`);
-  };
-
-  const openEdit = (enroller) => {
-    setEditingEnroller(enroller);
-    setPendingVisible(enroller.enrol_visible_to||[]);
-  };
-
-  const saveVisibility = async () => {
-    setSaving(true);
-    await sbPatch("rep_status", editingEnroller.id, { enrol_visible_to: pendingVisible, updated_at:new Date().toISOString() });
-    await reload();
-    setSaving(false);
-    setEditingEnroller(null);
-    fire("ok","Access updated");
-  };
-
-  const toggleReady = async () => {
-    if(!myRep) return;
-    setSaving(true);
-    await sbPatch("rep_status", myRep.id, { enrol_ready: !myRep.enrol_ready, updated_at:new Date().toISOString() });
-    await reload();
-    setSaving(false);
-  };
-
-  const transferToEnroller = async (enroller) => {
-    if(!enroller.enrol_ready) return;
-    setSaving(true);
-    await sbPatch("rep_status", enroller.id, { enrol_ready:false, updated_at:new Date().toISOString() });
-    await reload();
-    setSaving(false);
-    fire("ok", `Transferred to ${enroller.name}`);
-  };
-
-  const s = {card:{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,.07)"},label:{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.8,marginBottom:8},chip:(c)=>({display:"inline-block",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:c==="ready"?"#e8f8f0":c==="busy"?"#fdf0f0":"#f2f2f2",color:c==="ready"?"#1a7a45":c==="busy"?"#c0392b":"#777"})};
-
-  // ── Edit visibility screen ──────────────────────────────────────────
-  if(editingEnroller) {
-    const allClosers = reps.filter(r => r.enrol_role !== "enroller");
-    return (
-      <div style={{paddingTop:16}}>
-        <button onClick={()=>setEditingEnroller(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#1a5c35",fontWeight:700,fontSize:13,marginBottom:12,padding:0}}>← Back</button>
-        <div style={s.card}>
-          <p style={{...s.label,marginBottom:4}}>Who can see {editingEnroller.name}?</p>
-          <p style={{fontSize:12,color:"#aaa",marginBottom:12}}>Select the closers who are allowed to transfer calls to this enroller.</p>
-          {allClosers.map(c=>(
-            <div key={c.id} onClick={()=>setPendingVisible(v=>v.includes(c.id)?v.filter(x=>x!==c.id):[...v,c.id])} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:9,marginBottom:6,cursor:"pointer",background:pendingVisible.includes(c.id)?"#e8f8f0":"#f7f7f7",border:pendingVisible.includes(c.id)?"1.5px solid #27ae60":"1.5px solid #eee"}}>
-              <div style={{width:18,height:18,borderRadius:4,border:"2px solid",borderColor:pendingVisible.includes(c.id)?"#27ae60":"#ccc",background:pendingVisible.includes(c.id)?"#27ae60":"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                {pendingVisible.includes(c.id)&&<span style={{color:"#fff",fontSize:11,fontWeight:900}}>✓</span>}
-              </div>
-              <span style={{fontSize:13,fontWeight:600,color:"#222"}}>{c.name}</span>
-            </div>
-          ))}
-          {allClosers.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"20px 0"}}>No reps assigned as closers yet.</p>}
-          <button onClick={saveVisibility} disabled={saving} style={{width:"100%",marginTop:8,padding:"11px 0",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:saving?0.6:1}}>
-            {saving?"Saving…":"Save access"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Manager view ───────────────────────────────────────────────────
-  if(isManager) {
-    const assignRole = async (rep, role) => {
-      setSaving(true);
-      await sbPatch("rep_status", rep.id, {
-        enrol_role: role,
-        enrol_visible_to: role === "enroller" ? (rep.enrol_visible_to||[]) : [],
-        enrol_ready: false,
-        updated_at: new Date().toISOString(),
-      });
-      await reload();
-      setSaving(false);
-      fire("ok", role ? `${rep.name} set as ${role}` : `${rep.name} role removed`);
-    };
-
-    const RoleBtn = ({rep, role, label, color}) => {
-      const active = rep.enrol_role === role;
-      return (
-        <button
-          onClick={()=>assignRole(rep, active ? null : role)}
-          disabled={saving}
-          style={{padding:"4px 10px",borderRadius:7,border:`1.5px solid ${active?color:"#ddd"}`,background:active?color:"#fff",color:active?"#fff":"#aaa",fontSize:11,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1,transition:"all .15s"}}
-        >{active?"✓ ":""}{label}</button>
-      );
-    };
-
-    return (
-      <div style={{paddingTop:16}}>
-        {/* Enrollers — with edit access */}
-        {enrollers.length>0&&(
-          <>
-            <p style={s.label}>Enrollers ({enrollers.length})</p>
-            {enrollers.map(r=>(
-              <div key={r.id} style={s.card}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:34,height:34,borderRadius:"50%",background:"#1a5c35",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
-                    <div>
-                      <p style={{margin:0,fontSize:13,fontWeight:700}}>{r.name}</p>
-                      <span style={s.chip(r.enrol_ready?"ready":"busy")}>{r.enrol_ready?"🟢 Ready":"🔴 Busy"}</span>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={()=>openEdit(r)} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#fff",color:"#1a5c35",fontSize:11,fontWeight:700,cursor:"pointer"}}>Edit access</button>
-                    <button onClick={()=>assignRole(r,null)} disabled={saving} style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #e74c3c",background:"#fff",color:"#e74c3c",fontSize:11,fontWeight:700,cursor:"pointer"}}>Remove</button>
-                  </div>
-                </div>
-                {(r.enrol_visible_to||[]).length===0&&<p style={{margin:0,fontSize:11,color:"#e07b00",background:"#fff8ee",borderRadius:7,padding:"5px 10px"}}>⚠️ No closers assigned yet — hit Edit access.</p>}
-                {(r.enrol_visible_to||[]).length>0&&<p style={{margin:0,fontSize:11,color:"#666"}}>Visible to: {reps.filter(x=>(r.enrol_visible_to||[]).includes(x.id)).map(x=>x.name).join(", ")}</p>}
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* All reps — assign either role */}
-        <p style={{...s.label,marginTop:enrollers.length>0?18:0}}>All Reps — assign roles</p>
-        {reps.map(r=>(
-          <div key={r.id} style={{...s.card,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:30,height:30,borderRadius:"50%",background:"#e8f4ee",color:"#1a5c35",fontWeight:700,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
-              <span style={{fontSize:13,fontWeight:600}}>{r.name}</span>
-            </div>
-            <div style={{display:"flex",gap:6}}>
-              <RoleBtn rep={r} role="enroller" label="Enroller" color="#1a5c35"/>
-              <RoleBtn rep={r} role="closer" label="Closer" color="#2980b9"/>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // ── Enroller view (toggle ready) ───────────────────────────────────
-  if(amIEnroller) {
-    return (
-      <div style={{paddingTop:16}}>
-        <div style={s.card}>
-          <p style={{...s.label,marginBottom:4}}>Your enrolment status</p>
-          <p style={{fontSize:12,color:"#888",marginBottom:14}}>Toggle ready when you can take a transfer. Closers will see your status in real time.</p>
-          <button onClick={toggleReady} disabled={saving} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:myRep?.enrol_ready?"#c0392b":"#27ae60",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",opacity:saving?0.6:1}}>
-            {saving?"…":myRep?.enrol_ready?"🔴 Mark as Busy":"🟢 Go Ready"}
-          </button>
-          <p style={{margin:"10px 0 0",textAlign:"center",fontSize:12,color:"#aaa"}}>{myRep?.enrol_ready?"Closers can see you're available and can transfer now.":"You're marked busy — closers won't transfer to you."}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Closer view ────────────────────────────────────────────────────
-  const readyEnrollers = myEnrollers.filter(r=>r.enrol_ready);
-  return (
-    <div style={{paddingTop:16}}>
-      <div style={{...s.card,background:readyEnrollers.length>0?"#e8f8f0":"#fdf0f0",border:`1.5px solid ${readyEnrollers.length>0?"#27ae60":"#e74c3c"}`}}>
-        <p style={{margin:0,fontSize:15,fontWeight:800,color:readyEnrollers.length>0?"#1a7a45":"#c0392b",marginBottom:2}}>
-          {readyEnrollers.length>0?`✅ ${readyEnrollers.length} enroller${readyEnrollers.length>1?"s":""} ready — transfer the call now`:"🔴 No enrollers available — handle it yourself"}
-        </p>
-        <p style={{margin:"4px 0 0",fontSize:11,color:"#888"}}>{readyEnrollers.length>0?"Tap Transfer after the sale is locked in.":"Check back in a moment or complete the enrolment yourself."}</p>
-      </div>
-      {myEnrollers.map(r=>(
-        <div key={r.id} style={s.card}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:36,height:36,borderRadius:"50%",background:r.enrol_ready?"#1a5c35":"#ddd",color:r.enrol_ready?"#fff":"#888",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{r.avatar||r.name.slice(0,2).toUpperCase()}</div>
-              <div>
-                <p style={{margin:0,fontSize:13,fontWeight:700}}>{r.name}</p>
-                <span style={s.chip(r.enrol_ready?"ready":"busy")}>{r.enrol_ready?"🟢 Ready":"🔴 Busy"}</span>
-              </div>
-            </div>
-            {r.enrol_ready&&(
-              <button onClick={()=>transferToEnroller(r)} disabled={saving} style={{padding:"8px 16px",borderRadius:10,border:"none",background:"#1a5c35",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1}}>
-                Transfer →
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
-      {myEnrollers.length===0&&<div style={{...s.card,textAlign:"center",color:"#bbb",fontSize:13,padding:"20px 0"}}>No enrollers have been assigned to you yet. Ask your manager to set this up.</div>}
-    </div>
   );
 }
 
