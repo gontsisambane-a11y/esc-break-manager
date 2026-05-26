@@ -990,7 +990,7 @@ function MgrSchedules({ reps, reload, fire }) {
   , "Central");
 
   const inToday = reps
-    .filter(r => (r.shift_days||[]).includes(todayKey) && !["off","pto","sick"].includes(r.status))
+    .filter(r => (r.shift_days||[]).includes(todayKey))
     .map(r => {
       const sched = (r.lunch_schedule||{})[todayKey];
       const repTz = r.timezone||"Central";
@@ -1085,7 +1085,7 @@ function MgrSchedules({ reps, reload, fire }) {
       <div style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>📅 Today's Roster — {todayKey}</p>
-          <span style={{fontSize:10,color:"#ccc"}}>Your timezone: <strong style={{color:"#aaa"}}>{viewerTz}</strong></span>
+          <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:"#aaa"}}>{viewerTz}</strong> · {reps.filter(r=>(r.shift_days||[]).length>0).length}/{reps.length} reps have days set</span>
         </div>
 
         {inToday.length===0&&<p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"10px 0"}}>Nobody scheduled for today.</p>}
