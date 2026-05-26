@@ -815,7 +815,7 @@ function AddRepModal({ onClose, onAdd }) {
         )}
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <Btn label="Cancel" onClick={onClose} outline color="#888" small/>
-          <Btn label="Add Rep" onClick={()=>{if(!form.name.trim()){return;}onAdd({...form,avatar:avatar(form.name),id:Date.now()});}}/>
+          <Btn label="Add Rep" onClick={()=>{if(!form.name.trim()){return;}const{id:_,...d}=form;onAdd({...d,avatar:avatar(form.name)});}}/>
         </div>
       </div>
     </Modal>
