@@ -3,8 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
-const MANAGER_PIN = "2024";
-const HUB_ENABLED = true; // flip to true when approved
+const MANAGER_PIN = "1234";
+const HUB_ENABLED = false; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
@@ -532,11 +532,15 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   // ── Lunch schedule analysis for today ─────────────────────────────
   const todayKey = todayDay();
 
-  // Detect viewer's timezone from browser offset and map to app TZ label
-  const viewerOffsetMin = -(new Date().getTimezoneOffset()); // e.g. +120 for SAST
-  const viewerTz = Object.entries(TZ_OFFSET).reduce((best,[label,offset])=>
-    Math.abs(offset-viewerOffsetMin) < Math.abs((TZ_OFFSET[best]??Infinity)-viewerOffsetMin) ? label : best
-  , "Central");
+  // Detect viewer timezone using Intl, map to app label
+  const ianaZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const viewerTz = ianaZone.includes("Johannesburg")||ianaZone.includes("Africa") ? "SA"
+    : ianaZone.includes("Pacific") ? "Pacific"
+    : ianaZone.includes("Eastern") ? "Eastern"
+    : ianaZone.includes("Central") ? "Central"
+    : ianaZone.includes("London")||ianaZone.includes("GMT") ? "GMT"
+    : ianaZone.includes("Kolkata")||ianaZone.includes("India") ? "IST"
+    : "SA";
 
   const lunchSlots = reps
     .filter(r => isRepOnShift(r) && !["off","pto","sick"].includes(r.status))
@@ -983,11 +987,15 @@ function MgrSchedules({ reps, reload, fire }) {
 
   const todayKey = DAYS[new Date().getDay()];
 
-  // Viewer's timezone from browser offset
-  const viewerOffsetMin = -(new Date().getTimezoneOffset());
-  const viewerTz = Object.entries(TZ_OFFSET).reduce((best,[label,offset])=>
-    Math.abs(offset-viewerOffsetMin) < Math.abs((TZ_OFFSET[best]??Infinity)-viewerOffsetMin) ? label : best
-  , "Central");
+  // Detect viewer timezone using Intl, map to app label
+  const ianaZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const viewerTz = ianaZone.includes("Johannesburg")||ianaZone.includes("Africa") ? "SA"
+    : ianaZone.includes("Pacific") ? "Pacific"
+    : ianaZone.includes("Eastern") ? "Eastern"
+    : ianaZone.includes("Central") ? "Central"
+    : ianaZone.includes("London")||ianaZone.includes("GMT") ? "GMT"
+    : ianaZone.includes("Kolkata")||ianaZone.includes("India") ? "IST"
+    : "SA"; // fallback for this team
 
   const inToday = reps
     .filter(r => (r.shift_days||[]).includes(todayKey))
@@ -1088,7 +1096,12 @@ function MgrSchedules({ reps, reload, fire }) {
           <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:"#aaa"}}>{viewerTz}</strong> · {reps.filter(r=>(r.shift_days||[]).length>0).length}/{reps.length} reps have days set</span>
         </div>
 
-        {inToday.length===0&&<p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"10px 0"}}>Nobody scheduled for today.</p>}
+        {inToday.length===0&&(
+          <div>
+            <p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"6px 0"}}>Nobody scheduled for today.</p>
+            <p style={{fontSize:10,color:"#ddd",textAlign:"center"}}>Today key: "{todayKey}" · {reps.filter(r=>(r.shift_days||[]).includes(todayKey)).length} reps have {todayKey} in shift_days</p>
+          </div>
+        )}
 
         {inToday.map(({rep,start,end,lunch,repTz,lunchDur})=>{
           const cfg = ST[rep.status]||ST.available;
