@@ -3075,15 +3075,29 @@ function QuoteCalculator({locations}) {
   // ── AVAILABLE PROMOS ──────────────────────────────────────────────
   // FIX 1: DIVEIN40 excludes SwimKids (isEmler = false for SwimKids)
   // FIX 11: Day28 and DIVEIN40 both reduce first month — only show one or the other
+  // DIVEIN40 scenario state — tracks which classes get the discount
+  const [diveinScenario, setDiveinScenario] = useState(null); // null | "1day" | "2day_1disc" | "full"
+
   const promos = [];
   if(isEmler && enrollMo===5 && custType!=="active")
-    promos.push({code:"DIVEIN40",label:"40% Off June Tuition (DIVEIN40)",pct:40,note:"Continuous lessons only — no ODLs or clinics"});
+    promos.push({code:"DIVEIN40",label:"40% Off June Tuition (DIVEIN40)",pct:40,note:"Continuous lessons only — 1 day/week discounted. Select scenario below."});
   if(custType!=="active")
     promos.push({code:"REFERRAL",label:"Referral — $50 off per student",fixed:50,note:"New family must mention referrer by name"});
   if(custType==="lead" && !promoChecked.includes("DIVEIN40"))
     promos.push({code:"DAY28",label:"Lead Day 28 — 20% off first month",pct:20,note:"Do NOT offer proactively — customer must mention"});
 
-  const togglePromo = (code) => setPromoChecked(p=>p.includes(code)?p.filter(c=>c!==code):[...p,code]);
+  const togglePromo = (code) => {
+    setPromoChecked(p=>p.includes(code)?p.filter(c=>c!==code):[...p,code]);
+    if(code==="DIVEIN40") setDiveinScenario(null);
+  };
+
+  // DIVEIN40 scenarios shown when DIVEIN40 is checked
+  const DIVEIN_SCENARIOS = [
+    { key:"1day",       label:"1 class/week",   sub:"40% off that 1 class" },
+    { key:"2day_1disc", label:"2 classes/week",  sub:"1st class: 40% off · 2nd class: 10% multi-class" },
+    { key:"3day_1disc", label:"3 classes/week",  sub:"1st class: 40% off · 2nd & 3rd: 10% multi-class" },
+    { key:"full",       label:"Full month off",  sub:"Entire month 40% — confirm with manager" },
+  ];
 
   // ── PER-STUDENT CALCULATION ───────────────────────────────────────
   const calcStudent = (student, si) => {
@@ -3106,36 +3120,52 @@ function QuoteCalculator({locations}) {
     const sibDisc = (si>0 && canSibDiscount) ? groupContinuousTotal * 0.10 : 0;
     const afterSib = grossMonthly - sibDisc;
 
-    // % promo per eligible line (not a lump sum — transparent to rep)
+    // % promo logic — DIVEIN40 applies to 1 week's worth of 1 class only (scenario-aware)
     let pctPromoLabel = "";
-    const pctRate = promoChecked.includes("DIVEIN40") ? 0.40
-                  : promoChecked.includes("DAY28")    ? 0.20 : 0;
-    if(pctRate > 0) pctPromoLabel = promoChecked.includes("DIVEIN40") ? "DIVEIN40" : "Day28";
+    const isDivein = promoChecked.includes("DIVEIN40") && diveinScenario;
+    const isDay28  = promoChecked.includes("DAY28");
+    const pctRate  = isDay28 ? 0.20 : 0; // DAY28 applies normally across all eligible lines
+    if(isDay28) pctPromoLabel = "Day28";
 
-    // Build per-line promo discounts (shown per lesson in breakdown)
+    // Build per-line promo discounts
     const linesWithPromo = lines.map((l,li)=>{
       const sibLineDisc = (l.group && l.continuous && si>0 && canSibDiscount) ? l.net * 0.10 : 0;
       const netAfterSib = l.net - sibLineDisc;
-      const promoLineDisc = l.promoEligible ? netAfterSib * pctRate : 0;
-      return {...l, sibLineDisc, netAfterSib, promoLineDisc, finalNet: netAfterSib - promoLineDisc};
+
+      // DAY28 — standard % across all eligible
+      const day28Disc = (isDay28 && l.promoEligible) ? netAfterSib * 0.20 : 0;
+
+      // DIVEIN40 — applies only to 1 class per week (the first line only)
+      // subsequent classes already get 10% multi-class discount, not DIVEIN40
+      let diveinDisc = 0;
+      if(isDivein && l.promoEligible && li===0) {
+        if(diveinScenario === "full") {
+          diveinDisc = netAfterSib * 0.40;
+        } else {
+          // Discount = 1 class rate × 40% (one week's class, applied once)
+          diveinDisc = l.rate * 0.40;
+        }
+      }
+
+      const promoLineDisc = day28Disc + diveinDisc;
+      return {...l, sibLineDisc, netAfterSib, promoLineDisc, day28Disc, diveinDisc, finalNet: netAfterSib - promoLineDisc};
     });
 
     const pctPromoDisc = linesWithPromo.reduce((s,l)=>s+l.promoLineDisc, 0);
     const referralDisc = promoChecked.includes("REFERRAL") ? 50 : 0;
     const totalPromoDisc = pctPromoDisc + referralDisc;
-    const promoLabel = [pctPromoLabel, promoChecked.includes("REFERRAL")?"Referral":""].filter(Boolean).join(" + ");
+    const promoLabel = [isDivein?"DIVEIN40":null, isDay28?"Day28":null, promoChecked.includes("REFERRAL")?"Referral":null].filter(Boolean).join(" + ");
 
     // Reg fee
     const regFee = (regUsed + si) < 2 ? REG_FEE : 0;
 
     const rawDueToday = regFee + afterSib - totalPromoDisc;
     const dueToday = Math.max(0, rawDueToday);
-    const creditNote = rawDueToday < 0 ? Math.abs(rawDueToday) : 0; // credit applied to account
-    // FIX 9: two ongoing amounts — months 1-3 (with sibling) vs month 4+ (without)
-    const ongoing1to3 = afterSib;  // with sibling discount
-    const ongoing4plus = grossMonthly; // sibling discount ends after 3 months
+    const creditNote = rawDueToday < 0 ? Math.abs(rawDueToday) : 0;
+    const ongoing1to3 = afterSib;
+    const ongoing4plus = grossMonthly;
 
-    return {linesWithPromo, lines, grossMonthly, groupContinuousTotal, sibDisc, afterSib, pctPromoDisc, pctRate, referralDisc, totalPromoDisc, promoLabel, regFee, dueToday, creditNote, ongoing1to3, ongoing4plus, hasSibDisc: sibDisc > 0};
+    return {linesWithPromo, lines, grossMonthly, groupContinuousTotal, sibDisc, afterSib, pctPromoDisc, isDivein, isDay28, pctRate, referralDisc, totalPromoDisc, promoLabel, regFee, dueToday, creditNote, ongoing1to3, ongoing4plus, hasSibDisc: sibDisc > 0};
   };
 
   const calcs = students.map((s,i)=>calcStudent(s,i));
@@ -3159,8 +3189,9 @@ function QuoteCalculator({locations}) {
         const baseAmt = l.afterMulti||l.net;
         out.push(`  • ${fmt(baseAmt)} ${mo} tuition for ${name} (${lbl}${li>0&&l.continuous?" — 10% multi-class":""})`);
         if((l.sibLineDisc||0)>0) out.push(`    minus ${fmt(l.sibLineDisc)} sibling discount — first 3 full months`);
-        if((l.promoLineDisc||0)>0) out.push(`    minus ${fmt(l.promoLineDisc)} ${c.promoLabel} discount — continuous lessons only`);
-        if(!(l.promoEligible)&&c.pctRate>0) out.push(`    (promo does not apply to ${l.lt?.key==="clinic"?"clinics":"ODL"})`);
+        if((l.diveinDisc||0)>0) out.push(`    minus ${fmt(l.diveinDisc)} DIVEIN40 — 1 class × 40%`);
+        if((l.day28Disc||0)>0) out.push(`    minus ${fmt(l.day28Disc)} Day28 20% discount`);
+        if(!(l.promoEligible)&&(c.isDivein||c.isDay28)) out.push(`    (promo does not apply to ${l.lt?.key==="clinic"?"clinics":"ODL"})`);
       });
       if(c.referralDisc>0) out.push(`  • Minus $50 Referral discount for ${name}`);
       if((c.creditNote||0)>0) out.push(`  • Note: discount exceeds tuition — ${fmt(c.creditNote)} credit added to account`);
@@ -3286,14 +3317,49 @@ function QuoteCalculator({locations}) {
         <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #f0c080",padding:"14px",marginBottom:10}}>
           <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase",letterSpacing:.5}}>③ Available Promotions</p>
           {promos.map(p=>(
-            <div key={p.code} onClick={()=>togglePromo(p.code)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 11px",borderRadius:9,border:`1.5px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#eafaf1":"#fff",cursor:"pointer",marginBottom:6}}>
-              <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                {promoChecked.includes(p.code)&&<span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span>}
+            <div key={p.code}>
+              <div onClick={()=>togglePromo(p.code)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 11px",borderRadius:9,border:`1.5px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#eafaf1":"#fff",cursor:"pointer",marginBottom:6}}>
+                <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                  {promoChecked.includes(p.code)&&<span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span>}
+                </div>
+                <div>
+                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.label}</p>
+                  <p style={{margin:0,fontSize:10,color:"#888"}}>{p.note}</p>
+                </div>
               </div>
-              <div>
-                <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.label}</p>
-                <p style={{margin:0,fontSize:10,color:"#888"}}>{p.note}</p>
-              </div>
+              {/* DIVEIN40 scenario selector — shown when checked */}
+              {p.code==="DIVEIN40"&&promoChecked.includes("DIVEIN40")&&(
+                <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:9,padding:"10px 12px",marginBottom:6,marginTop:-2}}>
+                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1a5c35"}}>📋 How many classes/week does the customer attend?</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {DIVEIN_SCENARIOS.map(sc=>(
+                      <div key={sc.key} onClick={()=>setDiveinScenario(sc.key)}
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${diveinScenario===sc.key?"#1a5c35":"#ddd"}`,background:diveinScenario===sc.key?"#fff":"#fafafa",cursor:"pointer",transition:"all .15s"}}>
+                        <div>
+                          <span style={{fontSize:13,fontWeight:600,color:diveinScenario===sc.key?"#1a5c35":"#444"}}>{sc.label}</span>
+                          <span style={{fontSize:11,color:"#888",marginLeft:8}}>{sc.sub}</span>
+                        </div>
+                        <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${diveinScenario===sc.key?"#1a5c35":"#ccc"}`,background:diveinScenario===sc.key?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          {diveinScenario===sc.key&&<div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!diveinScenario&&<p style={{margin:"8px 0 0",fontSize:11,color:"#e07b00",fontWeight:600}}>⚠️ Select a scenario above to calculate the discount correctly</p>}
+                  {diveinScenario&&diveinScenario!=="full"&&(
+                    <div style={{marginTop:8,padding:"7px 10px",background:"#fff",borderRadius:7,border:"1px solid #c8e6c9"}}>
+                      <p style={{margin:0,fontSize:11,color:"#1a5c35"}}>
+                        <strong>1st class:</strong> 1 class rate × 40% off (DIVEIN40) · <strong>Additional classes:</strong> 10% multi-class discount applies as normal.
+                      </p>
+                    </div>
+                  )}
+                  {diveinScenario==="full"&&(
+                    <div style={{marginTop:8,padding:"7px 10px",background:"#fff3cd",borderRadius:7,border:"1px solid #f0c080"}}>
+                      <p style={{margin:0,fontSize:11,color:"#856404"}}>⚠️ Full month discount — confirm this scenario with your manager before applying.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -3313,8 +3379,9 @@ function QuoteCalculator({locations}) {
                     <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.afterMulti)}</span>
                   </div>
                   {l.sibLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>Sibling discount −10% (mo 1–3)</span><span>−{fmt(l.sibLineDisc)}</span></div>}
-                  {l.promoLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>{c.promoLabel.includes("DIVEIN40")?"DIVEIN40":"Day28"} −{c.promoLabel.includes("DIVEIN40")?"40":"20"}% (eligible lesson)</span><span>−{fmt(l.promoLineDisc)}</span></div>}
-                  {!l.promoEligible&&c.pctRate>0&&<div style={{fontSize:10,color:"#e07b00",paddingLeft:8}}>⚠️ Promo does not apply to {l.lt?.key==="clinic"?"clinics":"ODL"}</div>}
+                  {l.diveinDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>DIVEIN40 — 1 class × 40%{diveinScenario==="full"?" (full month)":""}</span><span>−{fmt(l.diveinDisc)}</span></div>}
+                  {l.day28Disc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>Day28 −20%</span><span>−{fmt(l.day28Disc)}</span></div>}
+                  {!l.promoEligible&&(c.isDivein||c.isDay28)&&<div style={{fontSize:10,color:"#e07b00",paddingLeft:8}}>⚠️ Promo does not apply to {l.lt?.key==="clinic"?"clinics":"ODL"}</div>}
                 </div>
               ))}
               {c.referralDisc>0&&(
@@ -3382,7 +3449,8 @@ function QuoteCalculator({locations}) {
                     <div key={li}>
                       <p style={{margin:"0 0 2px"}}>• {fmt(l.afterMulti)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.continuous?" — 10% multi-class":""})</p>
                       {l.sibLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.sibLineDisc)} sibling discount — first 3 full months</p>}
-                      {l.promoLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.promoLineDisc)} {c.promoLabel} — continuous lessons only</p>}
+                      {l.diveinDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.diveinDisc)} DIVEIN40 (1 class × 40%{diveinScenario==="full"?" full month":""})</p>}
+                      {l.day28Disc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.day28Disc)} Day28 20% discount</p>}
                     </div>
                   ))}
                   {c.referralDisc>0&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Minus $50 Referral discount for {name}</p>}
