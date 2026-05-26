@@ -42,6 +42,11 @@ const ST = {
   off:       { label:"Scheduled Off", dot:"#bbb",    bg:"#f7f7f7", border:"#e8e8e8" },
   off_shift: { label:"Off Shift",     dot:"#999",    bg:"#f2f2f2", border:"#e0e0e0" },
 };
+const STAGE_CFG = {
+  active:      { label:"Active",       bg:"#eafaf1", text:"#1a7a45", border:"#b7dfca" },
+  training:    { label:"Training",     bg:"#fff8ee", text:"#b85c00", border:"#f0c080" },
+  not_started: { label:"Not Started",  bg:"#f5f5f5", text:"#888",    border:"#ddd"    },
+};
 const TZ_C = {
   Central:{bg:"#e8f0fe",text:"#1a4a8a"}, Eastern:{bg:"#e6f4ea",text:"#1a5c35"},
   Pacific:{bg:"#fff3e6",text:"#7a4500"}, SA:{bg:"#fce8f3",text:"#7a1a5c"},
@@ -508,6 +513,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:cfg.bg,color:cfg.dot,border:`1px solid ${cfg.border}`,fontWeight:600}}>{cfg.label}</span>
               {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:"#fff3cd",color:"#856404",padding:"2px 5px",borderRadius:4}}>Override</span>}
+              {rep.rep_stage&&rep.rep_stage!=="active"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).text,border:`1px solid ${(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).border}`,fontWeight:700}}>{rep.rep_stage==="training"?"🎓 Training":"⏳ Not Started"}</span>}
             </div>
             {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:"#aaa"}}>{rep.ooo_note}</p>}
             {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
@@ -705,6 +711,8 @@ function MgrTeam({ reps, settings, reload, fire }) {
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
         const cooldownActive = !!(rep.health_time_banked>=HEALTH_MAX_SEC && rep.last_break_returned_at && elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
         const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(rep.last_break_returned_at) : 0;
+        const stage = rep.rep_stage||"active";
+        const stageCfg = STAGE_CFG[stage]||STAGE_CFG.active;
         return (
           <div key={rep.id} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
@@ -716,10 +724,22 @@ function MgrTeam({ reps, settings, reload, fire }) {
                   <StatusDot status={rep.status}/>
                   <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
                 </div>
-                <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:6,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
+                  <select
+                    value={stage}
+                    onChange={async e=>{
+                      await sbPatch("rep_status",rep.id,{rep_stage:e.target.value,updated_at:new Date().toISOString()});
+                      fire("info",`${rep.name} → ${STAGE_CFG[e.target.value]?.label}`);
+                      reload();
+                    }}
+                    style={{fontSize:10,padding:"2px 7px",borderRadius:6,border:`1.5px solid ${stageCfg.border}`,background:stageCfg.bg,color:stageCfg.text,fontWeight:700,cursor:"pointer",outline:"none"}}
+                  >
+                    <option value="active">✅ Active</option>
+                    <option value="training">🎓 Training</option>
+                    <option value="not_started">⏳ Not Started</option>
+                  </select>
                   <span style={{fontSize:10,color:"#aaa"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} today</span>
-                  {cooldownActive&&<span style={{fontSize:10,color:"#e07b00"}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
-                  {(rep.health_time_banked||0)>0&&<span style={{fontSize:10,color:"#888"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
+                  {cooldownActive&&<span style={{fontSize:10,color:"#e07b00"}}>⏳ {fmtTime(cooldownLeft)}</span>}
                 </div>
               </div>
               <div style={{display:"flex",gap:5,flexShrink:0}}>
@@ -735,16 +755,26 @@ function MgrTeam({ reps, settings, reload, fire }) {
 }
 
 function AddRepModal({ onClose, onAdd }) {
-  const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:""});
+  const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:"",rep_stage:"not_started"});
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
   const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}));
   return (
     <Modal title="Add Team Member" sub="NEW REP" onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Full Name</label>
-          <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Jordan Smith" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Full Name</label>
+            <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Jordan Smith" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          </div>
+          <div>
+            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Stage</label>
+            <select value={form.rep_stage} onChange={e=>set("rep_stage",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1.5px solid ${(STAGE_CFG[form.rep_stage]||STAGE_CFG.active).border}`,background:(STAGE_CFG[form.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[form.rep_stage]||STAGE_CFG.active).text,fontSize:13,outline:"none",fontWeight:600}}>
+              <option value="not_started">⏳ Not Started</option>
+              <option value="training">🎓 Training</option>
+              <option value="active">✅ Active</option>
+            </select>
+          </div>
         </div>
         <div>
           <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Timezone</label>
