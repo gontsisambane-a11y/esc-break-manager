@@ -204,7 +204,16 @@ async function loadAll() {
       r.status="pto"; r.ooo_note="PTO";
     }
   }
-  return { reps, settings, adHoc, swaps, activeBreaks, breakQueue:breakQueue||[] };
+  // Auto-fix stuck breaks: reps marked available/pto/sick but still have open break_log entries
+  for(const r of reps) {
+    if(!["health","lunch"].includes(r.status)) {
+      const hasOpenLog = activeBreaks.some(b=>b.rep_id===r.id);
+      if(hasOpenLog) {
+        await sb(`break_log?rep_id=eq.${r.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:HEALTH_MAX_SEC})});
+      }
+    }
+  }
+  return { reps, settings, adHoc, swaps, activeBreaks:activeBreaks.filter(b=>reps.find(r=>r.id===b.rep_id&&["health","lunch"].includes(r.status))), breakQueue:breakQueue||[] };
 }
 
 async function loadReportData(start, end) {
@@ -445,21 +454,16 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   const handleReturn = async (rep) => {
     const ab = activeBreaks.find(b=>b.rep_id===rep.id);
     const durSec = ab ? elapsedSec(ab.started_at) : 0;
-    const newBanked = (rep.health_time_banked||0) + durSec;
+    const newBanked = (rep.health_time_banked||0) + Math.min(durSec, HEALTH_MAX_SEC);
     const updates = { status:"available", updated_at: new Date().toISOString() };
     if(rep.status==="health") {
-      if(newBanked >= HEALTH_MAX_SEC) {
-        updates.health_time_banked = HEALTH_MAX_SEC; // mark as full
-        updates.last_break_returned_at = new Date().toISOString();
-        updates.health_breaks_today = (rep.health_breaks_today||0)+1;
-        if((rep.health_breaks_today||0)+1>=HEALTH_PER_DAY) fire("warn",`⚠️ ${rep.name} has used all ${HEALTH_PER_DAY} full breaks today`);
-      } else {
-        updates.health_time_banked = newBanked;
-      }
+      updates.health_time_banked = Math.min(newBanked, HEALTH_MAX_SEC);
+      updates.last_break_returned_at = new Date().toISOString();
+      updates.health_breaks_today = (rep.health_breaks_today||0)+1;
+      if((rep.health_breaks_today||0)+1>=HEALTH_PER_DAY) fire("warn",`⚠️ ${rep.name} has used all ${HEALTH_PER_DAY} full breaks today`);
     }
-    if(ab) {
-      await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
-    }
+    // Close all open break_log entries for this rep (catches stuck entries)
+    await sb(`break_log?rep_id=eq.${rep.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:Math.min(durSec,HEALTH_MAX_SEC)})});
     await sbPatch("rep_status",rep.id,updates);
     fire("approved",`${rep.name} is back on duty`);
     reload();
@@ -859,6 +863,34 @@ function MgrSchedules({ reps, reload, fire }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
 
+  const exportSchedules = () => {
+    // Header row
+    const headers = ["Name","Timezone","Stage","Working Days","Sun Start","Sun End","Sun Lunch","Sun Dur","Mon Start","Mon End","Mon Lunch","Mon Dur","Tue Start","Tue End","Tue Lunch","Tue Dur","Wed Start","Wed End","Wed Lunch","Wed Dur","Thu Start","Thu End","Thu Lunch","Thu Dur","Fri Start","Fri End","Fri Lunch","Fri Dur","Sat Start","Sat End","Sat Lunch","Sat Dur"];
+    const rows = [headers];
+    reps.forEach(rep => {
+      const sched = rep.lunch_schedule||{};
+      const stage = rep.rep_stage||"active";
+      const row = [
+        rep.name,
+        rep.timezone||"Central",
+        stage==="active"?"Active":stage==="training"?"Training":"Not Started",
+        (rep.shift_days||[]).join(", "),
+      ];
+      DAYS.forEach(d => {
+        const ds = sched[d]||{};
+        row.push(ds.start||"", ds.end||"", ds.time||"", ds.duration||"");
+      });
+      rows.push(row);
+    });
+    const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv],{type:"text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`esc-schedules-${todayStr()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    fire("approved","Schedule exported ✅");
+  };
+
   const startEdit = (rep) => {
     setEditing(rep);
     setForm({
@@ -1042,7 +1074,10 @@ function MgrSchedules({ reps, reload, fire }) {
       </div>
 
       {/* ── ALL REPS LIST ── */}
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>All Reps — tap to edit</p>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 10px"}}>
+        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>All Reps — tap to edit</p>
+        <button onClick={exportSchedules} style={{padding:"6px 13px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:"#1a5c35",fontWeight:600}}>📥 Export CSV</button>
+      </div>
       {reps.map(rep=>{
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
         const days=(rep.shift_days||[]).join(", ")||"No days set";
