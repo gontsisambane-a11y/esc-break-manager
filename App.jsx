@@ -8,7 +8,7 @@ const HUB_ENABLED = true; // flip to true when approved
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
-const LUNCH_LIMIT = 3;
+const LUNCH_LIMIT = 2;
 const H_LIMIT_NORMAL = 2;
 const H_LIMIT_PEAK = 1;
 const COOLDOWN_SEC = 7200;
@@ -1644,6 +1644,27 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
       )}
 
       <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>My Status</p>
+      {/* Today's lunch time banner */}
+      {(()=>{
+        const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+        const todayKey=DAYS_SHORT[new Date().getDay()];
+        const sched=(myRep.lunch_schedule||{})[todayKey];
+        const lunchTime=sched?.time;
+        const dur=sched?.duration||60;
+        if(!lunchTime) return null;
+        const [lh,lm]=lunchTime.split(":").map(Number);
+        const endMin=lh*60+lm+dur;
+        const endStr=`${String(Math.floor(endMin/60)%24).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
+        return (
+          <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>🥗</span>
+            <div>
+              <p style={{margin:0,fontSize:12,fontWeight:700,color:"#b85c00"}}>Your lunch today</p>
+              <p style={{margin:0,fontSize:14,fontWeight:800,color:"#7a3d00"}}>{lunchTime} – {endStr} <span style={{fontSize:11,fontWeight:400,color:"#b85c00"}}>({dur}min)</span></p>
+            </div>
+          </div>
+        );
+      })()}
       <div style={{background:cfg.bg,border:`2px solid ${cfg.border}`,borderRadius:18,padding:"20px 18px",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:isOOO||isOff?0:14}}>
           <div style={{width:48,height:48,borderRadius:"50%",background:isOff?"#eee":onBreak?(myRep.status==="health"?"#d6eaf8":"#fdebd0"):"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:isOff?"#bbb":onBreak?(myRep.status==="health"?"#1a6291":"#9c5a00"):"#1a5c35"}}>
