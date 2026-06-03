@@ -181,7 +181,7 @@ async function loadAll() {
     sb(`break_queue?date=eq.${todayStr()}&status=in.(waiting,notified)&order=queued_at`),
     sb(`calloffs?calloff_date=eq.${todayStr()}&reason=eq.pto&select=rep_name`),
   ]);
-  const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false,admin_mode:false};
+  const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false,admin_mode:false,admin_limit:null};
   // seed hardcoded PTO once
   if(!settings.pto_seeded) {
     try {
@@ -363,7 +363,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
   const onHealth = reps.filter(r=>r.status==="health").length;
   const onLunch  = reps.filter(r=>r.status==="lunch").length;
   const onAdmin  = reps.filter(r=>r.status==="admin").length;
-  const adminLimit = Math.max(1, Math.floor(activeReps.length * 0.5));
+  const adminLimit = settings.admin_limit ?? Math.max(1, Math.floor(activeReps.length * 0.5));
   const hLimit = settings.peak_mode ? H_LIMIT_PEAK : H_LIMIT_NORMAL;
   const notifCount = adHoc.length + swaps.length;
 
@@ -1738,6 +1738,8 @@ function MgrPTO({ reps, reload, fire }) {
 // ── MGR: SETTINGS ─────────────────────────────────────────────────────
 function MgrSettings({ settings, reps, reload, fire }) {
   const [customCap, setCustomCap] = useState(settings.custom_limit??Math.floor(reps.length*0.3));
+  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
+  const [adminLimit, setAdminLimit] = useState(settings.admin_limit??Math.max(1,Math.floor(activeReps.length*0.5)));
 
   const togglePeak = async () => {
     await sbPatch("app_settings",1,{peak_mode:!settings.peak_mode,updated_at:new Date().toISOString()});
@@ -1748,6 +1750,20 @@ function MgrSettings({ settings, reps, reload, fire }) {
   const toggleAdmin = async () => {
     await sbPatch("app_settings",1,{admin_mode:!settings.admin_mode,updated_at:new Date().toISOString()});
     fire("info",`Admin mode ${settings.admin_mode?"disabled":"enabled"}`);
+    reload();
+  };
+
+  const saveAdminLimit = async () => {
+    await sbPatch("app_settings",1,{admin_limit:adminLimit,updated_at:new Date().toISOString()});
+    fire("approved","Admin limit updated");
+    reload();
+  };
+
+  const resetAdminLimit = async () => {
+    const def = Math.max(1,Math.floor(activeReps.length*0.5));
+    await sbPatch("app_settings",1,{admin_limit:null,updated_at:new Date().toISOString()});
+    setAdminLimit(def);
+    fire("info","Admin limit reset to 50% default");
     reload();
   };
 
@@ -1785,13 +1801,22 @@ function MgrSettings({ settings, reps, reload, fire }) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div>
             <p style={{margin:0,fontWeight:700,fontSize:14}}>🗂️ Admin Mode</p>
-            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Allows reps to take 30-min admin slots · max 50% of team at once</p>
+            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Allows reps to take 30-min admin slots</p>
           </div>
           <div onClick={toggleAdmin} style={{width:46,height:26,borderRadius:13,background:settings.admin_mode?"#1d4ed8":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
             <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
           </div>
         </div>
-        {settings.admin_mode&&<p style={{margin:0,fontSize:11,color:"#1d4ed8",fontWeight:600}}>🗂️ Active — reps can take admin time. Best windows: 7–9am CT and after 6pm CT</p>}
+        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Default: 50% of active team = {Math.max(1,Math.floor(activeReps.length*0.5))} max on admin at once</p>
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+          <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
+          <span style={{fontSize:13,color:"#888"}}>max people on admin at once</span>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn label="Reset to 50%" onClick={resetAdminLimit} outline color="#888" small/>
+          <Btn label="Save Limit" onClick={saveAdminLimit} color="#1d4ed8" small/>
+        </div>
+        {settings.admin_mode&&<p style={{margin:"10px 0 0",fontSize:11,color:"#1d4ed8",fontWeight:600}}>🗂️ Active — best windows: 7–9am CT and after 6pm CT</p>}
       </div>
 
       {/* Team Cap */}
