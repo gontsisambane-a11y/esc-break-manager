@@ -2587,7 +2587,7 @@ function HubView({ isManager }) {
         </div>
       </div>
 
-      <div style={{padding:"14px 14px 0",maxWidth:800,margin:"0 auto"}}>
+      <div style={{padding:"14px 20px 0",maxWidth:1200,margin:"0 auto"}}>
 
         {/* HOME / SEARCH RESULTS */}
         {tab==="home"&&(
@@ -2644,7 +2644,9 @@ function HubView({ isManager }) {
                 {promos.length>0&&(
                   <div style={{marginBottom:16}}>
                     <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#856404",margin:"0 0 8px",fontWeight:700}}>🎯 Active Promotions</p>
-                    {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
+                      {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+                    </div>
                     {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed #ddd",background:"transparent",cursor:"pointer",fontSize:12,color:"#aaa",marginTop:6}}>+ Add Promo</button>}
                   </div>
                 )}
@@ -2705,7 +2707,9 @@ function HubView({ isManager }) {
             {matchLoc.length>0&&Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
               <div key={region} style={{marginBottom:16}}>
                 <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>{region} ({locs.length})</p>
-                {locs.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
+                  {locs.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
+                </div>
               </div>
             ))}
           </div>
@@ -2725,7 +2729,9 @@ function HubView({ isManager }) {
             {Object.entries(docs.reduce((acc,d)=>{const cat=d.category||"General";if(!acc[cat])acc[cat]=[];acc[cat].push(d);return acc;},{})).map(([cat,catDocs])=>(
               <div key={cat} style={{marginBottom:16}}>
                 <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 8px",fontWeight:700}}>{cat}</p>
-                {catDocs.map((d,i)=><HubDocCard key={i} doc={d} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
+                  {catDocs.map((d,i)=><HubDocCard key={i} doc={d} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
+                </div>
               </div>
             ))}
           </div>
@@ -2738,7 +2744,9 @@ function HubView({ isManager }) {
               <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:"#856404",fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
               <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
             </div>
-            {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={true} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
+              {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={true} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
+            </div>
           </div>
         )}
         {tab==="closures"&&isManager&&(
