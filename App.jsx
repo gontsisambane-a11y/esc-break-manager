@@ -9,6 +9,7 @@ const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
 const LUNCH_LIMIT = 2;
+const ADMIN_DURATION_SEC = 1800; // 30 minutes
 const H_LIMIT_NORMAL = 2;
 const H_LIMIT_PEAK = 1;
 const COOLDOWN_SEC = 7200;
@@ -180,7 +181,7 @@ async function loadAll() {
     sb(`break_queue?date=eq.${todayStr()}&status=in.(waiting,notified)&order=queued_at`),
     sb(`calloffs?calloff_date=eq.${todayStr()}&reason=eq.pto&select=rep_name`),
   ]);
-  const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false};
+  const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false,admin_mode:false};
   // seed hardcoded PTO once
   if(!settings.pto_seeded) {
     try {
@@ -358,9 +359,11 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
 
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
   const maxOut = settings.custom_limit ?? Math.floor(activeReps.length * 0.3);
-  const totalOut = reps.filter(r=>["health","lunch"].includes(r.status)).length;
+  const totalOut = reps.filter(r=>["health","lunch","admin"].includes(r.status)).length;
   const onHealth = reps.filter(r=>r.status==="health").length;
   const onLunch  = reps.filter(r=>r.status==="lunch").length;
+  const onAdmin  = reps.filter(r=>r.status==="admin").length;
+  const adminLimit = Math.max(1, Math.floor(activeReps.length * 0.5));
   const hLimit = settings.peak_mode ? H_LIMIT_PEAK : H_LIMIT_NORMAL;
   const notifCount = adHoc.length + swaps.length;
 
@@ -395,6 +398,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
           </div>
         </div>
         {!centreOpen&&<div style={{background:"rgba(255,200,0,.15)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#ffd700",fontWeight:600,textAlign:"center"}}>🌙 Centre closed — opens 2:00pm SAST · Showing next shift data</div>}
+        {settings.admin_mode&&<div style={{background:"rgba(29,78,216,.2)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#93c5fd",fontWeight:600,textAlign:"center"}}>🗂️ Admin Mode ON — reps can take 30-min admin slots</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
           {[
             {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)&&(r.rep_stage||"active")==="active").length,l:"Available",c:"#27ae60"},
@@ -408,11 +412,12 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
             </div>
           ))}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
           {[
             {icon:"👥",label:"Team Cap",val:`${totalOut}/${maxOut} out`,full:totalOut>=maxOut,color:"#8e44ad"},
             {icon:"🌿",label:"Health",val:`${onHealth}/${hLimit}`,full:onHealth>=hLimit,color:"#2980b9"},
             {icon:"🥗",label:"Lunch",val:`${onLunch}/${LUNCH_LIMIT}`,full:onLunch>=LUNCH_LIMIT,color:"#e07b00"},
+            {icon:"🗂️",label:"Admin",val:settings.admin_mode?`${onAdmin}/${adminLimit}`:"Off",full:onAdmin>=adminLimit,color:"#1d4ed8"},
           ].map(m=>(
             <div key={m.label} style={{background:"rgba(255,255,255,.08)",borderRadius:9,padding:"8px 10px",border:`1px solid ${m.full?"rgba(231,76,60,.5)":"rgba(255,255,255,.1)"}`}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -437,7 +442,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
       </div>
 
       <div style={{padding:"0 14px",maxWidth:640,margin:"0 auto"}}>
-        {tab==="overview"  &&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={hLimit} maxOut={maxOut} reload={reload} fire={fire} settings={settings} centreOpen={centreOpen}/>}
+        {tab==="overview"  &&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={hLimit} maxOut={maxOut} reload={reload} fire={fire} settings={settings} centreOpen={centreOpen} onAdmin={onAdmin} adminLimit={adminLimit}/>}
         {tab==="requests"  &&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire}/>}
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
@@ -452,7 +457,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
 }
 
 // ── MGR: OVERVIEW ─────────────────────────────────────────────────────
-function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, settings, centreOpen }) {
+function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, settings, centreOpen, onAdmin=0, adminLimit=1 }) {
   const [oooModal, setOooModal] = useState(null);
   const [peakOverride, setPeakOverride] = useState({});
 
@@ -499,7 +504,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     fire("info",`Peak limit ${peakOverride[rep.id]?"restored":"overridden"} for ${rep.name}`);
   };
 
-  const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch") : [];
+  const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch"||r.status==="admin") : [];
   const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r) && (r.rep_stage||"active")==="active");
   const offShift  = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)) && (r.rep_stage||"active")==="active");
   const inTraining = reps.filter(r=>r.status==="available" && (r.rep_stage==="training"||r.rep_stage==="not_started"||r.rep_stage==="ramping"));
@@ -508,7 +513,8 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   function RepRow({rep}) {
     const effectiveStatus = (rep.status==="available" && (!centreOpen || !isRepOnShift(rep))) ? "off_shift" : rep.status;
     const cfg=ST[effectiveStatus]||ST.available;
-    const isBreak=rep.status==="health"||rep.status==="lunch";
+    const isBreak=rep.status==="health"||rep.status==="lunch"||rep.status==="admin";
+    const isAdmin=rep.status==="admin";
     const isOOO=rep.status==="pto"||rep.status==="sick";
     const isOff=rep.status==="off"||effectiveStatus==="off_shift";
     const tz=TZ_C[rep.timezone]||TZ_C.Central;
@@ -516,7 +522,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     return (
       <div style={{background:cfg.bg,borderRadius:12,padding:"10px 13px",border:`1.5px solid ${cfg.border}`,marginBottom:6}}>
         <div style={{display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,background:isOOO?"#ede0f5":isOff?"#eee":isBreak?(rep.status==="health"?"#d6eaf8":"#fdebd0"):"#eafaf1",color:isOOO?"#7a1a5c":isOff?"#bbb":isBreak?(rep.status==="health"?"#1a6291":"#9c5a00"):"#1a5c35"}}>{rep.avatar||avatar(rep.name)}</div>
+          <div style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,background:isOOO?"#ede0f5":isOff?"#eee":isAdmin?"#dbeafe":isBreak?(rep.status==="health"?"#d6eaf8":"#fdebd0"):"#eafaf1",color:isOOO?"#7a1a5c":isOff?"#bbb":isAdmin?"#1d4ed8":isBreak?(rep.status==="health"?"#1a6291":"#9c5a00"):"#1a5c35"}}>{rep.avatar||avatar(rep.name)}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
               <span style={{fontWeight:600,fontSize:13,color:isOff?"#bbb":"#1a1a1a"}}>{rep.name}</span>
@@ -528,6 +534,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
             {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:"#aaa"}}>{rep.ooo_note}</p>}
             {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
             {rep.status==="health"&&<p style={{margin:"2px 0 0",fontSize:10,color:"#888"}}>Breaks today: {rep.health_breaks_today||0}/{HEALTH_PER_DAY}</p>}
+            {rep.status==="admin"&&ab&&<p style={{margin:"2px 0 0",fontSize:10,color:"#1d4ed8"}}>🗂️ Admin — {fmtDur(elapsedSec(ab.started_at))} / 30m</p>}
           </div>
           <div style={{display:"flex",gap:5,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
             {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#555",fontWeight:600}}>Back 👋</button>}
@@ -546,7 +553,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
       {oooModal&&(
         <OOOModal rep={oooModal} onClose={()=>setOooModal(null)} onMark={handleMarkOOO}/>
       )}
-      {onBreak.length>0&&<Section title="🌿🥗 On Break" items={onBreak} Row={RepRow} color="#2980b9"/>}
+      {onBreak.length>0&&<Section title="🌿🥗🗂️ On Break / Admin" items={onBreak} Row={RepRow} color="#2980b9"/>}
       {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
       {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
       {inTraining.length>0&&<Section title="🎓 Training / Not Started / Ramping" items={inTraining} Row={RepRow} color="#b85c00"/>}
@@ -1738,6 +1745,12 @@ function MgrSettings({ settings, reps, reload, fire }) {
     reload();
   };
 
+  const toggleAdmin = async () => {
+    await sbPatch("app_settings",1,{admin_mode:!settings.admin_mode,updated_at:new Date().toISOString()});
+    fire("info",`Admin mode ${settings.admin_mode?"disabled":"enabled"}`);
+    reload();
+  };
+
   const saveCap = async () => {
     await sbPatch("app_settings",1,{custom_limit:customCap,updated_at:new Date().toISOString()});
     fire("approved","Team cap updated");
@@ -1765,6 +1778,20 @@ function MgrSettings({ settings, reps, reload, fire }) {
           </div>
         </div>
         {settings.peak_mode&&<p style={{margin:0,fontSize:11,color:"#e74c3c",fontWeight:600}}>⚡ Active — health breaks limited to 1 at a time</p>}
+      </div>
+
+      {/* Admin Mode */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div>
+            <p style={{margin:0,fontWeight:700,fontSize:14}}>🗂️ Admin Mode</p>
+            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Allows reps to take 30-min admin slots · max 50% of team at once</p>
+          </div>
+          <div onClick={toggleAdmin} style={{width:46,height:26,borderRadius:13,background:settings.admin_mode?"#1d4ed8":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
+            <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
+          </div>
+        </div>
+        {settings.admin_mode&&<p style={{margin:0,fontSize:11,color:"#1d4ed8",fontWeight:600}}>🗂️ Active — reps can take admin time. Best windows: 7–9am CT and after 6pm CT</p>}
       </div>
 
       {/* Team Cap */}
@@ -1829,7 +1856,10 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const breaksLeft = HEALTH_PER_DAY - (myRep.health_breaks_today||0);
 
   const canTakeHealth = healthLeft>0 && capLeft>0 && !cooldownActive && breaksLeft>0 && myRep.status==="available";
-  const canTakeLunch = lunchLeft>0 && capLeft>0 && myRep.status==="available";
+  const canTakeLunch  = lunchLeft>0 && capLeft>0 && myRep.status==="available";
+  const adminLimit    = Math.max(1, Math.floor(activeReps.length * 0.5));
+  const onAdmin       = reps.filter(r=>r.status==="admin").length;
+  const canTakeAdmin  = settings.admin_mode && onAdmin<adminLimit && capLeft>0 && myRep.status==="available";
 
   // Queue helpers
   const myQueueEntry = breakQueue.find(q=>q.rep_id===repInfo.id);
@@ -1897,12 +1927,16 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         reload(); return;
       }
     }
+    if(type==="admin"){
+      if(!settings.admin_mode){fire("declined","Admin mode is not active");return;}
+      if(onAdmin>=adminLimit){fire("declined","Admin slots full — too many reps on admin");return;}
+    }
     const bankedReset = type==="health" && myRep.health_time_banked>=HEALTH_MAX_SEC && !cooldownActive;
     const updates = {status:type,updated_at:new Date().toISOString()};
     if(bankedReset) updates.health_time_banked = 0; // start fresh cycle after cooldown expired
     await sbPatch("rep_status",repInfo.id,updates);
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:type});
-    fire("approved",`Enjoy your ${type==="lunch"?"lunch 🥗":"health break 🌿"}!`);
+    fire("approved",`Enjoy your ${type==="lunch"?"lunch 🥗":type==="admin"?"admin time 🗂️":"health break 🌿"}!`);
     reload();
   };
 
@@ -1913,7 +1947,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     const updates = {status:"available",updated_at:new Date().toISOString()};
     if(myRep.status==="health") {
       if(newBanked >= HEALTH_MAX_SEC) {
-        updates.health_time_banked = HEALTH_MAX_SEC; // mark as full
+        updates.health_time_banked = HEALTH_MAX_SEC;
         updates.last_break_returned_at = new Date().toISOString();
         updates.health_breaks_today = (myRep.health_breaks_today||0)+1;
         fire("info","10 min banked — 2-hour cooldown now active 🕐");
@@ -1923,7 +1957,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     }
     if(ab) await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
     await sbPatch("rep_status",repInfo.id,updates);
-    fire("approved","Welcome back! You're on duty 🎉");
+    fire("approved",myRep.status==="admin"?"Admin time done — welcome back! 🗂️":"Welcome back! You're on duty 🎉");
     await processQueue();
     reload();
   };
@@ -1948,11 +1982,12 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
           </div>
           <button onClick={onLogout} style={{padding:"6px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.7)",cursor:"pointer",fontSize:11}}>Switch</button>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:settings.admin_mode?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr",gap:8}}>
           {[
             {icon:"🌿",label:"Health",avail:healthLeft,total:hLimit,color:"#2980b9",extra:cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:"Available"},
             {icon:"🥗",label:"Lunch",avail:lunchLeft,total:LUNCH_LIMIT,color:"#e07b00",extra:"slots"},
             {icon:"👥",label:"Team Cap",avail:capLeft,total:maxOut,color:"#8e44ad",extra:"slots"},
+            ...(settings.admin_mode?[{icon:"🗂️",label:"Admin",avail:adminLimit-onAdmin,total:adminLimit,color:"#1d4ed8",extra:"slots"}]:[]),
           ].map(m=>(
             <div key={m.label} style={{background:"rgba(255,255,255,.12)",borderRadius:11,padding:"10px 11px",border:`1px solid ${m.avail===0?"rgba(231,76,60,.5)":"rgba(255,255,255,.15)"}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -1979,7 +2014,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
 
       <div style={{padding:"16px 16px",maxWidth:480,margin:"0 auto"}}>
         {tab==="my"&&(
-          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak}/>
+          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
@@ -1989,7 +2024,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   );
 }
 
-function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak }) {
+function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={} }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
   const cfg = ST[myRep.status]||ST.available;
   const onBreak = myRep.status==="health"||myRep.status==="lunch";
@@ -2005,6 +2040,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, cooldownActive, 
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
               {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
+              ...(settings.admin_mode?[{key:"admin",icon:"🗂️",label:"Admin Time",dur:"30 min",avail:canTakeAdmin,reason:!canTakeAdmin?"Slots full":null}]:[]),
             ].map(o=>(
               <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
