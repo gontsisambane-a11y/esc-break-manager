@@ -368,6 +368,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
     {k:"schedules",l:"Schedules"},
     {k:"pto",l:"PTO"},
     {k:"reports",l:"Reports"},
+    {k:"kpi",l:"📊 KPI"},
     {k:"settings",l:"Settings"},
     ...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[]),
   ];
@@ -438,6 +439,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
+        {tab==="kpi"       &&<MgrKPI/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
@@ -1104,6 +1106,350 @@ function MgrSchedules({ reps, reload, fire }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── MGR: REPORTS ──────────────────────────────────────────────────────
+// ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
+function MgrKPI() {
+  const [kpiTab, setKpiTab]   = useState("summary");
+  const [rows, setRows]       = useState([]);
+  const [fileName, setFileName] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const PAID_DISPS  = new Set(["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"]);
+  const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
+  const ESC_AGENTS  = new Set(["Amanda Beydoun","Andrea Burtman","Dalvin Hogg","Darryl Shipman",
+    "Deonte Epps","Heather Baker","Jordan DiDonato","Kelly Perez","Leah Lopez","Likhona Nyumbeka",
+    "Lungile Cewu","Marcel Matthee","Mbali Mbata","Mpho Ndaba","Pamela Martin","Phiwe Khasa",
+    "Rebecca Jaffier","Shadrack Kondile"]);
+  const NEW_JOINERS  = ["Dalvin Hogg","Phiwe Khasa","Mbali Mbata","Mpho Ndaba"];
+  const RAMP_START   = new Date("2026-05-29T00:00:00Z");
+  const PAID_TARGET  = 20;
+  const TOTAL_TARGET = 45;
+  const RAMP_TARGETS = {1:{paid:10,total:20,dates:"29 May – 04 Jun"},2:{paid:15,total:30,dates:"05 Jun – 11 Jun"},3:{paid:18,total:38,dates:"12 Jun – 18 Jun"},4:{paid:20,total:45,dates:"19 Jun – 25 Jun"}};
+
+  const parseCSV = (text) => {
+    const lines = text.trim().split("\n");
+    const headers = lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
+    return lines.slice(1).map(line=>{
+      const vals = []; let cur="", inQ=false;
+      for(let c of line){ if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){vals.push(cur.trim());cur="";}else{cur+=c;} }
+      vals.push(cur.trim());
+      const obj={};
+      headers.forEach((h,i)=>{ obj[h]=vals[i]||""; });
+      return obj;
+    });
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = parseCSV(ev.target.result);
+      const filtered = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
+      setRows(filtered);
+      setFileName(file.name);
+      setUploading(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const getWeekKey = (ts) => {
+    const d = new Date(ts);
+    const day = d.getDay();
+    const mon = new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
+    return mon.toISOString().split("T")[0];
+  };
+  const getMonthKey = (ts) => { const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
+  const getRampWeek = (ts) => {
+    const diff = new Date(ts) - RAMP_START;
+    if(diff<0) return null;
+    return Math.min(Math.floor(diff/(7*24*3600*1000))+1, 4);
+  };
+
+  const agg = (filterFn, groupFn) => {
+    const map = {};
+    rows.filter(r=>!filterFn||filterFn(r)).forEach(r=>{
+      const key = groupFn(r);
+      if(!key) return;
+      if(!map[key]) map[key]={calls:0,paid:0,trial:0};
+      map[key].calls++;
+      if(PAID_DISPS.has(r.hs_call_disposition_label))  map[key].paid++;
+      if(TRIAL_DISPS.has(r.hs_call_disposition_label)) map[key].trial++;
+    });
+    return map;
+  };
+
+  const cvr = (paid,trial,calls) => calls>0?((paid+trial)/calls*100).toFixed(1):null;
+  const paidCvr = (paid,calls) => calls>0?(paid/calls*100).toFixed(1):null;
+
+  const cvrColor = (val, target) => {
+    if(val===null) return {bg:"#f5f5f5",fg:"#bbb"};
+    const v=parseFloat(val);
+    if(v>=target) return {bg:"#eafaf1",fg:"#1a5c35"};
+    if(v>=target-5) return {bg:"#fff8ee",fg:"#b85c00"};
+    return {bg:"#fdf0ee",fg:"#c0392b"};
+  };
+
+  const kpiTabs = [{k:"summary",l:"Summary"},{k:"monthly",l:"Monthly"},{k:"weekly",l:"Weekly"},{k:"ramp",l:"🆕 Ramp"}];
+
+  // Summary data
+  const summaryMap = agg(null, r=>r.hs_agent_name);
+  const summaryData = Object.entries(summaryMap)
+    .map(([name,d])=>({name,calls:d.calls,paid:d.paid,trial:d.trial,
+      paidCvr:paidCvr(d.paid,d.calls),totalCvr:cvr(d.paid,d.trial,d.calls)}))
+    .sort((a,b)=>parseFloat(b.totalCvr||0)-parseFloat(a.totalCvr||0));
+
+  // Monthly data
+  const monthlyMap = agg(null, r=>r.hs_agent_name+"||"+getMonthKey(r.hs_call_timestamp));
+  const allMonths = [...new Set(Object.keys(monthlyMap).map(k=>k.split("||")[1]))].sort().slice(-6);
+  const monthlyAgents = [...new Set(Object.keys(monthlyMap).map(k=>k.split("||")[0]))].sort();
+
+  // Weekly data
+  const weeklyMap = agg(null, r=>r.hs_agent_name+"||"+getWeekKey(r.hs_call_timestamp));
+  const allWeeks = [...new Set(Object.keys(weeklyMap).map(k=>k.split("||")[1]))].sort().slice(-8);
+  const weeklyAgents = [...new Set(Object.keys(weeklyMap).map(k=>k.split("||")[0]))].sort();
+
+  // Ramp data
+  const rampMap = agg(r=>NEW_JOINERS.includes(r.hs_agent_name), r=>r.hs_agent_name+"||"+getRampWeek(r.hs_call_timestamp));
+
+  const Cell = ({val,target,small}) => {
+    const {bg,fg} = cvrColor(val,target);
+    return <div style={{background:bg,color:fg,fontWeight:700,fontSize:small?10:12,padding:"4px 6px",borderRadius:6,textAlign:"center",minWidth:44}}>{val!==null?`${val}%`:"—"}</div>;
+  };
+
+  const thStyle = {fontSize:10,fontWeight:700,color:"#999",padding:"6px 8px",background:"#f8f8f8",borderBottom:"1.5px solid #eee",textAlign:"center",whiteSpace:"nowrap"};
+  const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"center"};
+  const nameStyle = {fontSize:12,fontWeight:600,color:"#1a1a1a",padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"left",whiteSpace:"nowrap"};
+
+  if(!rows.length) return (
+    <div style={{marginTop:16}}>
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"32px 20px",textAlign:"center"}}>
+        <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
+        <p style={{fontSize:15,fontWeight:700,color:"#1a1a1a",margin:"0 0 6px"}}>KPI Dashboard</p>
+        <p style={{fontSize:12,color:"#888",margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data.</p>
+        <button onClick={()=>fileRef.current?.click()} style={{padding:"10px 24px",borderRadius:10,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
+          {uploading?"Processing…":"📂 Upload bookings CSV"}
+        </button>
+        <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
+        <p style={{fontSize:10,color:"#bbb",marginTop:12}}>Supabase → Table Editor → bookings → Export CSV</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{marginTop:16}}>
+      {/* Header with upload */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div>
+          <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>📊 KPI Dashboard</p>
+          <p style={{margin:0,fontSize:10,color:"#aaa"}}>{fileName} · {rows.length.toLocaleString()} calls</p>
+        </div>
+        <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:"#1a5c35",cursor:"pointer",fontSize:11,fontWeight:700}}>
+          🔄 Refresh CSV
+        </button>
+        <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
+      </div>
+
+      {/* Baseline pills */}
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        {[{l:"Paid CVR baseline",v:"20%",c:"#1a5c35"},{l:"Total CVR baseline",v:"45%",c:"#1d4ed8"}].map(p=>(
+          <div key={p.l} style={{background:"#fff",border:`1.5px solid ${p.c}20`,borderRadius:8,padding:"5px 10px",display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:14,fontWeight:800,color:p.c}}>{p.v}</span>
+            <span style={{fontSize:10,color:"#888"}}>{p.l}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Sub tabs */}
+      <div style={{display:"flex",borderBottom:"1.5px solid #ebebeb",marginBottom:14,overflowX:"auto"}}>
+        {kpiTabs.map(t=>(
+          <button key={t.k} onClick={()=>setKpiTab(t.k)} style={{padding:"9px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:kpiTab===t.k?700:500,color:kpiTab===t.k?"#1a5c35":"#999",borderBottom:kpiTab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,whiteSpace:"nowrap"}}>{t.l}</button>
+        ))}
+      </div>
+
+      {/* SUMMARY */}
+      {kpiTab==="summary"&&(
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef"}}>
+            <thead>
+              <tr>
+                {["Agent","Calls","Paid","Trial","Paid CVR","Trial CVR","Total CVR"].map(h=>(
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {summaryData.map(d=>(
+                <tr key={d.name}>
+                  <td style={nameStyle}>{d.name}</td>
+                  <td style={tdStyle}>{d.calls.toLocaleString()}</td>
+                  <td style={tdStyle}>{d.paid}</td>
+                  <td style={tdStyle}>{d.trial}</td>
+                  <td style={{...tdStyle,padding:4}}><Cell val={d.paidCvr} target={PAID_TARGET}/></td>
+                  <td style={tdStyle}>{d.trial>0?(d.trial/d.calls*100).toFixed(1)+"%":"—"}</td>
+                  <td style={{...tdStyle,padding:4}}><Cell val={d.totalCvr} target={TOTAL_TARGET}/></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{fontSize:10,color:"#bbb",marginTop:8,textAlign:"center"}}>Green = at/above baseline · Amber = within 5pts · Red = 5pts+ below</p>
+        </div>
+      )}
+
+      {/* MONTHLY */}
+      {kpiTab==="monthly"&&(
+        <div style={{overflowX:"auto"}}>
+          <p style={{fontSize:10,color:"#888",marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 6 months</p>
+          <table style={{borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef",minWidth:"100%"}}>
+            <thead>
+              <tr>
+                <th style={{...thStyle,textAlign:"left"}}>Agent</th>
+                {allMonths.map(m=><th key={m} style={thStyle}>{m.slice(5)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyAgents.map(agent=>(
+                <tr key={agent}>
+                  <td style={nameStyle}>{agent}</td>
+                  {allMonths.map(m=>{
+                    const d=monthlyMap[agent+"||"+m];
+                    if(!d) return <td key={m} style={{...tdStyle,color:"#ddd"}}>—</td>;
+                    const pc=paidCvr(d.paid,d.calls); const tc=cvr(d.paid,d.trial,d.calls);
+                    const {bg,fg}=cvrColor(tc,TOTAL_TARGET);
+                    return <td key={m} style={{...tdStyle,padding:3}}>
+                      <div style={{background:bg,borderRadius:6,padding:"3px 5px",textAlign:"center"}}>
+                        <div style={{fontSize:10,color:fg,fontWeight:700}}>{pc}%</div>
+                        <div style={{fontSize:11,color:fg,fontWeight:800}}>{tc}%</div>
+                      </div>
+                    </td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* WEEKLY */}
+      {kpiTab==="weekly"&&(
+        <div style={{overflowX:"auto"}}>
+          <p style={{fontSize:10,color:"#888",marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 8 weeks (week starting Mon)</p>
+          <table style={{borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef",minWidth:"100%"}}>
+            <thead>
+              <tr>
+                <th style={{...thStyle,textAlign:"left"}}>Agent</th>
+                {allWeeks.map(w=><th key={w} style={thStyle}>{w.slice(5)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {weeklyAgents.map(agent=>(
+                <tr key={agent}>
+                  <td style={nameStyle}>{agent}</td>
+                  {allWeeks.map(w=>{
+                    const d=weeklyMap[agent+"||"+w];
+                    if(!d) return <td key={w} style={{...tdStyle,color:"#ddd"}}>—</td>;
+                    const pc=paidCvr(d.paid,d.calls); const tc=cvr(d.paid,d.trial,d.calls);
+                    const {bg,fg}=cvrColor(tc,TOTAL_TARGET);
+                    return <td key={w} style={{...tdStyle,padding:3}}>
+                      <div style={{background:bg,borderRadius:6,padding:"3px 5px",textAlign:"center"}}>
+                        <div style={{fontSize:10,color:fg,fontWeight:700}}>{pc}%</div>
+                        <div style={{fontSize:11,color:fg,fontWeight:800}}>{tc}%</div>
+                      </div>
+                    </td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* RAMP TRACKER */}
+      {kpiTab==="ramp"&&(
+        <div>
+          {/* Target table */}
+          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:16}}>
+            <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8"}}>
+              <p style={{margin:0,fontSize:12,fontWeight:700,color:"#1a1a1a"}}>Ramp Targets — All started 29 May 2026</p>
+            </div>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Metric</th>
+                  {[1,2,3,4].map(w=><th key={w} style={thStyle}>Week {w}<br/><span style={{fontWeight:400,fontSize:9}}>{RAMP_TARGETS[w].dates}</span></th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {[{l:"Paid CVR target",k:"paid"},{l:"Total CVR target",k:"total"}].map(row=>(
+                  <tr key={row.k}>
+                    <td style={{...nameStyle,fontSize:11}}>{row.l}</td>
+                    {[1,2,3,4].map(w=>(
+                      <td key={w} style={{...tdStyle,fontWeight:700,color:"#1a5c35"}}>{RAMP_TARGETS[w][row.k]}%</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Per agent ramp */}
+          {NEW_JOINERS.map(agent=>{
+            const agRows = rows.filter(r=>r.hs_agent_name===agent);
+            return (
+              <div key={agent} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
+                <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a5c35"}}>{agent}</p>
+                  <p style={{margin:0,fontSize:10,color:"#aaa"}}>{agRows.length} total calls</p>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr>
+                      {["Week","Dates","Calls","Paid","Trial","Paid CVR","Total CVR","P.Target","T.Target","Status"].map(h=>(
+                        <th key={h} style={thStyle}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1,2,3,4].map(wk=>{
+                      const wkRows = agRows.filter(r=>getRampWeek(r.hs_call_timestamp)===wk);
+                      const calls=wkRows.length;
+                      const paid=wkRows.filter(r=>PAID_DISPS.has(r.hs_call_disposition_label)).length;
+                      const trial=wkRows.filter(r=>TRIAL_DISPS.has(r.hs_call_disposition_label)).length;
+                      const pc=calls?paidCvr(paid,calls):null;
+                      const tc=calls?cvr(paid,trial,calls):null;
+                      const pt=RAMP_TARGETS[wk].paid; const tt=RAMP_TARGETS[wk].total;
+                      const upcoming=calls===0;
+                      const status=upcoming?"Upcoming":parseFloat(tc)>=tt?"On Track ✅":parseFloat(tc)>=tt-5?"Watch ⚠️":"Below 🔴";
+                      const statusColor=upcoming?"#bbb":parseFloat(tc||0)>=tt?"#1a5c35":parseFloat(tc||0)>=tt-5?"#b85c00":"#c0392b";
+                      return (
+                        <tr key={wk} style={{background:upcoming?"#fafafa":"#fff"}}>
+                          <td style={{...tdStyle,color:upcoming?"#ccc":"#1a1a1a",fontWeight:700}}>W{wk}</td>
+                          <td style={{...tdStyle,fontSize:10,color:"#888"}}>{RAMP_TARGETS[wk].dates}</td>
+                          <td style={tdStyle}>{upcoming?"—":calls}</td>
+                          <td style={tdStyle}>{upcoming?"—":paid}</td>
+                          <td style={tdStyle}>{upcoming?"—":trial}</td>
+                          <td style={{...tdStyle,padding:3}}>{upcoming?<span style={{color:"#ddd"}}>—</span>:<Cell val={pc} target={pt} small/>}</td>
+                          <td style={{...tdStyle,padding:3}}>{upcoming?<span style={{color:"#ddd"}}>—</span>:<Cell val={tc} target={tt} small/>}</td>
+                          <td style={{...tdStyle,color:"#1a5c35",fontWeight:600}}>{pt}%</td>
+                          <td style={{...tdStyle,color:"#1d4ed8",fontWeight:600}}>{tt}%</td>
+                          <td style={{...tdStyle,fontWeight:700,color:statusColor,fontSize:11}}>{status}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+          <p style={{fontSize:10,color:"#bbb",textAlign:"center",marginTop:4}}>Week 1 sample sizes are small — use trend direction, not absolute numbers</p>
+        </div>
+      )}
     </div>
   );
 }
