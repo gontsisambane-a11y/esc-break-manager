@@ -1748,8 +1748,18 @@ function MgrSettings({ settings, reps, reload, fire }) {
   };
 
   const toggleAdmin = async () => {
-    await sbPatch("app_settings",1,{admin_mode:!settings.admin_mode,updated_at:new Date().toISOString()});
-    fire("info",`Admin mode ${settings.admin_mode?"disabled":"enabled"}`);
+    const newVal = !settings.admin_mode;
+    await sbPatch("app_settings",1,{admin_mode:newVal,updated_at:new Date().toISOString()});
+    fire("info",`Admin mode ${newVal?"enabled":"disabled"}`);
+    if(newVal) {
+      try {
+        await fetch("https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({text:"🗂️ *Admin time is open!* Calls are quiet — jump into the break app and tap Admin Time to take a 30-min slot for emails and tickets. Watch for the banner 👀"})
+        });
+      } catch(e) { console.warn("GChat webhook failed",e); }
+    }
     reload();
   };
 
