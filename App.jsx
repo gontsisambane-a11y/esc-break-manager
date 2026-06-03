@@ -352,6 +352,8 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
   const { reps, settings, adHoc, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("overview");
   const [toast, setToast] = useState(null);
+  const [kpiRows, setKpiRows] = useState([]);
+  const [kpiFileName, setKpiFileName] = useState(null);
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
@@ -440,7 +442,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
-        {tab==="kpi"       &&<MgrKPI reps={reps}/>}
+        {tab==="kpi"       &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
@@ -1127,10 +1129,8 @@ function MgrSchedules({ reps, reload, fire }) {
 
 // ── MGR: REPORTS ──────────────────────────────────────────────────────
 // ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
-function MgrKPI({ reps=[] }) {
+function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName }) {
   const [kpiTab, setKpiTab]   = useState("summary");
-  const [rows, setRows]       = useState([]);
-  const [fileName, setFileName] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
 
@@ -1167,8 +1167,13 @@ function MgrKPI({ reps=[] }) {
     reader.onload = (ev) => {
       const parsed = parseCSV(ev.target.result);
       const filtered = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
-      setRows(filtered);
-      setFileName(file.name);
+      // Merge with existing rows — deduplicate by hs_deal_id
+      setKpiRows(prev => {
+        const existingIds = new Set(prev.map(r=>r.hs_deal_id));
+        const newRows = filtered.filter(r=>!existingIds.has(r.hs_deal_id));
+        return [...prev, ...newRows];
+      });
+      setKpiFileName(file.name);
       setUploading(false);
     };
     reader.readAsText(file);
@@ -1190,7 +1195,7 @@ function MgrKPI({ reps=[] }) {
 
   const agg = (filterFn, groupFn) => {
     const map = {};
-    rows.filter(r=>!filterFn||filterFn(r)).forEach(r=>{
+    kpiRows.filter(r=>!filterFn||filterFn(r)).forEach(r=>{
       const key = groupFn(r);
       if(!key) return;
       if(!map[key]) map[key]={calls:0,paid:0,trial:0};
@@ -1243,7 +1248,7 @@ function MgrKPI({ reps=[] }) {
   const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"center"};
   const nameStyle = {fontSize:12,fontWeight:600,color:"#1a1a1a",padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"left",whiteSpace:"nowrap"};
 
-  if(!rows.length) return (
+  if(!kpiRows.length) return (
     <div style={{marginTop:16}}>
       <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"32px 20px",textAlign:"center"}}>
         <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
@@ -1264,11 +1269,16 @@ function MgrKPI({ reps=[] }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
           <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>📊 KPI Dashboard</p>
-          <p style={{margin:0,fontSize:10,color:"#aaa"}}>{fileName} · {rows.length.toLocaleString()} calls</p>
+          <p style={{margin:0,fontSize:10,color:"#aaa"}}>{kpiFileName} · {kpiRows.length.toLocaleString()} calls</p>
         </div>
-        <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:"#1a5c35",cursor:"pointer",fontSize:11,fontWeight:700}}>
-          🔄 Refresh CSV
-        </button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:"#1a5c35",cursor:"pointer",fontSize:11,fontWeight:700}}>
+            ➕ Add Weekly CSV
+          </button>
+          <button onClick={()=>{setKpiRows([]);setKpiFileName(null);}} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:700}}>
+            🗑 Clear
+          </button>
+        </div>
         <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
       </div>
 
@@ -1423,7 +1433,7 @@ function MgrKPI({ reps=[] }) {
             </div>
           )}
           {NEW_JOINERS.map(agent=>{
-            const agRows = rows.filter(r=>r.hs_agent_name===agent);
+            const agRows = kpiRows.filter(r=>r.hs_agent_name===agent);
             const rampStart = RAMP_START_MAP[agent];
             const rampStartStr = rampStart ? rampStart.toISOString().split("T")[0] : "29 May 2026";
             return (
