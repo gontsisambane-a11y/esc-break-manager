@@ -401,7 +401,6 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
 
   // Load KPI data from Supabase on mount
   useEffect(()=>{
-    if(kpiLoaded) return;
     sb("kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=200000")
       .then(rows=>{ setKpiRows(rows||[]); })
       .catch(()=>{});
