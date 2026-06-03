@@ -355,6 +355,45 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
   const [toast, setToast] = useState(null);
   const [kpiRows, setKpiRows] = useState([]);
   const [kpiFileName, setKpiFileName] = useState(null);
+  const [kpiLoaded, setKpiLoaded] = useState(false);
+
+  // Load KPI data from Supabase on mount
+  useEffect(()=>{
+    if(kpiLoaded) return;
+    sb("kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=100000")
+      .then(rows=>{ setKpiRows(rows||[]); setKpiLoaded(true); })
+      .catch(()=>setKpiLoaded(true));
+    sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); });
+  },[kpiLoaded]);
+
+  const setKpiRowsPersist = async (updater) => {
+    const prev = kpiRows;
+    const next = typeof updater==="function" ? updater(prev) : updater;
+    setKpiRows(next);
+    // Find new rows not already in DB
+    const existingIds = new Set(prev.map(r=>r.hs_deal_id));
+    const newRows = next.filter(r=>!existingIds.has(r.hs_deal_id));
+    if(newRows.length===0) return;
+    // Batch insert in chunks of 500
+    for(let i=0;i<newRows.length;i+=500){
+      const chunk=newRows.slice(i,i+500);
+      await sb("kpi_bookings",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates"},body:JSON.stringify(chunk)}).catch(e=>console.warn("KPI insert error",e));
+    }
+  };
+
+  const setKpiFileNamePersist = async (name) => {
+    setKpiFileName(name);
+    await sb("kpi_upload_meta",{method:"PATCH",body:JSON.stringify({last_filename:name,last_uploaded_at:new Date().toISOString(),total_rows:kpiRows.length})})
+      .catch(()=>{});
+  };
+
+  const clearKpiData = async () => {
+    setKpiRows([]);
+    setKpiFileName(null);
+    // DELETE all rows — requires id=gte.0 pattern to avoid Supabase blocking full table delete
+    await sb("kpi_bookings?id=gte.0",{method:"DELETE"}).catch(()=>{});
+    await sb("kpi_upload_meta?id=eq.1",{method:"PATCH",body:JSON.stringify({last_filename:null,total_rows:0})}).catch(()=>{});
+  };
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
@@ -447,7 +486,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
-        {tab==="kpi"       &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
+        {tab==="kpi"       &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRowsPersist} kpiFileName={kpiFileName} setKpiFileName={setKpiFileNamePersist} clearKpiData={clearKpiData}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
@@ -1136,22 +1175,36 @@ function MgrSchedules({ reps, reload, fire }) {
 
 // ── MGR: REPORTS ──────────────────────────────────────────────────────
 // ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
-function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName }) {
+function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKpiData }) {
   const [kpiTab, setKpiTab]   = useState("summary");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
 
   const PAID_DISPS  = new Set(["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"]);
   const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
-  const ESC_AGENTS  = new Set(["Amanda Beydoun","Andrea Burtman","Dalvin Hogg","Darryl Shipman",
+  // Full name mapping — rep.name is first name, hs_agent_name is full name
+  // Keep all known agents for historical data but mark deleted ones
+  const ALL_AGENTS = new Set(["Amanda Beydoun","Andrea Burtman","Dalvin Hogg","Darryl Shipman",
     "Deonte Epps","Heather Baker","Jordan DiDonato","Kelly Perez","Leah Lopez","Likhona Nyumbeka",
     "Lungile Cewu","Marcel Matthee","Mbali Mbata","Mpho Ndaba","Pamela Martin","Phiwe Khasa",
-    "Rebecca Jaffier","Shadrack Kondile"]);
+    "Rebecca Jaffier","Shadrack Kondile","Mike Garcia"]);
+  // Active agents — derived from reps in DB (first name match)
+  const activeFirstNames = new Set(reps.map(r=>r.name));
+  const ACTIVE_AGENTS = new Set([...ALL_AGENTS].filter(fullName=>{
+    const first = fullName.split(" ")[0];
+    return activeFirstNames.has(first);
+  }));
+  const ESC_AGENTS = ALL_AGENTS; // keep all for upload filtering
   const NEW_JOINERS  = reps.filter(r=>r.rep_stage==="ramping").map(r=>r.name);
   const RAMP_START_MAP = Object.fromEntries(reps.filter(r=>r.rep_stage==="ramping").map(r=>[r.name, r.ramp_start_date ? new Date(r.ramp_start_date+"T00:00:00Z") : new Date("2026-05-29T00:00:00Z")]));
   const PAID_TARGET  = 20;
   const TOTAL_TARGET = 45;
   const RAMP_TARGETS = {1:{paid:10,total:20,dates:"29 May – 04 Jun"},2:{paid:15,total:30,dates:"05 Jun – 11 Jun"},3:{paid:18,total:38,dates:"12 Jun – 18 Jun"},4:{paid:20,total:45,dates:"19 Jun – 25 Jun"}};
+
+  // PDF / PIP state
+  const [pipAgent,   setPipAgent]   = useState("");
+  const [pipFrom,    setPipFrom]    = useState("");
+  const [pipTo,      setPipTo]      = useState("");
 
   const parseCSV = (text) => {
     const lines = text.trim().split("\n");
@@ -1224,11 +1277,125 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
     return {bg:"#fdf0ee",fg:"#c0392b"};
   };
 
-  const kpiTabs = [{k:"summary",l:"Summary"},{k:"monthly",l:"Monthly"},{k:"weekly",l:"Weekly"},{k:"ramp",l:"🆕 Ramp"}];
+  const kpiTabs = [{k:"summary",l:"Summary"},{k:"monthly",l:"Monthly"},{k:"weekly",l:"Weekly"},{k:"ramp",l:"📈 Ramp"},{k:"pip",l:"📄 PIP PDF"}];
+
+  const generatePIP = () => {
+    if(!pipAgent||!pipFrom||!pipTo){ alert("Select an agent and date range first"); return; }
+    const from = new Date(pipFrom+"T00:00:00Z");
+    const to   = new Date(pipTo+"T23:59:59Z");
+    const agRows = kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to);
+
+    // Build weekly breakdown
+    const weekMap={};
+    agRows.forEach(r=>{
+      const wk=getWeekKey(r.hs_call_timestamp);
+      if(!weekMap[wk]) weekMap[wk]={calls:0,paid:0,trial:0};
+      weekMap[wk].calls++;
+      if(PAID_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].paid++;
+      if(TRIAL_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].trial++;
+    });
+    const weeks=Object.entries(weekMap).sort(([a],[b])=>a.localeCompare(b));
+
+    const totalCalls=agRows.length;
+    const totalPaid=agRows.filter(r=>PAID_DISPS.has(r.hs_call_disposition_label)).length;
+    const totalTrial=agRows.filter(r=>TRIAL_DISPS.has(r.hs_call_disposition_label)).length;
+    const totalPaidCvr=totalCalls?(totalPaid/totalCalls*100).toFixed(1):0;
+    const totalCvr2=totalCalls?((totalPaid+totalTrial)/totalCalls*100).toFixed(1):0;
+
+    const cvColor=(v,t)=>parseFloat(v)>=t?"#1a5c35":parseFloat(v)>=t-5?"#b85c00":"#c0392b";
+    const cvBg=(v,t)=>parseFloat(v)>=t?"#eafaf1":parseFloat(v)>=t-5?"#fff8ee":"#fdf0ee";
+
+    const html=`<!DOCTYPE html><html><head><title>Performance Report – ${pipAgent}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#1a1a1a;font-size:13px;}
+      h1{font-size:20px;color:#003087;margin:0 0 4px;}
+      .sub{color:#888;font-size:12px;margin:0 0 20px;}
+      .meta{display:flex;gap:20px;margin-bottom:20px;}
+      .meta-box{background:#f8f8f8;border-radius:8px;padding:12px 16px;flex:1;}
+      .meta-box .val{font-size:24px;font-weight:700;color:#003087;}
+      .meta-box .lbl{font-size:11px;color:#888;margin-top:2px;}
+      table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+      th{background:#003087;color:#fff;padding:8px 10px;font-size:11px;text-align:left;}
+      td{padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;}
+      tr:nth-child(even) td{background:#f9f9f9;}
+      .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;}
+      .footer{margin-top:30px;font-size:10px;color:#bbb;border-top:1px solid #eee;padding-top:10px;}
+      .section-title{font-size:11px;font-weight:700;color:#003087;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 8px;}
+      .summary-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
+      .sum-card{border-radius:8px;padding:12px;text-align:center;}
+      .sum-card .n{font-size:22px;font-weight:800;}
+      .sum-card .l{font-size:10px;color:#888;margin-top:2px;}
+      @media print{body{padding:16px;} .no-print{display:none;}}
+    </style></head><body>
+    <div class="no-print" style="margin-bottom:16px;">
+      <button onclick="window.print()" style="padding:8px 20px;background:#003087;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Print / Save PDF</button>
+    </div>
+    <h1>Performance Report — ${pipAgent}</h1>
+    <p class="sub">Period: ${pipFrom} to ${pipTo} &nbsp;|&nbsp; Generated ${new Date().toLocaleDateString()}</p>
+    <p class="sub" style="margin-top:-12px;color:#c0392b;font-size:11px;">⚠️ CONFIDENTIAL — FOR MANAGEMENT USE ONLY</p>
+
+    <div class="summary-grid">
+      <div class="sum-card" style="background:#e8f0fe;">
+        <div class="n" style="color:#003087;">${totalCalls}</div>
+        <div class="l">Total Calls</div>
+      </div>
+      <div class="sum-card" style="background:#eafaf1;">
+        <div class="n" style="color:#1a5c35;">${totalPaid}</div>
+        <div class="l">Paid Enrollments</div>
+      </div>
+      <div class="sum-card" style="background:${cvBg(totalPaidCvr,PAID_TARGET)};">
+        <div class="n" style="color:${cvColor(totalPaidCvr,PAID_TARGET)};">${totalPaidCvr}%</div>
+        <div class="l">Paid CVR (target ${PAID_TARGET}%)</div>
+      </div>
+      <div class="sum-card" style="background:${cvBg(totalCvr2,TOTAL_TARGET)};">
+        <div class="n" style="color:${cvColor(totalCvr2,TOTAL_TARGET)};">${totalCvr2}%</div>
+        <div class="l">Total CVR (target ${TOTAL_TARGET}%)</div>
+      </div>
+    </div>
+
+    <p class="section-title">Weekly Breakdown</p>
+    <table>
+      <thead><tr><th>Week of</th><th>Calls</th><th>Paid</th><th>Trial</th><th>Paid CVR</th><th>Total CVR</th><th>vs Target</th></tr></thead>
+      <tbody>
+        ${weeks.map(([wk,d])=>{
+          const pc=(d.paid/d.calls*100).toFixed(1);
+          const tc=((d.paid+d.trial)/d.calls*100).toFixed(1);
+          const status=parseFloat(tc)>=TOTAL_TARGET?"✅ On target":parseFloat(tc)>=TOTAL_TARGET-5?"⚠️ Watch":"❌ Below target";
+          return `<tr>
+            <td>${wk}</td><td>${d.calls}</td><td>${d.paid}</td><td>${d.trial}</td>
+            <td><span class="badge" style="background:${cvBg(pc,PAID_TARGET)};color:${cvColor(pc,PAID_TARGET)}">${pc}%</span></td>
+            <td><span class="badge" style="background:${cvBg(tc,TOTAL_TARGET)};color:${cvColor(tc,TOTAL_TARGET)}">${tc}%</span></td>
+            <td>${status}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+
+    <p class="section-title">Period Summary vs Baseline</p>
+    <table>
+      <thead><tr><th>Metric</th><th>Actual</th><th>Target</th><th>Gap</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Paid CVR</td><td>${totalPaidCvr}%</td><td>${PAID_TARGET}%</td>
+          <td style="color:${parseFloat(totalPaidCvr)>=PAID_TARGET?"#1a5c35":"#c0392b"}">${(parseFloat(totalPaidCvr)-PAID_TARGET).toFixed(1)}%</td>
+          <td>${parseFloat(totalPaidCvr)>=PAID_TARGET?"✅ Met":"❌ Not met"}</td></tr>
+        <tr><td>Total CVR</td><td>${totalCvr2}%</td><td>${TOTAL_TARGET}%</td>
+          <td style="color:${parseFloat(totalCvr2)>=TOTAL_TARGET?"#1a5c35":"#c0392b"}">${(parseFloat(totalCvr2)-TOTAL_TARGET).toFixed(1)}%</td>
+          <td>${parseFloat(totalCvr2)>=TOTAL_TARGET?"✅ Met":"❌ Not met"}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="footer">ESC Break Manager · Auto-generated performance report · ${new Date().toISOString()}</div>
+    </body></html>`;
+
+    const w=window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+  };
 
   // Summary data
   const summaryMap = agg(null, r=>r.hs_agent_name);
   const summaryData = Object.entries(summaryMap)
+    .filter(([name])=>ACTIVE_AGENTS.has(name))
     .map(([name,d])=>({name,calls:d.calls,paid:d.paid,trial:d.trial,
       paidCvr:paidCvr(d.paid,d.calls),totalCvr:cvr(d.paid,d.trial,d.calls)}))
     .sort((a,b)=>parseFloat(b.totalCvr||0)-parseFloat(a.totalCvr||0));
@@ -1236,12 +1403,12 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
   // Monthly data
   const monthlyMap = agg(null, r=>r.hs_agent_name+"||"+getMonthKey(r.hs_call_timestamp));
   const allMonths = [...new Set(Object.keys(monthlyMap).map(k=>k.split("||")[1]))].sort().slice(-6);
-  const monthlyAgents = [...new Set(Object.keys(monthlyMap).map(k=>k.split("||")[0]))].sort();
+  const monthlyAgents = [...new Set(Object.keys(monthlyMap).map(k=>k.split("||")[0]))].filter(n=>ACTIVE_AGENTS.has(n)).sort();
 
   // Weekly data
   const weeklyMap = agg(null, r=>r.hs_agent_name+"||"+getWeekKey(r.hs_call_timestamp));
   const allWeeks = [...new Set(Object.keys(weeklyMap).map(k=>k.split("||")[1]))].sort().slice(-8);
-  const weeklyAgents = [...new Set(Object.keys(weeklyMap).map(k=>k.split("||")[0]))].sort();
+  const weeklyAgents = [...new Set(Object.keys(weeklyMap).map(k=>k.split("||")[0]))].filter(n=>ACTIVE_AGENTS.has(n)).sort();
 
   // Ramp data
   const rampMap = agg(r=>NEW_JOINERS.includes(r.hs_agent_name), r=>r.hs_agent_name+"||"+getRampWeek(r.hs_call_timestamp, r.hs_agent_name));
@@ -1260,7 +1427,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"32px 20px",textAlign:"center"}}>
         <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
         <p style={{fontSize:15,fontWeight:700,color:"#1a1a1a",margin:"0 0 6px"}}>KPI Dashboard</p>
-        <p style={{fontSize:12,color:"#888",margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data.</p>
+        <p style={{fontSize:12,color:"#888",margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data. Data is shared across all managers automatically.</p>
         <button onClick={()=>fileRef.current?.click()} style={{padding:"10px 24px",borderRadius:10,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
           {uploading?"Processing…":"📂 Upload bookings CSV"}
         </button>
@@ -1282,7 +1449,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:"#1a5c35",cursor:"pointer",fontSize:11,fontWeight:700}}>
             ➕ Add Weekly CSV
           </button>
-          <button onClick={()=>{setKpiRows([]);setKpiFileName(null);}} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:700}}>
+          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:700}}>
             🗑 Clear
           </button>
         </div>
@@ -1489,7 +1656,48 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
               </div>
             );
           })}
-          <p style={{fontSize:10,color:"#bbb",textAlign:"center",marginTop:4}}>Week 1 sample sizes are small — use trend direction, not absolute numbers</p>
+      {/* PIP PDF */}
+      {kpiTab==="pip"&&(
+        <div>
+          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"20px",marginBottom:14}}>
+            <p style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:"#1a1a1a"}}>📄 Performance Report Generator</p>
+            <p style={{margin:"0 0 16px",fontSize:12,color:"#888"}}>Generate a printable PDF report for any agent over a custom date range. Use for PIPs, reviews or coaching sessions.</p>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+              <div>
+                <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>Agent</label>
+                <select value={pipAgent} onChange={e=>setPipAgent(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                  <option value="">Select agent…</option>
+                  {[...ACTIVE_AGENTS].sort().map(n=><option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>From</label>
+                <input type="date" value={pipFrom} onChange={e=>setPipFrom(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>To</label>
+                <input type="date" value={pipTo} onChange={e=>setPipTo(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              </div>
+            </div>
+
+            {pipAgent&&pipFrom&&pipTo&&(()=>{
+              const from=new Date(pipFrom+"T00:00:00Z"); const to=new Date(pipTo+"T23:59:59Z");
+              const count=kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to).length;
+              return <p style={{margin:"0 0 14px",fontSize:12,color:"#1a5c35",fontWeight:600}}>✅ {count} calls found for {pipAgent} in this period</p>;
+            })()}
+
+            <button onClick={generatePIP} disabled={!pipAgent||!pipFrom||!pipTo}
+              style={{padding:"11px 24px",borderRadius:10,background:pipAgent&&pipFrom&&pipTo?"#003087":"#ccc",color:"#fff",border:"none",cursor:pipAgent&&pipFrom&&pipTo?"pointer":"default",fontSize:13,fontWeight:700}}>
+              📄 Generate PDF Report
+            </button>
+            <p style={{margin:"8px 0 0",fontSize:10,color:"#aaa"}}>Opens in a new tab — use browser Print (Cmd+P / Ctrl+P) and select "Save as PDF"</p>
+          </div>
+
+          <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px"}}>
+            <p style={{margin:0,fontSize:12,color:"#856404",fontWeight:600}}>⚠️ PIP guidance</p>
+            <p style={{margin:"4px 0 0",fontSize:11,color:"#856404"}}>This report shows call data only. For a formal PIP you should also include call recordings, coaching session notes, and HR sign-off. This document is a performance data supplement, not a standalone PIP document.</p>
+          </div>
         </div>
       )}
     </div>
