@@ -3681,12 +3681,32 @@ function QuoteCalculator({locations, activePromos=[]}) {
 
   // ── Filter eligible promos from DB ────────────────────────────────
   const eligiblePromos = activePromos.filter(p => {
-    if(!p.discount_type) return false; // old-style promo without calculator fields
-    const custOk = !p.customer_types?.length || p.customer_types.includes(custType);
-    const moOk   = p.month_restriction===null || p.month_restriction===undefined || p.month_restriction==="" || String(p.month_restriction)===String(enrollMo);
-    const emlerOk = isEmler || p.applies_to==="all";
+    // Accept promos even without calculator fields — treat them as pct type if discount_pct exists
+    const hasCalcFields = p.discount_type || p.discount_pct || p.discount_fixed;
+    if(!hasCalcFields) return false;
+
+    // customer_types can be array, JSON string, or null — normalise it
+    let custTypes = p.customer_types;
+    if(typeof custTypes === "string") {
+      try { custTypes = JSON.parse(custTypes); } catch { custTypes = custTypes ? [custTypes] : []; }
+    }
+    const custOk = !custTypes?.length || custTypes.includes(custType);
+
+    // month_restriction: null/"" = any month
+    const moOk = !p.month_restriction || p.month_restriction==="" || String(p.month_restriction)===String(enrollMo);
+
+    // brand/location filter — only apply if location is selected, otherwise show all
+    const emlerOk = !loc || isEmler || p.applies_to==="all" || !p.applies_to;
+
     return custOk && moOk && emlerOk;
-  });
+  }).map(p => ({
+    // Normalise missing fields so calculation doesn't break
+    ...p,
+    discount_type: p.discount_type || (p.discount_fixed ? "fixed" : "pct"),
+    discount_pct:  p.discount_pct  || 0,
+    discount_fixed: p.discount_fixed || 0,
+    applies_to:    p.applies_to    || "continuous",
+  }));
 
   const SCENARIO_OPTIONS = [
     {key:"1day",  label:"1 class/week",   sub:"Discount on that 1 class"},
@@ -3968,6 +3988,12 @@ function QuoteCalculator({locations, activePromos=[]}) {
       {eligiblePromos.length===0&&loc&&(
         <div style={{background:"#f9f9f9",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
           <p style={{margin:0,fontSize:12,color:"#aaa"}}>No active promotions apply to this customer / month combination.</p>
+          {activePromos.length>0&&<p style={{margin:"4px 0 0",fontSize:11,color:"#bbb"}}>{activePromos.length} promo{activePromos.length>1?"s":""} in DB — check discount_type and customer_types fields are filled in the Hub → Promos tab</p>}
+        </div>
+      )}
+      {eligiblePromos.length===0&&!loc&&activePromos.length>0&&(
+        <div style={{background:"#f9f9f9",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
+          <p style={{margin:0,fontSize:12,color:"#aaa"}}>Select a location to see available promotions ({activePromos.filter(p=>p.discount_type||p.discount_pct).length} configured)</p>
         </div>
       )}
 
