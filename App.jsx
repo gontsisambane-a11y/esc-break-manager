@@ -3701,6 +3701,7 @@ const REG_FEE = 35;
 
 function QuoteCalculator({locations, activePromos=[]}) {
   const [locId,    setLocId]    = useState("");
+  const [locSearch, setLocSearch] = useState("");
   const [custType, setCustType] = useState("lead");
   const [regUsed,  setRegUsed]  = useState(0);
   const [weeks,    setWeeks]    = useState(4);
@@ -3890,11 +3891,39 @@ function QuoteCalculator({locations, activePromos=[]}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
             <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location</label>
+            {/* Zip search input */}
+            <div style={{position:"relative",marginBottom:6}}>
+              <input
+                type="text"
+                placeholder="Search by zip or name…"
+                onChange={e=>{
+                  const v=e.target.value.trim();
+                  setLocSearch(v);
+                  // auto-select if exact zip match
+                  if(/^\d{5}$/.test(v)){
+                    const match=locations.find(l=>l.zip===v);
+                    if(match) setLocId(String(match.id));
+                  }
+                }}
+                value={locSearch||""}
+                style={{width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}
+              />
+              {locSearch&&<button onClick={()=>{setLocSearch("");}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#aaa"}}>✕</button>}
+            </div>
             <select value={locId} onChange={e=>setLocId(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
               <option value="">Select location…</option>
-              {[...locations].sort((a,b)=>a.name.localeCompare(b.name)).map(l=>(
-                <option key={l.id} value={l.id}>{l.name}{l.region&&l.region!==l.name?` (${l.region})`:""}</option>
-              ))}
+              {[...locations]
+                .filter(l=>{
+                  if(!locSearch) return true;
+                  const s=locSearch.toLowerCase();
+                  return l.name?.toLowerCase().includes(s)||l.zip?.includes(s)||l.region?.toLowerCase().includes(s)||l.addr?.toLowerCase().includes(s);
+                })
+                .sort((a,b)=>a.name.localeCompare(b.name))
+                .map(l=>(
+                  <option key={l.id} value={l.id}>
+                    {l.name}{l.zip?` — ${l.zip}`:""}{l.region&&l.region!==l.name?` (${l.region})`:""}
+                  </option>
+                ))}
             </select>
           </div>
           <div>
