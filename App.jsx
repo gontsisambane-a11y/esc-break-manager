@@ -5060,14 +5060,18 @@ function ClientView({ currentUser, data, reload, onLogout }) {
 
           {/* LOCATION — identical fields to HubLocModal */}
           {type==="location"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
-            <div>{lbl("Location *")}<select value={loc.id||""} onChange={e=>{
-              const found=locations.find(l=>l.id===parseInt(e.target.value));
+            <div>{lbl("Location *")}<select value={loc.id!=null?String(loc.id):""} onChange={e=>{
+              const val=e.target.value;
+              if(!val){setLoc({id:null,name:"",ext:"",privates:false,pool:"Chlorine",addr:""});return;}
+              const found=locations.find(l=>String(l.id)===val);
               if(found) setLoc({id:found.id,name:found.name,ext:found.ext||"",privates:found.privates||false,pool:found.pool||"Chlorine",addr:found.addr||""});
             }} style={{...S,background:"#fff"}}>
               <option value="">Select location…</option>
-              {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-            </select></div>
-            {loc.id&&<>
+              {locations.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+            </select>
+            {locations.length===0&&<p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>Loading locations…</p>}
+            </div>
+            {loc.id!=null&&loc.name&&<>
               {g2(<div>{lbl("Extension")}<input value={loc.ext} onChange={e=>setL("ext",e.target.value)} placeholder="e.g. 1001" style={S}/></div>,
                  <div>{lbl("Pool Type")}<select value={loc.pool} onChange={e=>setL("pool",e.target.value)} style={{...S,background:"#fff"}}>
                    <option value="Chlorine">Chlorine</option><option value="Salt">Salt water</option><option value="Therapy">Therapy pool</option>
