@@ -4725,7 +4725,7 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
 // ── MGR: SUBMISSION QUEUE ─────────────────────────────────────────────
 function MgrSubmissions({ submissions=[], reload, fire, currentUser }) {
   const [filter, setFilter] = useState("pending");
-  const TYPE_LABELS = {promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",alert:"🔔 Reminder"};
+  const TYPE_LABELS = {promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",pricing:"💰 Pricing",alert:"🔔 Reminder"};
 
   const filtered = submissions.filter(s=>filter==="all"||s.status===filter);
 
@@ -4742,6 +4742,14 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser }) {
       } else if(s.type==="location"){
         await sbPatch("hub_locations",p.id,p);
         gchatPing(`📍 *Location updated:* ${p.name} — check the Hub for latest details.`);
+      } else if(s.type==="pricing"){
+        // Only update non-empty price fields
+        const updates={};
+        ["price_mf","price_ss","price_priv","price_semi","price_priv20","price_odl",
+         "price_odl_ss","price_clinic","price_st_mf","price_st_ss","price_adaptive","reg_fee"
+        ].forEach(k=>{ if(p[k]!==""&&p[k]!=null) updates[k]=parseFloat(p[k]); });
+        await sbPatch("hub_locations",p.id,updates);
+        gchatPing(`💰 *Pricing updated:* ${p.name} — new rates now live in the calculator.`);
       } else if(s.type==="alert"){
         await sbPost("hub_alerts",{...p,active:true,sort_order:0});
         gchatPing(`🔔 *New reminder:* "${p.title}" — ${p.body}`);
@@ -4921,6 +4929,16 @@ function ClientView({ currentUser, data, reload, onLogout }) {
   const [alert, setAlert] = useState({title:"",body:"",category:"general",alert_type:"warning"});
   const setA=(k,v)=>setAlert(p=>({...p,[k]:v}));
 
+  // Pricing state
+  const [pricing, setPricing] = useState({
+    id:null, name:"",
+    price_mf:"", price_ss:"", price_priv:"", price_semi:"",
+    price_priv20:"", price_odl:"", price_odl_ss:"",
+    price_clinic:"", price_st_mf:"", price_st_ss:"", price_adaptive:"",
+    reg_fee:""
+  });
+  const setPR=(k,v)=>setPricing(p=>({...p,[k]:v}));
+
   const [urgent, setUrgent] = useState(false);
 
   const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -4938,6 +4956,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
     if(type==="promo") payload={...promo,active:true};
     else if(type==="closure") payload={...closure};
     else if(type==="location") payload={...loc};
+    else if(type==="pricing") payload={...pricing};
     else if(type==="alert") payload={...alert,active:true,sort_order:0};
 
     await sbPost("hub_submissions",{type,payload,submitted_by:currentUser?.display_name||currentUser?.username||"client",urgent,status:"pending"});
@@ -4948,7 +4967,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
     setPromo({title:"",code:"",rules:"",expires_on:"",proactive:false,discount_pct:0,discount_fixed:0,discount_type:"pct",applies_to:"continuous",one_class_only:false,multi_class_still:true,customer_types:["lead","lapsed"],month_restriction:"",requires_mention:false,show_scenarios:false});
     setClosure({location_name:"",start_date:"",end_date:"",reason:""});
     setLoc({id:null,name:"",ext:"",privates:false,pool:"Chlorine",addr:""});
-    setAlert({title:"",body:"",category:"general",alert_type:"warning"});
+    setPricing({id:null,name:"",price_mf:"",price_ss:"",price_priv:"",price_semi:"",price_priv20:"",price_odl:"",price_odl_ss:"",price_clinic:"",price_st_mf:"",price_st_ss:"",price_adaptive:"",reg_fee:""});
     setUrgent(false); setUrgentWord("");
     setSubmitting(false);
     const who=encodeURIComponent(currentUser?.display_name||currentUser?.username||"client");
@@ -4963,7 +4982,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
 
   const clientTabs=[{k:"home",l:"📤 Submit"},{k:"history",l:"📋 My Submissions"}];
   const STATUS_CFG={pending:{bg:"#fff8ee",fg:"#b85c00"},approved:{bg:"#eafaf1",fg:"#1a5c35"},rejected:{bg:"#fdf0ee",fg:"#c0392b"}};
-  const TYPE_LABELS={promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",alert:"🔔 Reminder"};
+  const TYPE_LABELS={promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",pricing:"💰 Pricing",alert:"🔔 Reminder"};
 
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f0f4f8",paddingBottom:60}}>
@@ -4988,8 +5007,8 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           {/* Type selector */}
           <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:12}}>
             <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Submission type</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {[{k:"promo",l:"🎯 Promo"},{k:"closure",l:"🚫 Closure"},{k:"location",l:"📍 Location Update"},{k:"alert",l:"🔔 Reminder"}].map(t=>(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              {[{k:"promo",l:"🎯 Promo"},{k:"closure",l:"🚫 Closure"},{k:"location",l:"📍 Location Update"},{k:"pricing",l:"💰 Pricing Update"},{k:"alert",l:"🔔 Reminder"}].map(t=>(
                 <div key={t.k} onClick={()=>setType(t.k)} style={{padding:"10px 12px",borderRadius:10,border:`2px solid ${type===t.k?"#003087":"#eee"}`,background:type===t.k?"#e8f0fe":"#fff",cursor:"pointer",fontWeight:type===t.k?700:500,fontSize:13,color:type===t.k?"#003087":"#555"}}>{t.l}</div>
               ))}
             </div>
@@ -5078,6 +5097,64 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                  </select></div>)}
               <div>{lbl("Address")}<input value={loc.addr} onChange={e=>setL("addr",e.target.value)} placeholder="Full street address" style={S}/></div>
               <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,cursor:"pointer"}}><input type="checkbox" checked={loc.privates} onChange={e=>setL("privates",e.target.checked)}/> Offers private lessons</label>
+            </>}
+          </div>}
+
+          {/* PRICING */}
+          {type==="pricing"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+            <div>{lbl("Location *")}<select value={pricing.id!=null?String(pricing.id):""} onChange={e=>{
+              const found=locations.find(l=>String(l.id)===e.target.value);
+              if(found) setPricing({
+                id:found.id,name:found.name,
+                price_mf:found.price_mf||"",price_ss:found.price_ss||"",
+                price_priv:found.price_priv||"",price_semi:found.price_semi||"",
+                price_priv20:found.price_priv20||"",price_odl:found.price_odl||"",
+                price_odl_ss:found.price_odl_ss||"",price_clinic:found.price_clinic||"",
+                price_st_mf:found.price_st_mf||"",price_st_ss:found.price_st_ss||"",
+                price_adaptive:found.price_adaptive||"",reg_fee:found.reg_fee||""
+              });
+            }} style={{...S,background:"#fff"}}>
+              <option value="">Select location…</option>
+              {locations.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
+            </select></div>
+
+            {pricing.id!=null&&pricing.name&&<>
+              <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+                <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase"}}>📅 Group / Continuous (per month)</p>
+                {g2(
+                  <div>{lbl("Group Mon–Fri ($)")}<input type="number" value={pricing.price_mf} onChange={e=>setPR("price_mf",e.target.value)} placeholder="e.g. 189" style={S}/></div>,
+                  <div>{lbl("Group Sat–Sun ($)")}<input type="number" value={pricing.price_ss} onChange={e=>setPR("price_ss",e.target.value)} placeholder="e.g. 189" style={S}/></div>
+                )}
+                {g2(
+                  <div>{lbl("Swim Team Mon–Fri ($)")}<input type="number" value={pricing.price_st_mf} onChange={e=>setPR("price_st_mf",e.target.value)} placeholder="e.g. 199" style={S}/></div>,
+                  <div>{lbl("Swim Team Sat–Sun ($)")}<input type="number" value={pricing.price_st_ss} onChange={e=>setPR("price_st_ss",e.target.value)} placeholder="e.g. 199" style={S}/></div>
+                )}
+              </div>
+
+              <div style={{background:"#e8f0fe",border:"1.5px solid #bfdbfe",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+                <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1d4ed8",textTransform:"uppercase"}}>👤 Private / Semi-Private (per month)</p>
+                {g2(
+                  <div>{lbl("Private 30 min ($)")}<input type="number" value={pricing.price_priv} onChange={e=>setPR("price_priv",e.target.value)} placeholder="e.g. 299" style={S}/></div>,
+                  <div>{lbl("Private 20 min ($)")}<input type="number" value={pricing.price_priv20} onChange={e=>setPR("price_priv20",e.target.value)} placeholder="e.g. 249" style={S}/></div>
+                )}
+                {g2(
+                  <div>{lbl("Semi-Private 30 min ($)")}<input type="number" value={pricing.price_semi} onChange={e=>setPR("price_semi",e.target.value)} placeholder="e.g. 259" style={S}/></div>,
+                  <div>{lbl("Private Adaptive ($)")}<input type="number" value={pricing.price_adaptive} onChange={e=>setPR("price_adaptive",e.target.value)} placeholder="e.g. 349" style={S}/></div>
+                )}
+              </div>
+
+              <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+                <p style={{margin:0,fontSize:11,fontWeight:700,color:"#b85c00",textTransform:"uppercase"}}>📋 ODL / Clinic / Fees</p>
+                {g2(
+                  <div>{lbl("ODL Mon–Fri ($)")}<input type="number" value={pricing.price_odl} onChange={e=>setPR("price_odl",e.target.value)} placeholder="e.g. 89" style={S}/></div>,
+                  <div>{lbl("ODL Sat–Sun ($)")}<input type="number" value={pricing.price_odl_ss} onChange={e=>setPR("price_odl_ss",e.target.value)} placeholder="e.g. 89" style={S}/></div>
+                )}
+                {g2(
+                  <div>{lbl("Swim Clinic (per wk) ($)")}<input type="number" value={pricing.price_clinic} onChange={e=>setPR("price_clinic",e.target.value)} placeholder="e.g. 49" style={S}/></div>,
+                  <div>{lbl("Registration Fee ($)")}<input type="number" value={pricing.reg_fee} onChange={e=>setPR("reg_fee",e.target.value)} placeholder="e.g. 25" style={S}/></div>
+                )}
+              </div>
+              <p style={{margin:0,fontSize:11,color:"#888"}}>💡 Leave a field blank to keep the current price unchanged. Only filled fields will be updated.</p>
             </>}
           </div>}
 
