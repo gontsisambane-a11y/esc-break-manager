@@ -2052,8 +2052,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
-        {tab==="hub"&&HUB_ENABLED&&<HubView isManager={false}/>}
       </div>
+      {tab==="hub"&&HUB_ENABLED&&<HubView isManager={false}/>}
     </div>
   );
 }
