@@ -1982,6 +1982,15 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
           </div>
           <button onClick={onLogout} style={{padding:"6px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.7)",cursor:"pointer",fontSize:11}}>Switch</button>
         </div>
+        {settings.admin_mode&&(
+          <div style={{background:"rgba(29,78,216,.25)",border:"1px solid rgba(147,197,253,.4)",borderRadius:10,padding:"10px 13px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20,flexShrink:0}}>🗂️</span>
+            <div>
+              <p style={{margin:0,fontSize:12,fontWeight:700,color:"#bfdbfe"}}>Admin time is open!</p>
+              <p style={{margin:"1px 0 0",fontSize:11,color:"rgba(191,219,254,.8)"}}>Calls are quiet — use this to clear emails and tickets. Tap Admin Time below to take a 30-min slot.</p>
+            </div>
+          </div>
+        )}
         <div style={{display:"grid",gridTemplateColumns:settings.admin_mode?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr",gap:8}}>
           {[
             {icon:"🌿",label:"Health",avail:healthLeft,total:hLimit,color:"#2980b9",extra:cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:"Available"},
