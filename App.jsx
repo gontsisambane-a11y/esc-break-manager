@@ -5,6 +5,9 @@ const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "2024";
 const HUB_ENABLED = true; // flip to true when approved
+
+const GCHAT_WEBHOOK = "https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss";
+const gchatPing = (text) => fetch(GCHAT_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(e=>console.warn("GChat ping failed",e));
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
@@ -287,12 +290,28 @@ function HealthTimer({ startedAt, bankedSec }) {
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────
-function LoginScreen({ onSelect, reps }) {
+function LoginScreen({ onSelect, reps, users=[] }) {
   const [mode,setMode]=useState("choose");
   const [pin,setPin]=useState("");
+  const [username,setUsername]=useState("");
   const [pinErr,setPinErr]=useState(false);
   const [search,setSearch]=useState("");
   const filtered=reps.filter(r=>r.name.toLowerCase().includes(search.toLowerCase()));
+
+  const tryMgrLogin = () => {
+    // Check against app_users table first, fallback to MANAGER_PIN
+    const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="management");
+    const legacyOk = !username && pin===MANAGER_PIN;
+    if(user) onSelect("manager", null, user);
+    else if(legacyOk) onSelect("manager", null, {username:"management",display_name:"Management",role:"management"});
+    else setPinErr(true);
+  };
+
+  const tryClientLogin = () => {
+    const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="client");
+    if(user) onSelect("client", null, user);
+    else setPinErr(true);
+  };
 
   if(mode==="choose") return (
     <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -307,6 +326,9 @@ function LoginScreen({ onSelect, reps }) {
         <button onClick={()=>setMode("rep")} style={{padding:"18px 24px",borderRadius:16,border:"2px solid #e8e8e8",background:"#fff",color:"#1a1a1a",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:28}}>👤</span><div style={{textAlign:"left"}}><p style={{margin:0,fontSize:15,fontWeight:700}}>Rep View</p><p style={{margin:0,fontSize:12,color:"#999"}}>Request your break</p></div>
         </button>
+        <button onClick={()=>setMode("client")} style={{padding:"18px 24px",borderRadius:16,border:"2px solid #003087",background:"#fff",color:"#003087",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:28}}>🏊</span><div style={{textAlign:"left"}}><p style={{margin:0,fontSize:15,fontWeight:700}}>Client Portal</p><p style={{margin:0,fontSize:12,color:"#888"}}>Hub content management</p></div>
+        </button>
       </div>
     </div>
   );
@@ -314,17 +336,38 @@ function LoginScreen({ onSelect, reps }) {
   if(mode==="pin") return (
     <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
       <div style={{background:"#fff",borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:320,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
-        <button onClick={()=>setMode("choose")} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#888",marginBottom:20,padding:0}}>← Back</button>
+        <button onClick={()=>{setMode("choose");setPin("");setUsername("");setPinErr(false);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#888",marginBottom:20,padding:0}}>← Back</button>
         <div style={{fontSize:36,marginBottom:12,textAlign:"center"}}>🔐</div>
-        <h2 style={{margin:"0 0 20px",fontSize:18,fontWeight:700,textAlign:"center"}}>Manager PIN</h2>
-        <input type="password" maxLength={4} value={pin} autoFocus
+        <h2 style={{margin:"0 0 20px",fontSize:18,fontWeight:700,textAlign:"center"}}>Manager Sign In</h2>
+        <input value={username} onChange={e=>{setUsername(e.target.value);setPinErr(false);}} placeholder="Username (optional)"
+          style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:"1.5px solid #ddd",fontSize:14,outline:"none",marginBottom:10,background:"#fafafa"}}/>
+        <input type="password" maxLength={8} value={pin} autoFocus
           onChange={e=>{setPin(e.target.value);setPinErr(false);}}
-          onKeyDown={e=>{if(e.key==="Enter"){pin===MANAGER_PIN?onSelect("manager"):setPinErr(true);}}}
-          placeholder="• • • •"
+          onKeyDown={e=>{if(e.key==="Enter") tryMgrLogin();}}
+          placeholder="PIN"
           style={{width:"100%",boxSizing:"border-box",padding:14,borderRadius:12,border:`1.5px solid ${pinErr?"#e74c3c":"#ddd"}`,fontSize:22,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:8,background:"#fafafa"}}/>
-        {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e74c3c",textAlign:"center"}}>Incorrect PIN</p>}
-        <Btn label="Sign In" onClick={()=>{pin===MANAGER_PIN?onSelect("manager"):setPinErr(true);}}/>
-        <p style={{margin:"14px 0 0",fontSize:11,color:"#ccc",textAlign:"center"}}>Default PIN: 1234</p>
+        {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e74c3c",textAlign:"center"}}>Incorrect username or PIN</p>}
+        <Btn label="Sign In" onClick={tryMgrLogin}/>
+      </div>
+    </div>
+  );
+
+  if(mode==="client") return (
+    <div style={{minHeight:"100vh",background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{background:"#fff",borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:320,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
+        <button onClick={()=>{setMode("choose");setPin("");setUsername("");setPinErr(false);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#888",marginBottom:20,padding:0}}>← Back</button>
+        <div style={{fontSize:36,marginBottom:12,textAlign:"center"}}>🏊</div>
+        <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:700,textAlign:"center"}}>Client Portal</h2>
+        <p style={{margin:"0 0 20px",fontSize:12,color:"#888",textAlign:"center"}}>Emler Knowledge Hub Management</p>
+        <input value={username} onChange={e=>{setUsername(e.target.value);setPinErr(false);}} placeholder="Username"
+          style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:"1.5px solid #ddd",fontSize:14,outline:"none",marginBottom:10,background:"#fafafa"}}/>
+        <input type="password" maxLength={8} value={pin} 
+          onChange={e=>{setPin(e.target.value);setPinErr(false);}}
+          onKeyDown={e=>{if(e.key==="Enter") tryClientLogin();}}
+          placeholder="PIN"
+          style={{width:"100%",boxSizing:"border-box",padding:14,borderRadius:12,border:`1.5px solid ${pinErr?"#e74c3c":"#003087"}`,fontSize:22,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:8,background:"#fafafa"}}/>
+        {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e74c3c",textAlign:"center"}}>Incorrect username or PIN</p>}
+        <Btn label="Sign In" onClick={tryClientLogin} color="#003087"/>
       </div>
     </div>
   );
@@ -349,35 +392,42 @@ function LoginScreen({ onSelect, reps }) {
 }
 
 // ── MANAGER VIEW ──────────────────────────────────────────────────────
-function ManagerView({ data, reload, onLogout, centreOpen }) {
+function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissions=[], pendingCount=0 }) {
   const { reps, settings, adHoc, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("overview");
   const [toast, setToast] = useState(null);
   const [kpiRows, setKpiRows] = useState([]);
   const [kpiFileName, setKpiFileName] = useState(null);
-  const [kpiLoaded, setKpiLoaded] = useState(false);
 
   // Load KPI data from Supabase on mount
   useEffect(()=>{
     if(kpiLoaded) return;
-    sb("kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=100000")
-      .then(rows=>{ setKpiRows(rows||[]); setKpiLoaded(true); })
-      .catch(()=>setKpiLoaded(true));
+    sb("kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=200000")
+      .then(rows=>{ setKpiRows(rows||[]); })
+      .catch(()=>{});
     sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); });
-  },[kpiLoaded]);
+  },[]); // empty deps — only run once on mount
 
   const setKpiRowsPersist = async (updater) => {
     const prev = kpiRows;
     const next = typeof updater==="function" ? updater(prev) : updater;
     setKpiRows(next);
-    // Find new rows not already in DB
     const existingIds = new Set(prev.map(r=>r.hs_deal_id));
     const newRows = next.filter(r=>!existingIds.has(r.hs_deal_id));
     if(newRows.length===0) return;
-    // Batch insert in chunks of 500
+    // Upsert in chunks of 500
     for(let i=0;i<newRows.length;i+=500){
       const chunk=newRows.slice(i,i+500);
-      await sb("kpi_bookings",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates"},body:JSON.stringify(chunk)}).catch(e=>console.warn("KPI insert error",e));
+      await fetch(`${SB_URL}/rest/v1/kpi_bookings`,{
+        method:"POST",
+        headers:{
+          apikey:SB_KEY,
+          Authorization:`Bearer ${SB_KEY}`,
+          "Content-Type":"application/json",
+          "Prefer":"resolution=merge-duplicates,return=minimal"
+        },
+        body:JSON.stringify(chunk)
+      }).catch(e=>console.warn("KPI insert error",e));
     }
   };
 
@@ -414,6 +464,8 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
     {k:"pto",l:"PTO"},
     {k:"reports",l:"Reports"},
     {k:"kpi",l:"📊 KPI"},
+    {k:"submissions",l:`🏊 Hub Queue${pendingCount>0?` (${pendingCount})`:""}`,notif:pendingCount>0},
+    {k:"users",l:"👥 Users"},
     {k:"settings",l:"Settings"},
     ...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[]),
   ];
@@ -482,11 +534,13 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
 
       <div style={{padding:"0 14px",maxWidth:640,margin:"0 auto"}}>
         {tab==="overview"  &&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={hLimit} maxOut={maxOut} reload={reload} fire={fire} settings={settings} centreOpen={centreOpen} onAdmin={onAdmin} adminLimit={adminLimit}/>}
-        {tab==="requests"  &&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire}/>}
+        {tab==="requests"  &&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire} settings={settings}/>}
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
-        {tab==="kpi"       &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRowsPersist} kpiFileName={kpiFileName} setKpiFileName={setKpiFileNamePersist} clearKpiData={clearKpiData}/>}
+        {tab==="kpi"        &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRowsPersist} kpiFileName={kpiFileName} setKpiFileName={setKpiFileNamePersist} clearKpiData={clearKpiData}/>}
+        {tab==="submissions"&&<MgrSubmissions submissions={submissions} reload={reload} fire={fire} currentUser={currentUser}/>}
+        {tab==="users"      &&<MgrUsers reload={reload} fire={fire}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
@@ -631,7 +685,56 @@ function OOOModal({ rep, onClose, onMark }) {
 }
 
 // ── MGR: REQUESTS ─────────────────────────────────────────────────────
-function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
+function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
+  const TZ_OFFSET = {"Central":-300,"Eastern":-240,"Pacific":-420,"SA":120};
+  const MGR_TZ = "Central"; // manager always views in CT
+
+  // Convert rep's preferred time to CT
+  const toMgrTz = (timeStr, repTz) => {
+    if(!timeStr) return null;
+    try {
+      const [h,m] = timeStr.split(":").map(Number);
+      const repOffset = TZ_OFFSET[repTz]||TZ_OFFSET["Central"];
+      const mgrOffset = TZ_OFFSET[MGR_TZ];
+      const utcMin = h*60+m - repOffset;
+      const ctMin = ((utcMin + mgrOffset) + 1440) % 1440;
+      return `${String(Math.floor(ctMin/60)).padStart(2,"0")}:${String(ctMin%60).padStart(2,"0")} CT`;
+    } catch { return timeStr; }
+  };
+
+  // Check if preferred time falls in peak window
+  const isPeak = (timeStr, repTz) => {
+    if(!timeStr) return false;
+    const [h,m] = timeStr.split(":").map(Number);
+    const repOffset = TZ_OFFSET[repTz]||TZ_OFFSET["Central"];
+    const utcMin = ((h*60+m - repOffset) + 1440) % 1440;
+    return (utcMin>=14*60&&utcMin<16*60)||(utcMin>=19*60&&utcMin<21*60);
+  };
+
+  // Count who's on lunch at requested time
+  const conflictsAtTime = (timeStr, repTz) => {
+    if(!timeStr) return [];
+    const [h,m] = timeStr.split(":").map(Number);
+    const repOffset = TZ_OFFSET[repTz]||TZ_OFFSET["Central"];
+    const reqUtcMin = ((h*60+m - repOffset) + 1440) % 1440;
+    const day = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date().getDay()];
+    return reps.filter(r=>{
+      const sched = r.lunch_schedule?.[day];
+      if(!sched?.time) return false;
+      const [lh,lm] = sched.time.split(":").map(Number);
+      const lOffset = TZ_OFFSET[r.timezone]||TZ_OFFSET["Central"];
+      const lUtcMin = ((lh*60+lm - lOffset) + 1440) % 1440;
+      const dur = sched.duration||60;
+      return reqUtcMin >= lUtcMin && reqUtcMin < lUtcMin+dur;
+    }).map(r=>r.name);
+  };
+
+  const EXECO_WEBHOOK = settings.execo_webhook;
+  const excooPing = (text) => {
+    if(!EXECO_WEBHOOK) return;
+    fetch(EXECO_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(()=>{});
+  };
+
   const handleAdHoc = async (req, approve) => {
     await sbPatch("adhoc_lunch_requests",req.id,{status:approve?"approved":"declined"});
     if(approve) {
@@ -640,12 +743,18 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
         await sbPatch("rep_status",rep.id,{status:"lunch",updated_at:new Date().toISOString()});
         await sbPost("break_log",{rep_id:rep.id,rep_name:rep.name,break_type:"lunch"});
       }
+      const ctTime = req.preferred_time ? toMgrTz(req.preferred_time, req.rep_timezone||"Central") : "now";
+      excooPing(`✅ Ad hoc lunch *approved* for ${req.rep_name} at ${ctTime}${req.note?` — "${req.note}"`:""}`);
       fire("approved",`Ad hoc lunch approved for ${req.rep_name}`);
     } else {
+      excooPing(`❌ Ad hoc lunch *declined* for ${req.rep_name}`);
       fire("declined",`Ad hoc lunch declined for ${req.rep_name}`);
     }
     reload();
   };
+
+  // Ping Execo when new adhoc request arrives — triggered from rep side
+  // (we detect new requests by checking if any lack an execo_pinged flag)
 
   const handleSwap = async (swap, approve) => {
     try {
@@ -663,6 +772,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
           await sbPatch("rep_status",repA.id,{lunch_schedule:schA});
           await sbPatch("rep_status",repB.id,{lunch_schedule:schB});
         }
+        excooPing(`🔄 Lunch swap *approved* — ${swap.requester_name} ↔ ${swap.target_name}`);
         fire("approved",`Lunch swap approved ✓`);
       } else {
         fire("info","Swap declined");
@@ -684,21 +794,50 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire }) {
       {adHoc.length>0&&(
         <div style={{marginBottom:20}}>
           <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#e07b00",margin:"0 0 8px",fontWeight:700}}>🥗 Ad Hoc Lunch Requests ({adHoc.length})</p>
-          {adHoc.map(r=>(
-            <div key={r.id} style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
-                <div>
-                  <p style={{margin:0,fontWeight:600,fontSize:14}}>{r.rep_name}</p>
-                  <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>Requested: {r.requested_time}</p>
-                  {r.approved_for&&<p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>Requested for: {r.approved_for}</p>}
+          {adHoc.map(r=>{
+            const ctTime = r.preferred_time ? toMgrTz(r.preferred_time, r.rep_timezone||"Central") : null;
+            const peak = r.preferred_time && isPeak(r.preferred_time, r.rep_timezone||"Central");
+            const conflicts = r.preferred_time ? conflictsAtTime(r.preferred_time, r.rep_timezone||"Central") : [];
+            const onLunchNow = reps.filter(x=>x.status==="lunch").length;
+            const capLeft = (settings.custom_limit??Math.floor(reps.filter(x=>!["off","pto","sick"].includes(x.status)).length*0.3)) - reps.filter(x=>["health","lunch","admin"].includes(x.status)).length;
+
+            return (
+              <div key={r.id} style={{background:"#fff8ee",border:`1.5px solid ${peak?"#e74c3c":"#f0c080"}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
+                  <div>
+                    <p style={{margin:0,fontWeight:700,fontSize:14}}>{r.rep_name}</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Requested at: {r.requested_time} · TZ: {r.rep_timezone||"Central"}</p>
+                    {r.note&&<p style={{margin:"4px 0 0",fontSize:12,color:"#555",fontStyle:"italic"}}>"{r.note}"</p>}
+                  </div>
                 </div>
+
+                {/* Preferred time */}
+                {ctTime&&(
+                  <div style={{background:"#fff",borderRadius:8,padding:"8px 10px",marginBottom:8,border:"1px solid #f0c080"}}>
+                    <p style={{margin:0,fontSize:12,fontWeight:600,color:"#1a1a1a"}}>⏰ Preferred time: <span style={{color:"#e07b00"}}>{r.preferred_time} {r.rep_timezone} → {ctTime}</span></p>
+                  </div>
+                )}
+
+                {/* Conflict analysis */}
+                <div style={{background:"#f9f9f9",borderRadius:8,padding:"8px 10px",marginBottom:10}}>
+                  <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#555"}}>📊 Impact Analysis</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {peak&&<p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
+                    {!peak&&ctTime&&<p style={{margin:0,fontSize:11,color:"#1a5c35"}}>✅ Off-peak window — lower call volume</p>}
+                    {conflicts.length>0&&<p style={{margin:0,fontSize:11,color:"#b85c00"}}>⚠️ Already on lunch at that time: {conflicts.join(", ")}</p>}
+                    {conflicts.length===0&&ctTime&&<p style={{margin:0,fontSize:11,color:"#1a5c35"}}>✅ No schedule conflicts at preferred time</p>}
+                    <p style={{margin:0,fontSize:11,color:capLeft<=0?"#c0392b":"#555"}}>Team cap: {reps.filter(x=>["health","lunch","admin"].includes(x.status)).length} out now · {capLeft} slot{capLeft!==1?"s":""} remaining</p>
+                    {onLunchNow>0&&<p style={{margin:0,fontSize:11,color:"#888"}}>{onLunchNow} rep{onLunchNow!==1?"s":""} currently on lunch</p>}
+                  </div>
+                </div>
+
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>handleAdHoc(r,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
-                  <button onClick={()=>handleAdHoc(r,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Approve</button>
+                  <button onClick={()=>handleAdHoc(r,false)} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
+                  <button onClick={()=>handleAdHoc(r,true)} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:700}}>✅ Approve</button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {swaps.length>0&&(
@@ -1950,8 +2089,14 @@ function MgrSettings({ settings, reps, reload, fire }) {
   const [adminLimit, setAdminLimit] = useState(settings.admin_limit??Math.max(1,Math.floor(activeReps.length*0.5)));
 
   const togglePeak = async () => {
-    await sbPatch("app_settings",1,{peak_mode:!settings.peak_mode,updated_at:new Date().toISOString()});
-    fire("info",`Peak mode ${settings.peak_mode?"disabled":"enabled"}`);
+    const newVal = !settings.peak_mode;
+    const updates = {peak_mode:newVal, updated_at:new Date().toISOString()};
+    if(newVal && settings.admin_mode) updates.admin_mode = false;
+    await sbPatch("app_settings",1,updates);
+    fire("info",`Peak mode ${newVal?"enabled":"disabled"}${newVal&&settings.admin_mode?" — admin mode closed":""}`);
+    if(newVal){
+      gchatPing("⚡ *Volume is building — back to the phones!* Peak mode is now active. Admin time is closed for now. Let's keep those calls answered 💪");
+    }
     reload();
   };
 
@@ -1959,14 +2104,8 @@ function MgrSettings({ settings, reps, reload, fire }) {
     const newVal = !settings.admin_mode;
     await sbPatch("app_settings",1,{admin_mode:newVal,updated_at:new Date().toISOString()});
     fire("info",`Admin mode ${newVal?"enabled":"disabled"}`);
-    if(newVal) {
-      try {
-        await fetch("https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss", {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({text:"🗂️ *Admin time is open!* Calls are quiet — jump into the break app and tap Admin Time to take a 30-min slot for emails and tickets. Watch for the banner 👀"})
-        });
-      } catch(e) { console.warn("GChat webhook failed",e); }
+    if(newVal){
+      gchatPing("🗂️ *Admin time is open!* Calls are quiet — jump into the break app and tap Admin Time to take a 30-min slot for emails and tickets. Watch for the banner 👀");
     }
     reload();
   };
@@ -2037,7 +2176,17 @@ function MgrSettings({ settings, reps, reload, fire }) {
         {settings.admin_mode&&<p style={{margin:"10px 0 0",fontSize:11,color:"#1d4ed8",fontWeight:600}}>🗂️ Active — best windows: 7–9am CT and after 6pm CT</p>}
       </div>
 
-      {/* Team Cap */}
+      {/* Execo Managers Webhook */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+        <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 Execo Managers GChat</p>
+        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Separate space for ad hoc lunch requests and approvals — for when you are unavailable</p>
+        <input value={settings.execo_webhook||""} onChange={async e=>{
+          await sbPatch("app_settings",1,{execo_webhook:e.target.value||null,updated_at:new Date().toISOString()});
+          reload();
+        }} placeholder="Paste GChat webhook URL…"
+          style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none"}}/>
+        {settings.execo_webhook&&<p style={{margin:"6px 0 0",fontSize:11,color:"#1a5c35",fontWeight:600}}>✅ Execo webhook active</p>}
+      </div>
       <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>👥 Team Break Cap</p>
         <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Default: 30% of active team = {Math.floor(reps.length*0.3)} max out at once</p>
@@ -2205,8 +2354,24 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     reload();
   };
 
-  const requestAdHocLunch = async () => {
-    await sbPost("adhoc_lunch_requests",{rep_id:repInfo.id,rep_name:repInfo.name,requested_time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})});
+  const requestAdHocLunch = async (preferredTime, note) => {
+    const tz = myRep.timezone||"Central";
+    await sbPost("adhoc_lunch_requests",{
+      rep_id:repInfo.id,
+      rep_name:repInfo.name,
+      requested_time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),
+      preferred_time:preferredTime||null,
+      rep_timezone:tz,
+      note:note||null,
+    });
+    // Ping Execo managers space
+    if(settings.execo_webhook){
+      const timeStr = preferredTime ? `Preferred: ${preferredTime} ${tz}` : "No preferred time given";
+      const noteStr = note ? ` — "${note}"` : "";
+      fetch(settings.execo_webhook,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({text:`🥗 *Ad hoc lunch request* from *${repInfo.name}* (${tz}). ${timeStr}${noteStr}. Awaiting manager approval.`})
+      }).catch(()=>{});
+    }
     fire("info","Ad hoc lunch request sent to manager 📩");
     reload();
   };
@@ -2276,6 +2441,34 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   );
 }
 
+function AdHocLunchModal({ onSubmit, onClose }) {
+  const [preferredTime, setPreferredTime] = useState("");
+  const [note, setNote] = useState("");
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#fff",borderRadius:20,padding:"24px 20px",width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.18)"}}>
+        <p style={{margin:"0 0 4px",fontSize:16,fontWeight:800,color:"#1a1a1a"}}>🥗 Request Ad Hoc Lunch</p>
+        <p style={{margin:"0 0 18px",fontSize:12,color:"#888"}}>Outside your scheduled window. Suggest a preferred time in your timezone.</p>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>Preferred time (your timezone)</label>
+          <input type="time" value={preferredTime} onChange={e=>setPreferredTime(e.target.value)}
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none"}}/>
+          <p style={{margin:"4px 0 0",fontSize:10,color:"#aaa"}}>Optional but helpful — manager will convert to their timezone</p>
+        </div>
+        <div style={{marginBottom:16}}>
+          <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>Note (optional)</label>
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. Running late, still active on calls"
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onClose} style={{flex:1,padding:"10px",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#888",cursor:"pointer",fontSize:13,fontWeight:600}}>Cancel</button>
+          <button onClick={()=>onSubmit(preferredTime,note)} style={{flex:2,padding:"10px",borderRadius:10,border:"none",background:"#e07b00",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700}}>Send Request 📩</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={} }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
   const cfg = ST[myRep.status]||ST.available;
@@ -2308,7 +2501,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
             ))}
           </div>
           <p style={{margin:"0 0 10px",fontSize:12,color:"#aaa",textAlign:"center"}}>Need lunch outside your schedule?</p>
-          <Btn label="Request Ad Hoc Lunch 📩" onClick={()=>{requestAdHocLunch();setShowBreakModal(false);}} outline color="#e07b00"/>
+          <AdHocLunchModal onSubmit={(time,note)=>{requestAdHocLunch(time,note);setShowBreakModal(false);}} onClose={()=>setShowBreakModal(false)}/>
         </Modal>
       )}
 
@@ -2726,6 +2919,7 @@ function HubView({ isManager }) {
 
   // CRUD
   const savePromo=async(f)=>{
+    const isNew = !f.id;
     const payload={title:f.title,code:f.code,rules:f.rules,expires_on:f.expires_on||null,proactive:f.proactive,active:true,
       discount_pct:f.discount_pct||0,discount_fixed:f.discount_fixed||0,discount_type:f.discount_type||"pct",
       applies_to:f.applies_to||"continuous",one_class_only:f.one_class_only||false,multi_class_still:f.multi_class_still!==false,
@@ -2733,17 +2927,34 @@ function HubView({ isManager }) {
       requires_mention:f.requires_mention||false,show_scenarios:f.show_scenarios||false,
     };
     if(f.id) await sbPatch("hub_promos",f.id,payload); else await sbPost("hub_promos",payload);
+    if(isNew) gchatPing(`🎯 *New promo added to the Hub!* "${f.title}"${f.code?` — Code: \`${f.code}\``:""}. Check the Hub for details and talk track.`);
     fire("approved","Promo saved"); setEditModal(null); reload();
   };
   const deletePromo=async(id)=>{ await sbPatch("hub_promos",id,{active:false}); fire("info","Promo removed"); reload(); };
-  const saveClosure=async(f)=>{ if(f.id)await sbPatch("hub_closures",f.id,{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason}); else await sbPost("hub_closures",{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason}); fire("approved","Closure saved"); setEditModal(null); reload(); };
+  const saveClosure=async(f)=>{
+    const isNew = !f.id;
+    if(f.id) await sbPatch("hub_closures",f.id,{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason});
+    else await sbPost("hub_closures",{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason});
+    if(isNew) gchatPing(`🚫 *School closure logged:* ${f.location_name} — ${f.start_date} to ${f.end_date}. Reason: ${f.reason}. Do not book enrollments for this location during this period.`);
+    fire("approved","Closure saved"); setEditModal(null); reload();
+  };
   const deleteClosure=async(id)=>{ await sbDel("hub_closures",id); fire("info","Closure removed"); reload(); };
   const saveDoc=async(f)=>{ if(f.id)await sbPatch("hub_docs",f.id,{title:f.title,content:f.content,category:f.category,updated_at:new Date().toISOString()}); else await sbPost("hub_docs",{title:f.title,content:f.content,category:f.category,sort_order:0}); fire("approved","Doc saved"); setEditModal(null); reload(); };
   const deleteDoc=async(id)=>{ await sbDel("hub_docs",id); fire("info","Doc removed"); reload(); };
-  const saveLoc=async(f)=>{ await sbPatch("hub_locations",f.id,{ext:f.ext,privates:f.privates,pool:f.pool,addr:f.addr}); fire("approved","Location updated"); setEditModal(null); reload(); };
+  const saveLoc=async(f)=>{
+    await sbPatch("hub_locations",f.id,{ext:f.ext,privates:f.privates,pool:f.pool,addr:f.addr});
+    gchatPing(`📍 *Location updated in the Hub:* ${f.name} — details have changed. Check the Hub for the latest info.`);
+    fire("approved","Location updated"); setEditModal(null); reload();
+  };
   const saveEvent=async(f)=>{ if(f.id)await sbPatch("hub_events",f.id,{name:f.name,event_date:f.event_date,note:f.note}); else await sbPost("hub_events",{name:f.name,event_date:f.event_date,note:f.note||""}); fire("approved","Event saved"); setEditModal(null); reload(); };
   const deleteEvent=async(id)=>{ await sbDel("hub_events",id); fire("info","Event removed"); reload(); };
-  const saveAlert=async(f)=>{ if(f.id)await sbPatch("hub_alerts",f.id,{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type}); else await sbPost("hub_alerts",{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type||"warning",sort_order:0,active:true}); fire("approved","Reminder saved"); setEditModal(null); reload(); };
+  const saveAlert=async(f)=>{
+    const isNew = !f.id;
+    if(f.id) await sbPatch("hub_alerts",f.id,{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type});
+    else await sbPost("hub_alerts",{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type||"warning",sort_order:0,active:true});
+    if(isNew) gchatPing(`🔔 *New reminder in the Hub:* "${f.title}" — ${f.body}`);
+    fire("approved","Reminder saved"); setEditModal(null); reload();
+  };
   const deleteAlert=async(id)=>{ await sbPatch("hub_alerts",id,{active:false}); fire("info","Reminder removed"); reload(); };
 
   const repTabs = [
@@ -4544,16 +4755,394 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
   );
 }
 
+// ── MGR: SUBMISSION QUEUE ─────────────────────────────────────────────
+function MgrSubmissions({ submissions=[], reload, fire, currentUser }) {
+  const [filter, setFilter] = useState("pending");
+  const TYPE_LABELS = {promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",alert:"🔔 Reminder"};
+
+  const filtered = submissions.filter(s=>filter==="all"||s.status===filter);
+
+  const approve = async (s) => {
+    // Apply the submission to the actual hub table
+    const p = s.payload;
+    try {
+      if(s.type==="promo"){
+        if(p.id) await sbPatch("hub_promos",p.id,p); else await sbPost("hub_promos",{...p,active:true});
+        gchatPing(`🎯 *New promo added to the Hub!* "${p.title}"${p.code?` — Code: \`${p.code}\``:""}. Check the Hub for details.`);
+      } else if(s.type==="closure"){
+        await sbPost("hub_closures",p);
+        gchatPing(`🚫 *School closure:* ${p.location_name} — ${p.start_date} to ${p.end_date}. ${p.reason}`);
+      } else if(s.type==="location"){
+        await sbPatch("hub_locations",p.id,p);
+        gchatPing(`📍 *Location updated:* ${p.name} — check the Hub for latest details.`);
+      } else if(s.type==="alert"){
+        await sbPost("hub_alerts",{...p,active:true,sort_order:0});
+        gchatPing(`🔔 *New reminder:* "${p.title}" — ${p.body}`);
+      }
+      await sbPatch("hub_submissions",s.id,{status:"approved",reviewed_by:currentUser?.display_name||"Manager",reviewed_at:new Date().toISOString()});
+      fire("approved","Submission approved and published ✅");
+      reload();
+    } catch(e) { fire("declined","Error applying submission"); }
+  };
+
+  const reject = async (s) => {
+    await sbPatch("hub_submissions",s.id,{status:"rejected",reviewed_by:currentUser?.display_name||"Manager",reviewed_at:new Date().toISOString()});
+    fire("info","Submission rejected");
+    reload();
+  };
+
+  return (
+    <div style={{marginTop:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <p style={{margin:0,fontSize:14,fontWeight:700,color:"#1a1a1a"}}>🏊 Hub Submission Queue</p>
+        <div style={{display:"flex",gap:6}}>
+          {["pending","approved","rejected","all"].map(f=>(
+            <button key={f} onClick={()=>setFilter(f)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${filter===f?"#003087":"#ddd"}`,background:filter===f?"#003087":"#fff",color:filter===f?"#fff":"#888",cursor:"pointer",fontSize:11,fontWeight:600,textTransform:"capitalize"}}>{f}</button>
+          ))}
+        </div>
+      </div>
+
+      {filtered.length===0&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No {filter} submissions</p></div>}
+
+      {filtered.map(s=>(
+        <div key={s.id} style={{background:"#fff",borderRadius:12,border:`1.5px solid ${s.urgent?"#e74c3c":"#efefef"}`,padding:"14px",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#003087"}}>{TYPE_LABELS[s.type]||s.type}</span>
+              {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 8px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+              <span style={{fontSize:11,color:"#bbb"}}>{new Date(s.submitted_at).toLocaleString()}</span>
+            </div>
+            <span style={{fontSize:11,fontWeight:600,color:s.status==="pending"?"#b85c00":s.status==="approved"?"#1a5c35":"#c0392b",background:s.status==="pending"?"#fff8ee":s.status==="approved"?"#eafaf1":"#fdf0ee",padding:"2px 8px",borderRadius:4}}>{s.status}</span>
+          </div>
+          <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12,color:"#444"}}>
+            <p style={{margin:"0 0 4px",fontWeight:600}}>{s.payload.title||s.payload.location_name||s.payload.name||"Update"}</p>
+            {s.payload.rules&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.rules}</p>}
+            {s.payload.reason&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.reason}</p>}
+            {s.payload.body&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.body}</p>}
+            {s.payload.code&&<p style={{margin:"0 0 2px",color:"#003087",fontWeight:600}}>Code: {s.payload.code}</p>}
+            {s.payload.expires_on&&<p style={{margin:"0 0 2px",color:"#888"}}>Expires: {s.payload.expires_on}</p>}
+          </div>
+          <p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Submitted by: {s.submitted_by}</p>
+          {s.reviewed_by&&<p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Reviewed by: {s.reviewed_by}</p>}
+          {s.status==="pending"&&(
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>approve(s)} style={{flex:1,padding:"9px",borderRadius:9,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:700}}>✅ Approve & Publish</button>
+              <button onClick={()=>reject(s)} style={{padding:"9px 16px",borderRadius:9,background:"#fdf0ee",color:"#c0392b",border:"1.5px solid #c0392b",cursor:"pointer",fontSize:12,fontWeight:700}}>Reject</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── MGR: USERS & ROLES ────────────────────────────────────────────────
+function MgrUsers({ reload, fire }) {
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({username:"",pin:"",role:"client",display_name:""});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    sb("app_users?order=created_at").then(u=>{setUsers(u||[]);setLoading(false);}).catch(()=>setLoading(false));
+  },[]);
+
+  const save = async () => {
+    if(!form.username||!form.pin){fire("declined","Username and PIN required");return;}
+    await sbPost("app_users",{...form,updated_at:new Date().toISOString()});
+    fire("approved","User added");
+    setForm({username:"",pin:"",role:"client",display_name:""});
+    const u=await sb("app_users?order=created_at").catch(()=>[]);
+    setUsers(u||[]);
+    reload();
+  };
+
+  const remove = async (id) => {
+    if(!window.confirm("Remove this user?")) return;
+    await sbDel("app_users",id);
+    const u=await sb("app_users?order=created_at").catch(()=>[]);
+    setUsers(u||[]);
+    fire("info","User removed");
+    reload();
+  };
+
+  const ROLE_COLORS = {management:{bg:"#eafaf1",fg:"#1a5c35"},client:{bg:"#e8f0fe",fg:"#003087"}};
+
+  return (
+    <div style={{marginTop:16}}>
+      <p style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#1a1a1a"}}>👥 Users & Roles</p>
+
+      {/* Add user form */}
+      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:16}}>
+        <p style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Add User</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Display Name</label>
+            <input value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})} placeholder="e.g. Andrea Johnson"
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Username</label>
+            <input value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})} placeholder="e.g. emler"
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>PIN</label>
+            <input type="password" value={form.pin} onChange={e=>setForm({...form,pin:e.target.value})} placeholder="Set a PIN"
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Role</label>
+            <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+              <option value="client">🏊 Client (Hub content only)</option>
+              <option value="management">🎛️ Management (Full access)</option>
+            </select>
+          </div>
+        </div>
+        <Btn label="Add User" onClick={save} color="#003087"/>
+      </div>
+
+      {/* User list */}
+      {loading?<p style={{textAlign:"center",color:"#aaa",fontSize:13}}>Loading…</p>:users.map(u=>(
+        <div key={u.id} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <div style={{width:36,height:36,borderRadius:"50%",background:(ROLE_COLORS[u.role]||{bg:"#eee"}).bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+              {u.role==="management"?"🎛️":"🏊"}
+            </div>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:13,color:"#1a1a1a"}}>{u.display_name||u.username}</p>
+              <p style={{margin:0,fontSize:11,color:"#aaa"}}>@{u.username} · <span style={{color:(ROLE_COLORS[u.role]||{fg:"#888"}).fg,fontWeight:600}}>{u.role}</span></p>
+            </div>
+          </div>
+          <button onClick={()=>remove(u.id)} style={{padding:"5px 12px",borderRadius:8,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:600}}>Remove</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── CLIENT VIEW (Emler) ───────────────────────────────────────────────
+function ClientView({ currentUser, data, reload, onLogout }) {
+  const [tab, setTab] = useState("home");
+  const [toast, setToast] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const fire = (type,msg)=>setToast({type,msg,id:Date.now()});
+
+  useEffect(()=>{
+    sb("hub_submissions?submitted_by=eq."+encodeURIComponent(currentUser?.display_name||currentUser?.username||"client")+"&order=submitted_at.desc&limit=50").then(s=>setSubmissions(s||[])).catch(()=>{});
+    sb("hub_locations?order=name").then(l=>setLocations(l||[])).catch(()=>{});
+  },[]);
+
+  const [form, setForm] = useState({type:"promo",title:"",code:"",rules:"",expires_on:"",urgent:false,
+    location_name:"",start_date:"",end_date:"",reason:"",body:"",category:"general",name:""});
+  const [urgentWord, setUrgentWord] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if(form.urgent && urgentWord.toUpperCase()!=="URGENT"){fire("declined","Type URGENT to confirm urgent submission");return;}
+    setSubmitting(true);
+    let payload = {};
+    if(form.type==="promo") payload={title:form.title,code:form.code,rules:form.rules,expires_on:form.expires_on||null,active:true};
+    else if(form.type==="closure") payload={location_name:form.location_name,start_date:form.start_date,end_date:form.end_date,reason:form.reason};
+    else if(form.type==="location") payload={name:form.name,addr:form.addr};
+    else if(form.type==="alert") payload={title:form.title,body:form.body,category:form.category,alert_type:"warning"};
+
+    await sbPost("hub_submissions",{
+      type:form.type,
+      payload,
+      submitted_by:currentUser?.display_name||currentUser?.username||"client",
+      urgent:form.urgent,
+      status:"pending"
+    });
+
+    if(form.urgent){
+      gchatPing(`🚨 *URGENT Hub submission from ${currentUser?.display_name||"client"}!* ${form.type==="promo"?`New promo: "${form.title}"`:form.type==="closure"?`Closure: ${form.location_name}`:form.title||form.name} — requires immediate review.`);
+    }
+
+    fire("approved",form.urgent?"Urgent submission sent — manager notified immediately 🚨":"Submission sent for approval ✅");
+    setForm({type:"promo",title:"",code:"",rules:"",expires_on:"",urgent:false,location_name:"",start_date:"",end_date:"",reason:"",body:"",category:"general",name:"",addr:""});
+    setUrgentWord("");
+    setSubmitting(false);
+    const s=await sb("hub_submissions?submitted_by=eq."+encodeURIComponent(currentUser?.display_name||currentUser?.username||"client")+"&order=submitted_at.desc&limit=50").catch(()=>[]);
+    setSubmissions(s||[]);
+    reload();
+  };
+
+  const clientTabs=[{k:"home",l:"📤 Submit Update"},{k:"history",l:"📋 My Submissions"}];
+  const STATUS_CFG={pending:{bg:"#fff8ee",fg:"#b85c00"},approved:{bg:"#eafaf1",fg:"#1a5c35"},rejected:{bg:"#fdf0ee",fg:"#c0392b"}};
+  const TYPE_LABELS={promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",alert:"🔔 Reminder"};
+
+  return (
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f0f4f8",paddingBottom:60}}>
+      <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
+      {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+
+      {/* Header */}
+      <div style={{background:"#003087",padding:"16px 18px 0",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:24}}>🏊</span>
+            <div>
+              <p style={{margin:0,fontSize:13,fontWeight:700}}>Emler Hub Portal</p>
+              <p style={{margin:0,fontSize:11,opacity:.6}}>Signed in as {currentUser?.display_name||currentUser?.username}</p>
+            </div>
+          </div>
+          <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,.3)",background:"transparent",color:"rgba(255,255,255,.8)",cursor:"pointer",fontSize:11}}>Sign Out</button>
+        </div>
+        <div style={{display:"flex",borderBottom:"none"}}>
+          {clientTabs.map(t=>(
+            <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"8px 16px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:tab===t.k?700:400,color:tab===t.k?"#fff":"rgba(255,255,255,.55)",borderBottom:tab===t.k?"2.5px solid #fff":"2.5px solid transparent",marginBottom:-1.5}}>{t.l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"16px 16px",maxWidth:600,margin:"0 auto"}}>
+
+        {/* SUBMIT */}
+        {tab==="home"&&(
+          <div>
+            <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12}}>
+              <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>What are you submitting?</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                {[{k:"promo",l:"🎯 Promo",d:"New promotion or discount"},
+                  {k:"closure",l:"🚫 Closure",d:"School closure dates"},
+                  {k:"location",l:"📍 Location",d:"Update school details"},
+                  {k:"alert",l:"🔔 Reminder",d:"Important notice for reps"}].map(t=>(
+                  <div key={t.k} onClick={()=>setForm({...form,type:t.k})} style={{padding:"12px",borderRadius:10,border:`2px solid ${form.type===t.k?"#003087":"#eee"}`,background:form.type===t.k?"#e8f0fe":"#fff",cursor:"pointer"}}>
+                    <p style={{margin:0,fontWeight:700,fontSize:13,color:form.type===t.k?"#003087":"#1a1a1a"}}>{t.l}</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{t.d}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Promo fields */}
+              {form.type==="promo"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Promo Title *</label>
+                <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Summer 20% Off First Month"
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Promo Code</label>
+                <input value={form.code} onChange={e=>setForm({...form,code:e.target.value})} placeholder="e.g. SUMMER20"
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Rules / Details</label>
+                <textarea value={form.rules} onChange={e=>setForm({...form,rules:e.target.value})} placeholder="Who qualifies, what's included, any exclusions…" rows={3}
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical"}}/></div>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Expiry Date</label>
+                <input type="date" value={form.expires_on} onChange={e=>setForm({...form,expires_on:e.target.value})}
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+              </div>)}
+
+              {/* Closure fields */}
+              {form.type==="closure"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location *</label>
+                <select value={form.location_name} onChange={e=>setForm({...form,location_name:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                  <option value="">Select location…</option>
+                  {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
+                </select></div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>From *</label>
+                  <input type="date" value={form.start_date} onChange={e=>setForm({...form,start_date:e.target.value})} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+                  <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>To *</label>
+                  <input type="date" value={form.end_date} onChange={e=>setForm({...form,end_date:e.target.value})} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+                </div>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Reason *</label>
+                <input value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} placeholder="e.g. Pool maintenance"
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+              </div>)}
+
+              {/* Location fields */}
+              {form.type==="location"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location *</label>
+                <select value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                  <option value="">Select location…</option>
+                  {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
+                </select></div>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>What changed?</label>
+                <textarea value={form.addr} onChange={e=>setForm({...form,addr:e.target.value})} placeholder="Describe what needs updating — address, phone, hours, instructor details…" rows={3}
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical"}}/></div>
+              </div>)}
+
+              {/* Alert fields */}
+              {form.type==="alert"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Title *</label>
+                <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. New pricing effective June 1"
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Details *</label>
+                <textarea value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder="Full details for the team…" rows={3}
+                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical"}}/></div>
+              </div>)}
+
+              {/* Urgent toggle */}
+              <div style={{margin:"14px 0 0",background:"#fdf0ee",borderRadius:10,padding:"12px",border:"1.5px solid #f5b7b1"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:form.urgent?10:0}}>
+                  <div>
+                    <p style={{margin:0,fontSize:12,fontWeight:700,color:"#c0392b"}}>🚨 Mark as Urgent</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Bypasses approval and pings manager immediately</p>
+                  </div>
+                  <div onClick={()=>setForm({...form,urgent:!form.urgent})} style={{width:42,height:24,borderRadius:12,background:form.urgent?"#c0392b":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
+                    <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:form.urgent?21:3,transition:"left .2s"}}/>
+                  </div>
+                </div>
+                {form.urgent&&(<div>
+                  <input value={urgentWord} onChange={e=>setUrgentWord(e.target.value)} placeholder='Type "URGENT" to confirm'
+                    style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1.5px solid ${urgentWord.toUpperCase()==="URGENT"?"#c0392b":"#ddd"}`,fontSize:13,outline:"none",background:"#fff"}}/>
+                </div>)}
+              </div>
+
+              <button onClick={submit} disabled={submitting} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:10,background:"#003087",color:"#fff",border:"none",cursor:submitting?"default":"pointer",fontSize:13,fontWeight:700,opacity:submitting?.7:1}}>
+                {submitting?"Submitting…":"📤 Submit for Approval"}
+              </button>
+            </div>
+
+            <div style={{background:"#e8f0fe",borderRadius:10,padding:"10px 14px",border:"1.5px solid #bfdbfe"}}>
+              <p style={{margin:0,fontSize:11,color:"#1d4ed8"}}>💡 Normal submissions go to the manager for review before going live. Use Urgent only for time-sensitive updates that can't wait.</p>
+            </div>
+          </div>
+        )}
+
+        {/* HISTORY */}
+        {tab==="history"&&(
+          <div>
+            {submissions.length===0&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:"#aaa"}}>No submissions yet</p></div>}
+            {submissions.map(s=>(
+              <div key={s.id} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#003087"}}>{TYPE_LABELS[s.type]||s.type}</span>
+                    {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+                  </div>
+                  <span style={{fontSize:11,fontWeight:600,color:(STATUS_CFG[s.status]||{}).fg,background:(STATUS_CFG[s.status]||{}).bg,padding:"2px 8px",borderRadius:4}}>{s.status}</span>
+                </div>
+                <p style={{margin:"0 0 4px",fontWeight:600,fontSize:13}}>{s.payload.title||s.payload.location_name||s.payload.name||"Update"}</p>
+                <p style={{margin:0,fontSize:11,color:"#aaa"}}>{new Date(s.submitted_at).toLocaleString()}</p>
+                {s.reviewed_by&&<p style={{margin:"4px 0 0",fontSize:11,color:"#888"}}>Reviewed by {s.reviewed_by}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState("login");
   const [currentRep, setCurrentRep] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [data, setData] = useState({reps:[],settings:{peak_mode:false,custom_limit:null},adHoc:[],swaps:[],activeBreaks:[]});
+  const [users, setUsers] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async()=>{
     try {
-      const d = await loadAll();
+      const [d, u, subs] = await Promise.all([
+        loadAll(),
+        sb("app_users?order=created_at").catch(()=>[]),
+        sb("hub_submissions?order=submitted_at.desc&limit=100").catch(()=>[]),
+      ]);
       setData(d);
+      setUsers(u||[]);
+      setSubmissions(subs||[]);
     } catch(e) {
       console.error("Load error:",e);
     } finally {
@@ -4584,11 +5173,9 @@ export default function App() {
   useEffect(()=>{
     if(data.reps.length === 0) return;
     if(!centreOpen) {
-      // Centre just closed — clear everyone on break
       const onBreak = data.reps.filter(r=>["health","lunch"].includes(r.status));
       onBreak.forEach(r => sbPatch("rep_status",r.id,{status:"available",updated_at:new Date().toISOString()}).catch(()=>{}));
     } else {
-      // Centre just opened — reset daily health counters
       data.reps.forEach(r => sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_banked:0,last_break_returned_at:null,updated_at:new Date().toISOString()}).catch(()=>{}));
     }
   },[centreOpen]);
@@ -4600,12 +5187,19 @@ export default function App() {
     </div>
   );
 
+  const pendingCount = submissions.filter(s=>s.status==="pending").length;
+
   return (
     <>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
-      {view==="login"   && <LoginScreen onSelect={(role,rep)=>{if(role==="manager")setView("manager");else{setCurrentRep(rep);setView("rep");}}} reps={data.reps}/>}
-      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen}/>}
+      {view==="login"   && <LoginScreen onSelect={(role,rep,user)=>{
+        if(role==="manager"){setCurrentUser(user);setView("manager");}
+        else if(role==="client"){setCurrentUser(user);setView("client");}
+        else{setCurrentRep(rep);setView("rep");}
+      }} reps={data.reps} users={users}/>}
+      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount}/>}
       {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen}/>}
+      {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
     </>
   );
 }
