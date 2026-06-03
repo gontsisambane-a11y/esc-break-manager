@@ -46,6 +46,7 @@ const STAGE_CFG = {
   active:      { label:"Active",       bg:"#eafaf1", text:"#1a7a45", border:"#b7dfca" },
   training:    { label:"Training",     bg:"#fff8ee", text:"#b85c00", border:"#f0c080" },
   not_started: { label:"Not Started",  bg:"#f5f5f5", text:"#888",    border:"#ddd"    },
+  ramping:     { label:"Ramping",      bg:"#eff6ff", text:"#1d4ed8", border:"#bfdbfe"  },
 };
 const TZ_C = {
   Central:{bg:"#e8f0fe",text:"#1a4a8a"}, Eastern:{bg:"#e6f4ea",text:"#1a5c35"},
@@ -439,7 +440,7 @@ function ManagerView({ data, reload, onLogout, centreOpen }) {
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
-        {tab==="kpi"       &&<MgrKPI/>}
+        {tab==="kpi"       &&<MgrKPI reps={reps}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
         {tab==="hub"&&HUB_ENABLED&&<HubView isManager={true}/>}
@@ -499,7 +500,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch") : [];
   const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r) && (r.rep_stage||"active")==="active");
   const offShift  = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)) && (r.rep_stage||"active")==="active");
-  const inTraining = reps.filter(r=>r.status==="available" && (r.rep_stage==="training"||r.rep_stage==="not_started"));
+  const inTraining = reps.filter(r=>r.status==="available" && (r.rep_stage==="training"||r.rep_stage==="not_started"||r.rep_stage==="ramping"));
   const out = reps.filter(r=>["pto","sick","off"].includes(r.status));
 
   function RepRow({rep}) {
@@ -520,7 +521,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:cfg.bg,color:cfg.dot,border:`1px solid ${cfg.border}`,fontWeight:600}}>{cfg.label}</span>
               {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:"#fff3cd",color:"#856404",padding:"2px 5px",borderRadius:4}}>Override</span>}
-              {rep.rep_stage&&rep.rep_stage!=="active"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).text,border:`1px solid ${(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).border}`,fontWeight:700}}>{rep.rep_stage==="training"?"🎓 Training":"⏳ Not Started"}</span>}
+              {rep.rep_stage&&rep.rep_stage!=="active"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).text,border:`1px solid ${(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).border}`,fontWeight:700}}>{rep.rep_stage==="training"?"🎓 Training":rep.rep_stage==="not_started"?"⏳ Not Started":rep.rep_stage==="ramping"?"📈 Ramping":"Unknown"}</span>}
             </div>
             {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:"#aaa"}}>{rep.ooo_note}</p>}
             {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
@@ -546,7 +547,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
       {onBreak.length>0&&<Section title="🌿🥗 On Break" items={onBreak} Row={RepRow} color="#2980b9"/>}
       {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
       {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
-      {inTraining.length>0&&<Section title="🎓 Training / Not Started" items={inTraining} Row={RepRow} color="#b85c00"/>}
+      {inTraining.length>0&&<Section title="🎓 Training / Not Started / Ramping" items={inTraining} Row={RepRow} color="#b85c00"/>}
       {out.length>0&&<Section title="Out Today" items={out} Row={RepRow} color="#8e44ad"/>}
     </div>
   );
@@ -737,6 +738,10 @@ function MgrTeam({ reps, settings, reload, fire }) {
                     value={stage}
                     onChange={async e=>{
                       await sbPatch("rep_status",rep.id,{rep_stage:e.target.value,updated_at:new Date().toISOString()});
+                      if(e.target.value==="ramping"){
+                        const dateStr = prompt("Enter ramp start date (YYYY-MM-DD):", new Date().toISOString().split("T")[0]);
+                        if(dateStr) await sbPatch("rep_status",rep.id,{ramp_start_date:dateStr,updated_at:new Date().toISOString()});
+                      }
                       fire("info",`${rep.name} → ${STAGE_CFG[e.target.value]?.label}`);
                       reload();
                     }}
@@ -745,6 +750,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
                     <option value="active">✅ Active</option>
                     <option value="training">🎓 Training</option>
                     <option value="not_started">⏳ Not Started</option>
+                    <option value="ramping">📈 Ramping</option>
                   </select>
                   <span style={{fontSize:10,color:"#aaa"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} today</span>
                   {cooldownActive&&<span style={{fontSize:10,color:"#e07b00"}}>⏳ {fmtTime(cooldownLeft)}</span>}
@@ -763,7 +769,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
 }
 
 function AddRepModal({ onClose, onAdd }) {
-  const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:"",rep_stage:"not_started"});
+  const [form,setForm]=useState({name:"",timezone:"Central",shift_days:[],lunch_schedule:{},health_breaks_today:0,health_time_banked:0,status:"available",ooo_note:"",rep_stage:"not_started",ramp_start_date:""});
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const toggleDay = d => set("shift_days",form.shift_days.includes(d)?form.shift_days.filter(x=>x!==d):[...form.shift_days,d]);
   const setDay = (day,field,val) => setForm(prev=>({...prev,lunch_schedule:{...prev.lunch_schedule,[day]:{...(prev.lunch_schedule[day]||{start:"",end:"",time:"",duration:60}),[field]:val}}}));
@@ -781,9 +787,18 @@ function AddRepModal({ onClose, onAdd }) {
               <option value="not_started">⏳ Not Started</option>
               <option value="training">🎓 Training</option>
               <option value="active">✅ Active</option>
+              <option value="ramping">📈 Ramping</option>
             </select>
           </div>
         </div>
+        {form.rep_stage==="ramping"&&(
+          <div>
+            <label style={{fontSize:12,color:"#1d4ed8",display:"block",marginBottom:4,fontWeight:600}}>📈 Ramp Start Date</label>
+            <input type="date" value={form.ramp_start_date} onChange={e=>set("ramp_start_date",e.target.value)}
+              style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #bfdbfe",fontSize:13,outline:"none",background:"#eff6ff",color:"#1d4ed8"}}/>
+            <p style={{margin:"4px 0 0",fontSize:10,color:"#888"}}>Week 1 targets start from this date</p>
+          </div>
+        )}
         <div>
           <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Timezone</label>
           <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
@@ -1112,7 +1127,7 @@ function MgrSchedules({ reps, reload, fire }) {
 
 // ── MGR: REPORTS ──────────────────────────────────────────────────────
 // ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
-function MgrKPI() {
+function MgrKPI({ reps=[] }) {
   const [kpiTab, setKpiTab]   = useState("summary");
   const [rows, setRows]       = useState([]);
   const [fileName, setFileName] = useState(null);
@@ -1125,8 +1140,8 @@ function MgrKPI() {
     "Deonte Epps","Heather Baker","Jordan DiDonato","Kelly Perez","Leah Lopez","Likhona Nyumbeka",
     "Lungile Cewu","Marcel Matthee","Mbali Mbata","Mpho Ndaba","Pamela Martin","Phiwe Khasa",
     "Rebecca Jaffier","Shadrack Kondile"]);
-  const NEW_JOINERS  = ["Dalvin Hogg","Phiwe Khasa","Mbali Mbata","Mpho Ndaba"];
-  const RAMP_START   = new Date("2026-05-29T00:00:00Z");
+  const NEW_JOINERS  = reps.filter(r=>r.rep_stage==="ramping").map(r=>r.name);
+  const RAMP_START_MAP = Object.fromEntries(reps.filter(r=>r.rep_stage==="ramping").map(r=>[r.name, r.ramp_start_date ? new Date(r.ramp_start_date+"T00:00:00Z") : new Date("2026-05-29T00:00:00Z")]));
   const PAID_TARGET  = 20;
   const TOTAL_TARGET = 45;
   const RAMP_TARGETS = {1:{paid:10,total:20,dates:"29 May – 04 Jun"},2:{paid:15,total:30,dates:"05 Jun – 11 Jun"},3:{paid:18,total:38,dates:"12 Jun – 18 Jun"},4:{paid:20,total:45,dates:"19 Jun – 25 Jun"}};
@@ -1166,8 +1181,9 @@ function MgrKPI() {
     return mon.toISOString().split("T")[0];
   };
   const getMonthKey = (ts) => { const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
-  const getRampWeek = (ts) => {
-    const diff = new Date(ts) - RAMP_START;
+  const getRampWeek = (ts, agentName) => {
+    const start = RAMP_START_MAP[agentName] || new Date("2026-05-29T00:00:00Z");
+    const diff = new Date(ts) - start;
     if(diff<0) return null;
     return Math.min(Math.floor(diff/(7*24*3600*1000))+1, 4);
   };
@@ -1216,7 +1232,7 @@ function MgrKPI() {
   const weeklyAgents = [...new Set(Object.keys(weeklyMap).map(k=>k.split("||")[0]))].sort();
 
   // Ramp data
-  const rampMap = agg(r=>NEW_JOINERS.includes(r.hs_agent_name), r=>r.hs_agent_name+"||"+getRampWeek(r.hs_call_timestamp));
+  const rampMap = agg(r=>NEW_JOINERS.includes(r.hs_agent_name), r=>r.hs_agent_name+"||"+getRampWeek(r.hs_call_timestamp, r.hs_agent_name));
 
   const Cell = ({val,target,small}) => {
     const {bg,fg} = cvrColor(val,target);
@@ -1399,13 +1415,22 @@ function MgrKPI() {
           </div>
 
           {/* Per agent ramp */}
+          {NEW_JOINERS.length===0&&(
+            <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"24px",textAlign:"center"}}>
+              <p style={{fontSize:20,margin:"0 0 8px"}}>📈</p>
+              <p style={{fontSize:13,fontWeight:600,color:"#1a1a1a",margin:"0 0 4px"}}>No agents currently ramping</p>
+              <p style={{fontSize:11,color:"#aaa",margin:0}}>Tag an agent as Ramping in the Team tab to track their progress here</p>
+            </div>
+          )}
           {NEW_JOINERS.map(agent=>{
             const agRows = rows.filter(r=>r.hs_agent_name===agent);
+            const rampStart = RAMP_START_MAP[agent];
+            const rampStartStr = rampStart ? rampStart.toISOString().split("T")[0] : "29 May 2026";
             return (
               <div key={agent} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
                 <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a5c35"}}>{agent}</p>
-                  <p style={{margin:0,fontSize:10,color:"#aaa"}}>{agRows.length} total calls</p>
+                  <p style={{margin:0,fontSize:10,color:"#aaa"}}>{agRows.length} total calls · started {rampStartStr}</p>
                 </div>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead>
@@ -1417,7 +1442,7 @@ function MgrKPI() {
                   </thead>
                   <tbody>
                     {[1,2,3,4].map(wk=>{
-                      const wkRows = agRows.filter(r=>getRampWeek(r.hs_call_timestamp)===wk);
+                      const wkRows = agRows.filter(r=>getRampWeek(r.hs_call_timestamp, agent)===wk);
                       const calls=wkRows.length;
                       const paid=wkRows.filter(r=>PAID_DISPS.has(r.hs_call_disposition_label)).length;
                       const trial=wkRows.filter(r=>TRIAL_DISPS.has(r.hs_call_disposition_label)).length;
