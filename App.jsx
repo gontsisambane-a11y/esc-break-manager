@@ -4893,203 +4893,241 @@ function ClientView({ currentUser, data, reload, onLogout }) {
   const [toast, setToast] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [locations, setLocations] = useState([]);
-  const fire = (type,msg)=>setToast({type,msg,id:Date.now()});
+  const [submitting, setSubmitting] = useState(false);
+  const [type, setType] = useState("promo");
+  const [urgentWord, setUrgentWord] = useState("");
+  const fire = (t,m)=>setToast({type:t,msg:m,id:Date.now()});
+
+  // Promo state — identical fields to HubPromoModal
+  const [promo, setPromo] = useState({
+    title:"",code:"",rules:"",expires_on:"",proactive:false,
+    discount_pct:0,discount_fixed:0,discount_type:"pct",
+    applies_to:"continuous",one_class_only:false,multi_class_still:true,
+    customer_types:["lead","lapsed"],month_restriction:"",
+    requires_mention:false,show_scenarios:false
+  });
+  const setP=(k,v)=>setPromo(p=>({...p,[k]:v}));
+  const toggleCT=(t)=>setP("customer_types",promo.customer_types.includes(t)?promo.customer_types.filter(x=>x!==t):[...promo.customer_types,t]);
+
+  // Closure state
+  const [closure, setClosure] = useState({location_name:"",start_date:"",end_date:"",reason:""});
+  const setC=(k,v)=>setClosure(p=>({...p,[k]:v}));
+
+  // Location state — identical fields to HubLocModal
+  const [loc, setLoc] = useState({id:null,name:"",ext:"",privates:false,pool:"Chlorine",addr:""});
+  const setL=(k,v)=>setLoc(p=>({...p,[k]:v}));
+
+  // Alert state
+  const [alert, setAlert] = useState({title:"",body:"",category:"general",alert_type:"warning"});
+  const setA=(k,v)=>setAlert(p=>({...p,[k]:v}));
+
+  const [urgent, setUrgent] = useState(false);
+
+  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   useEffect(()=>{
-    sb("hub_submissions?submitted_by=eq."+encodeURIComponent(currentUser?.display_name||currentUser?.username||"client")+"&order=submitted_at.desc&limit=50").then(s=>setSubmissions(s||[])).catch(()=>{});
+    const who=encodeURIComponent(currentUser?.display_name||currentUser?.username||"client");
+    sb("hub_submissions?submitted_by=eq."+who+"&order=submitted_at.desc&limit=50").then(s=>setSubmissions(s||[])).catch(()=>{});
     sb("hub_locations?order=name").then(l=>setLocations(l||[])).catch(()=>{});
   },[]);
 
-  const [form, setForm] = useState({type:"promo",title:"",code:"",rules:"",expires_on:"",urgent:false,
-    location_name:"",start_date:"",end_date:"",reason:"",body:"",category:"general",name:""});
-  const [urgentWord, setUrgentWord] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
   const submit = async () => {
-    if(form.urgent && urgentWord.toUpperCase()!=="URGENT"){fire("declined","Type URGENT to confirm urgent submission");return;}
+    if(urgent && urgentWord.toUpperCase()!=="URGENT"){fire("declined","Type URGENT to confirm");return;}
     setSubmitting(true);
-    let payload = {};
-    if(form.type==="promo") payload={title:form.title,code:form.code,rules:form.rules,expires_on:form.expires_on||null,active:true};
-    else if(form.type==="closure") payload={location_name:form.location_name,start_date:form.start_date,end_date:form.end_date,reason:form.reason};
-    else if(form.type==="location") payload={name:form.name,addr:form.addr};
-    else if(form.type==="alert") payload={title:form.title,body:form.body,category:form.category,alert_type:"warning"};
+    let payload={};
+    if(type==="promo") payload={...promo,active:true};
+    else if(type==="closure") payload={...closure};
+    else if(type==="location") payload={...loc};
+    else if(type==="alert") payload={...alert,active:true,sort_order:0};
 
-    await sbPost("hub_submissions",{
-      type:form.type,
-      payload,
-      submitted_by:currentUser?.display_name||currentUser?.username||"client",
-      urgent:form.urgent,
-      status:"pending"
-    });
+    await sbPost("hub_submissions",{type,payload,submitted_by:currentUser?.display_name||currentUser?.username||"client",urgent,status:"pending"});
 
-    if(form.urgent){
-      gchatPing(`🚨 *URGENT Hub submission from ${currentUser?.display_name||"client"}!* ${form.type==="promo"?`New promo: "${form.title}"`:form.type==="closure"?`Closure: ${form.location_name}`:form.title||form.name} — requires immediate review.`);
-    }
+    if(urgent) gchatPing("🚨 *URGENT Hub submission from "+(currentUser?.display_name||"client")+"!* "+(payload.title||payload.location_name||"Update")+" — requires immediate review.");
 
-    fire("approved",form.urgent?"Urgent submission sent — manager notified immediately 🚨":"Submission sent for approval ✅");
-    setForm({type:"promo",title:"",code:"",rules:"",expires_on:"",urgent:false,location_name:"",start_date:"",end_date:"",reason:"",body:"",category:"general",name:"",addr:""});
-    setUrgentWord("");
+    fire("approved",urgent?"Urgent submission sent 🚨":"Submitted for approval ✅");
+    setPromo({title:"",code:"",rules:"",expires_on:"",proactive:false,discount_pct:0,discount_fixed:0,discount_type:"pct",applies_to:"continuous",one_class_only:false,multi_class_still:true,customer_types:["lead","lapsed"],month_restriction:"",requires_mention:false,show_scenarios:false});
+    setClosure({location_name:"",start_date:"",end_date:"",reason:""});
+    setLoc({id:null,name:"",ext:"",privates:false,pool:"Chlorine",addr:""});
+    setAlert({title:"",body:"",category:"general",alert_type:"warning"});
+    setUrgent(false); setUrgentWord("");
     setSubmitting(false);
-    const s=await sb("hub_submissions?submitted_by=eq."+encodeURIComponent(currentUser?.display_name||currentUser?.username||"client")+"&order=submitted_at.desc&limit=50").catch(()=>[]);
+    const who=encodeURIComponent(currentUser?.display_name||currentUser?.username||"client");
+    const s=await sb("hub_submissions?submitted_by=eq."+who+"&order=submitted_at.desc&limit=50").catch(()=>[]);
     setSubmissions(s||[]);
     reload();
   };
 
-  const clientTabs=[{k:"home",l:"📤 Submit Update"},{k:"history",l:"📋 My Submissions"}];
+  const S={fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd"};
+  const lbl=(t)=><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase"}}>{t}</label>;
+  const g2=(a,b)=><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{a}{b}</div>;
+
+  const clientTabs=[{k:"home",l:"📤 Submit"},{k:"history",l:"📋 My Submissions"}];
   const STATUS_CFG={pending:{bg:"#fff8ee",fg:"#b85c00"},approved:{bg:"#eafaf1",fg:"#1a5c35"},rejected:{bg:"#fdf0ee",fg:"#c0392b"}};
   const TYPE_LABELS={promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",alert:"🔔 Reminder"};
 
   return (
     <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f0f4f8",paddingBottom:60}}>
-      <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
+      <style>{`*{box-sizing:border-box}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-
-      {/* Header */}
       <div style={{background:"#003087",padding:"16px 18px 0",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:24}}>🏊</span>
-            <div>
-              <p style={{margin:0,fontSize:13,fontWeight:700}}>Emler Hub Portal</p>
-              <p style={{margin:0,fontSize:11,opacity:.6}}>Signed in as {currentUser?.display_name||currentUser?.username}</p>
-            </div>
+            <div><p style={{margin:0,fontSize:13,fontWeight:700}}>Emler Hub Portal</p><p style={{margin:0,fontSize:11,opacity:.6}}>{currentUser?.display_name||currentUser?.username}</p></div>
           </div>
           <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,.3)",background:"transparent",color:"rgba(255,255,255,.8)",cursor:"pointer",fontSize:11}}>Sign Out</button>
         </div>
-        <div style={{display:"flex",borderBottom:"none"}}>
-          {clientTabs.map(t=>(
-            <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"8px 16px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:tab===t.k?700:400,color:tab===t.k?"#fff":"rgba(255,255,255,.55)",borderBottom:tab===t.k?"2.5px solid #fff":"2.5px solid transparent",marginBottom:-1.5}}>{t.l}</button>
-          ))}
+        <div style={{display:"flex"}}>
+          {clientTabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"8px 16px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:tab===t.k?700:400,color:tab===t.k?"#fff":"rgba(255,255,255,.55)",borderBottom:tab===t.k?"2.5px solid #fff":"2.5px solid transparent",marginBottom:-1.5}}>{t.l}</button>)}
         </div>
       </div>
 
-      <div style={{padding:"16px 16px",maxWidth:600,margin:"0 auto"}}>
+      <div style={{padding:"16px",maxWidth:640,margin:"0 auto"}}>
 
-        {/* SUBMIT */}
-        {tab==="home"&&(
-          <div>
-            <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12}}>
-              <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>What are you submitting?</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-                {[{k:"promo",l:"🎯 Promo",d:"New promotion or discount"},
-                  {k:"closure",l:"🚫 Closure",d:"School closure dates"},
-                  {k:"location",l:"📍 Location",d:"Update school details"},
-                  {k:"alert",l:"🔔 Reminder",d:"Important notice for reps"}].map(t=>(
-                  <div key={t.k} onClick={()=>setForm({...form,type:t.k})} style={{padding:"12px",borderRadius:10,border:`2px solid ${form.type===t.k?"#003087":"#eee"}`,background:form.type===t.k?"#e8f0fe":"#fff",cursor:"pointer"}}>
-                    <p style={{margin:0,fontWeight:700,fontSize:13,color:form.type===t.k?"#003087":"#1a1a1a"}}>{t.l}</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{t.d}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Promo fields */}
-              {form.type==="promo"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Promo Title *</label>
-                <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Summer 20% Off First Month"
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Promo Code</label>
-                <input value={form.code} onChange={e=>setForm({...form,code:e.target.value})} placeholder="e.g. SUMMER20"
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Rules / Details</label>
-                <textarea value={form.rules} onChange={e=>setForm({...form,rules:e.target.value})} placeholder="Who qualifies, what's included, any exclusions…" rows={3}
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical"}}/></div>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Expiry Date</label>
-                <input type="date" value={form.expires_on} onChange={e=>setForm({...form,expires_on:e.target.value})}
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-              </div>)}
-
-              {/* Closure fields */}
-              {form.type==="closure"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location *</label>
-                <select value={form.location_name} onChange={e=>setForm({...form,location_name:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
-                  <option value="">Select location…</option>
-                  {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
-                </select></div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>From *</label>
-                  <input type="date" value={form.start_date} onChange={e=>setForm({...form,start_date:e.target.value})} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-                  <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>To *</label>
-                  <input type="date" value={form.end_date} onChange={e=>setForm({...form,end_date:e.target.value})} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-                </div>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Reason *</label>
-                <input value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} placeholder="e.g. Pool maintenance"
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-              </div>)}
-
-              {/* Location fields */}
-              {form.type==="location"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location *</label>
-                <select value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
-                  <option value="">Select location…</option>
-                  {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
-                </select></div>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>What changed?</label>
-                <textarea value={form.addr} onChange={e=>setForm({...form,addr:e.target.value})} placeholder="Describe what needs updating — address, phone, hours, instructor details…" rows={3}
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical"}}/></div>
-              </div>)}
-
-              {/* Alert fields */}
-              {form.type==="alert"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Title *</label>
-                <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. New pricing effective June 1"
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-                <div><label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Details *</label>
-                <textarea value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder="Full details for the team…" rows={3}
-                  style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",resize:"vertical"}}/></div>
-              </div>)}
-
-              {/* Urgent toggle */}
-              <div style={{margin:"14px 0 0",background:"#fdf0ee",borderRadius:10,padding:"12px",border:"1.5px solid #f5b7b1"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:form.urgent?10:0}}>
-                  <div>
-                    <p style={{margin:0,fontSize:12,fontWeight:700,color:"#c0392b"}}>🚨 Mark as Urgent</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Bypasses approval and pings manager immediately</p>
-                  </div>
-                  <div onClick={()=>setForm({...form,urgent:!form.urgent})} style={{width:42,height:24,borderRadius:12,background:form.urgent?"#c0392b":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
-                    <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:form.urgent?21:3,transition:"left .2s"}}/>
-                  </div>
-                </div>
-                {form.urgent&&(<div>
-                  <input value={urgentWord} onChange={e=>setUrgentWord(e.target.value)} placeholder='Type "URGENT" to confirm'
-                    style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1.5px solid ${urgentWord.toUpperCase()==="URGENT"?"#c0392b":"#ddd"}`,fontSize:13,outline:"none",background:"#fff"}}/>
-                </div>)}
-              </div>
-
-              <button onClick={submit} disabled={submitting} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:10,background:"#003087",color:"#fff",border:"none",cursor:submitting?"default":"pointer",fontSize:13,fontWeight:700,opacity:submitting?.7:1}}>
-                {submitting?"Submitting…":"📤 Submit for Approval"}
-              </button>
-            </div>
-
-            <div style={{background:"#e8f0fe",borderRadius:10,padding:"10px 14px",border:"1.5px solid #bfdbfe"}}>
-              <p style={{margin:0,fontSize:11,color:"#1d4ed8"}}>💡 Normal submissions go to the manager for review before going live. Use Urgent only for time-sensitive updates that can't wait.</p>
+        {tab==="home"&&<div>
+          {/* Type selector */}
+          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:12}}>
+            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Submission type</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {[{k:"promo",l:"🎯 Promo"},{k:"closure",l:"🚫 Closure"},{k:"location",l:"📍 Location Update"},{k:"alert",l:"🔔 Reminder"}].map(t=>(
+                <div key={t.k} onClick={()=>setType(t.k)} style={{padding:"10px 12px",borderRadius:10,border:`2px solid ${type===t.k?"#003087":"#eee"}`,background:type===t.k?"#e8f0fe":"#fff",cursor:"pointer",fontWeight:type===t.k?700:500,fontSize:13,color:type===t.k?"#003087":"#555"}}>{t.l}</div>
+              ))}
             </div>
           </div>
-        )}
 
-        {/* HISTORY */}
-        {tab==="history"&&(
-          <div>
-            {submissions.length===0&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:"#aaa"}}>No submissions yet</p></div>}
-            {submissions.map(s=>(
-              <div key={s.id} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#003087"}}>{TYPE_LABELS[s.type]||s.type}</span>
-                    {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
-                  </div>
-                  <span style={{fontSize:11,fontWeight:600,color:(STATUS_CFG[s.status]||{}).fg,background:(STATUS_CFG[s.status]||{}).bg,padding:"2px 8px",borderRadius:4}}>{s.status}</span>
+          {/* PROMO — identical to HubPromoModal */}
+          {type==="promo"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+            {g2(<div>{lbl("Promo Title *")}<input value={promo.title} onChange={e=>setP("title",e.target.value)} placeholder="e.g. June Dive In" style={S}/></div>,
+               <div>{lbl("Promo Code")}<input value={promo.code} onChange={e=>setP("code",e.target.value)} placeholder="e.g. DIVEIN40" style={S}/></div>)}
+
+            <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase"}}>💰 Discount Settings</p>
+              {g2(
+                <div>{lbl("Discount Type")}<select value={promo.discount_type} onChange={e=>setP("discount_type",e.target.value)} style={{...S,background:"#fff"}}>
+                  <option value="pct">% off tuition</option>
+                  <option value="one_class_pct">% off — 1 class/week only</option>
+                  <option value="fixed">Fixed $ off per student</option>
+                </select></div>,
+                <div>{(promo.discount_type==="pct"||promo.discount_type==="one_class_pct")
+                  ?<>{lbl("Discount %")}<input type="number" min={1} max={100} value={promo.discount_pct} onChange={e=>setP("discount_pct",+e.target.value)} style={S}/></>
+                  :<>{lbl("Discount Amount ($)")}<input type="number" min={1} value={promo.discount_fixed} onChange={e=>setP("discount_fixed",+e.target.value)} style={S}/></>
+                }</div>
+              )}
+              <div>{lbl("Applies To")}<select value={promo.applies_to} onChange={e=>setP("applies_to",e.target.value)} style={{...S,background:"#fff"}}>
+                <option value="continuous">Continuous classes only (no ODL/clinic)</option>
+                <option value="group">Group classes only</option>
+                <option value="all">All lesson types</option>
+              </select></div>
+            </div>
+
+            <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{margin:0,fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase"}}>🔒 Restrictions</p>
+              <div>{lbl("Valid For")}
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {[{k:"lead",l:"New leads"},{k:"lapsed",l:"Lapsed"},{k:"active",l:"Active"}].map(t=>(
+                    <div key={t.k} onClick={()=>toggleCT(t.k)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${promo.customer_types.includes(t.k)?"#e07b00":"#ddd"}`,background:promo.customer_types.includes(t.k)?"#fff8ee":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:promo.customer_types.includes(t.k)?"#b85c00":"#888"}}>
+                      {promo.customer_types.includes(t.k)?"✓ ":""}{t.l}
+                    </div>
+                  ))}
                 </div>
-                <p style={{margin:"0 0 4px",fontWeight:600,fontSize:13}}>{s.payload.title||s.payload.location_name||s.payload.name||"Update"}</p>
-                <p style={{margin:0,fontSize:11,color:"#aaa"}}>{new Date(s.submitted_at).toLocaleString()}</p>
-                {s.reviewed_by&&<p style={{margin:"4px 0 0",fontSize:11,color:"#888"}}>Reviewed by {s.reviewed_by}</p>}
               </div>
-            ))}
+              {g2(
+                <div>{lbl("Month Restriction")}<select value={promo.month_restriction} onChange={e=>setP("month_restriction",e.target.value)} style={{...S,background:"#fff"}}>
+                  <option value="">Any month</option>
+                  {MONTHS.map((m,i)=><option key={i} value={String(i)}>{m}</option>)}
+                </select></div>,
+                <div>{lbl("Expiry Date")}<input type="date" value={promo.expires_on} onChange={e=>setP("expires_on",e.target.value)} style={S}/></div>
+              )}
+              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}><input type="checkbox" checked={promo.proactive} onChange={e=>setP("proactive",e.target.checked)}/> May offer proactively</label>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}><input type="checkbox" checked={promo.requires_mention} onChange={e=>setP("requires_mention",e.target.checked)}/> Customer must mention it</label>
+              </div>
+            </div>
+
+            <div>{lbl("Full Rules")}<textarea value={promo.rules} onChange={e=>setP("rules",e.target.value)} rows={3} placeholder="Full terms as stated in the promo brief…" style={{...S,resize:"vertical"}}/></div>
+          </div>}
+
+          {/* CLOSURE */}
+          {type==="closure"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+            <div>{lbl("Location *")}<select value={closure.location_name} onChange={e=>setC("location_name",e.target.value)} style={{...S,background:"#fff"}}>
+              <option value="">Select location…</option>
+              {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
+            </select></div>
+            {g2(<div>{lbl("From *")}<input type="date" value={closure.start_date} onChange={e=>setC("start_date",e.target.value)} style={S}/></div>,
+               <div>{lbl("To *")}<input type="date" value={closure.end_date} onChange={e=>setC("end_date",e.target.value)} style={S}/></div>)}
+            <div>{lbl("Reason *")}<input value={closure.reason} onChange={e=>setC("reason",e.target.value)} placeholder="e.g. Pool maintenance" style={S}/></div>
+          </div>}
+
+          {/* LOCATION — identical fields to HubLocModal */}
+          {type==="location"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+            <div>{lbl("Location *")}<select value={loc.id||""} onChange={e=>{
+              const found=locations.find(l=>l.id===parseInt(e.target.value));
+              if(found) setLoc({id:found.id,name:found.name,ext:found.ext||"",privates:found.privates||false,pool:found.pool||"Chlorine",addr:found.addr||""});
+            }} style={{...S,background:"#fff"}}>
+              <option value="">Select location…</option>
+              {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+            </select></div>
+            {loc.id&&<>
+              {g2(<div>{lbl("Extension")}<input value={loc.ext} onChange={e=>setL("ext",e.target.value)} placeholder="e.g. 1001" style={S}/></div>,
+                 <div>{lbl("Pool Type")}<select value={loc.pool} onChange={e=>setL("pool",e.target.value)} style={{...S,background:"#fff"}}>
+                   <option value="Chlorine">Chlorine</option><option value="Salt">Salt water</option><option value="Therapy">Therapy pool</option>
+                 </select></div>)}
+              <div>{lbl("Address")}<input value={loc.addr} onChange={e=>setL("addr",e.target.value)} placeholder="Full street address" style={S}/></div>
+              <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,cursor:"pointer"}}><input type="checkbox" checked={loc.privates} onChange={e=>setL("privates",e.target.checked)}/> Offers private lessons</label>
+            </>}
+          </div>}
+
+          {/* ALERT */}
+          {type==="alert"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+            <div>{lbl("Title *")}<input value={alert.title} onChange={e=>setA("title",e.target.value)} placeholder="e.g. New pricing effective June 1" style={S}/></div>
+            <div>{lbl("Details *")}<textarea value={alert.body} onChange={e=>setA("body",e.target.value)} rows={3} placeholder="Full details for the team…" style={{...S,resize:"vertical"}}/></div>
+            {g2(<div>{lbl("Category")}<select value={alert.category} onChange={e=>setA("category",e.target.value)} style={{...S,background:"#fff"}}>
+              <option value="general">General</option><option value="pricing">Pricing</option><option value="operations">Operations</option><option value="promos">Promos</option>
+            </select></div>,
+            <div>{lbl("Type")}<select value={alert.alert_type} onChange={e=>setA("alert_type",e.target.value)} style={{...S,background:"#fff"}}>
+              <option value="warning">⚠️ Warning</option><option value="info">ℹ️ Info</option><option value="success">✅ Positive</option>
+            </select></div>)}
+          </div>}
+
+          {/* Urgent toggle */}
+          <div style={{background:"#fdf0ee",borderRadius:10,padding:"12px",border:"1.5px solid #f5b7b1",marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:urgent?10:0}}>
+              <div><p style={{margin:0,fontSize:12,fontWeight:700,color:"#c0392b"}}>🚨 Mark as Urgent</p><p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Bypasses approval — pings manager immediately</p></div>
+              <div onClick={()=>setUrgent(!urgent)} style={{width:42,height:24,borderRadius:12,background:urgent?"#c0392b":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:urgent?21:3,transition:"left .2s"}}/>
+              </div>
+            </div>
+            {urgent&&<input value={urgentWord} onChange={e=>setUrgentWord(e.target.value)} placeholder='Type "URGENT" to confirm'
+              style={{...S,border:`1.5px solid ${urgentWord.toUpperCase()==="URGENT"?"#c0392b":"#ddd"}`,background:"#fff"}}/>}
           </div>
-        )}
+
+          <button onClick={submit} disabled={submitting} style={{width:"100%",padding:"12px",borderRadius:10,background:"#003087",color:"#fff",border:"none",cursor:submitting?"default":"pointer",fontSize:13,fontWeight:700,opacity:submitting?.7:1}}>
+            {submitting?"Submitting…":"📤 Submit for Approval"}
+          </button>
+        </div>}
+
+        {tab==="history"&&<div>
+          {submissions.length===0&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:"#aaa"}}>No submissions yet</p></div>}
+          {submissions.map(s=>(
+            <div key={s.id} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#003087"}}>{TYPE_LABELS[s.type]||s.type}</span>
+                  {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+                </div>
+                <span style={{fontSize:11,fontWeight:600,color:(STATUS_CFG[s.status]||{}).fg,background:(STATUS_CFG[s.status]||{}).bg,padding:"2px 8px",borderRadius:4}}>{s.status}</span>
+              </div>
+              <p style={{margin:"0 0 4px",fontWeight:600,fontSize:13}}>{s.payload?.title||s.payload?.location_name||s.payload?.name||"Update"}</p>
+              <p style={{margin:0,fontSize:11,color:"#aaa"}}>{new Date(s.submitted_at).toLocaleString()}</p>
+              {s.reviewed_by&&<p style={{margin:"4px 0 0",fontSize:11,color:"#888"}}>Reviewed by {s.reviewed_by}</p>}
+            </div>
+          ))}
+        </div>}
       </div>
     </div>
   );
 }
+
 
 export default function App() {
   const [view, setView] = useState("login");
