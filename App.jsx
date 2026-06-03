@@ -1313,6 +1313,104 @@ function MgrSchedules({ reps, reload, fire }) {
 }
 
 // ── MGR: REPORTS ──────────────────────────────────────────────────────
+function generatePIPReport({pipAgent,pipFrom,pipTo,kpiRows,PAID_TARGET,TOTAL_TARGET,PAID_DISPS,TRIAL_DISPS,getWeekKey}) {
+  if(!pipAgent||!pipFrom||!pipTo){ alert("Select an agent and date range first"); return; }
+  const from=new Date(pipFrom+"T00:00:00Z"), to=new Date(pipTo+"T23:59:59Z");
+  const agRows=kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to);
+  const weekMap={};
+  agRows.forEach(r=>{
+    const wk=getWeekKey(r.hs_call_timestamp);
+    if(!weekMap[wk]) weekMap[wk]={calls:0,paid:0,trial:0};
+    weekMap[wk].calls++;
+    if(PAID_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].paid++;
+    if(TRIAL_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].trial++;
+  });
+  const weeks=Object.entries(weekMap).sort(([a],[b])=>a.localeCompare(b));
+  const totalCalls=agRows.length;
+  const totalPaid=agRows.filter(r=>PAID_DISPS.has(r.hs_call_disposition_label)).length;
+  const totalTrial=agRows.filter(r=>TRIAL_DISPS.has(r.hs_call_disposition_label)).length;
+  const totalPaidCvr=totalCalls?(totalPaid/totalCalls*100).toFixed(1):0;
+  const totalCvr2=totalCalls?((totalPaid+totalTrial)/totalCalls*100).toFixed(1):0;
+  const cvColor=(v,t)=>parseFloat(v)>=t?"#1a5c35":parseFloat(v)>=t-5?"#b85c00":"#c0392b";
+  const cvBg=(v,t)=>parseFloat(v)>=t?"#eafaf1":parseFloat(v)>=t-5?"#fff8ee":"#fdf0ee";
+  const weekRows=weeks.map(([wk,d])=>{
+    const pc=(d.paid/d.calls*100).toFixed(1);
+    const tc=((d.paid+d.trial)/d.calls*100).toFixed(1);
+    const status=parseFloat(tc)>=TOTAL_TARGET?"On target":parseFloat(tc)>=TOTAL_TARGET-5?"Watch":"Below target";
+    return "<tr><td>"+wk+"</td><td>"+d.calls+"</td><td>"+d.paid+"</td><td>"+d.trial+"</td>"
+      +"<td><span class='badge' style='background:"+cvBg(pc,PAID_TARGET)+";color:"+cvColor(pc,PAID_TARGET)+"'>"+pc+"%</span></td>"
+      +"<td><span class='badge' style='background:"+cvBg(tc,TOTAL_TARGET)+";color:"+cvColor(tc,TOTAL_TARGET)+"'>"+tc+"%</span></td>"
+      +"<td>"+status+"</td></tr>";
+  }).join("");
+  const html="<!DOCTYPE html><html><head><title>Performance Report - "+pipAgent+"</title>"
+    +"<style>body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#1a1a1a;font-size:13px;}"
+    +"h1{font-size:20px;color:#003087;margin:0 0 4px;}.sub{color:#888;font-size:12px;margin:0 0 20px;}"
+    +"table{width:100%;border-collapse:collapse;margin-bottom:20px;}"
+    +"th{background:#003087;color:#fff;padding:8px 10px;font-size:11px;text-align:left;}"
+    +"td{padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;}"
+    +"tr:nth-child(even) td{background:#f9f9f9;}"
+    +".badge{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;}"
+    +".footer{margin-top:30px;font-size:10px;color:#bbb;border-top:1px solid #eee;padding-top:10px;}"
+    +".sg{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;}"
+    +".sc{border-radius:8px;padding:12px;text-align:center;}.sc .n{font-size:22px;font-weight:800;}.sc .l{font-size:10px;color:#888;margin-top:2px;}"
+    +"@media print{body{padding:16px;}.np{display:none;}}</style></head><body>"
+    +"<div class='np' style='margin-bottom:16px;'><button onclick='window.print()' style='padding:8px 20px;background:#003087;color:#fff;border:none;border-radius:6px;cursor:pointer;'>Print / Save PDF</button></div>"
+    +"<h1>Performance Report - "+pipAgent+"</h1>"
+    +"<p class='sub'>Period: "+pipFrom+" to "+pipTo+" | Generated "+new Date().toLocaleDateString()+"</p>"
+    +"<p class='sub' style='margin-top:-12px;color:#c0392b;font-size:11px;'>CONFIDENTIAL - FOR MANAGEMENT USE ONLY</p>"
+    +"<div class='sg'>"
+    +"<div class='sc' style='background:#e8f0fe;'><div class='n' style='color:#003087;'>"+totalCalls+"</div><div class='l'>Total Calls</div></div>"
+    +"<div class='sc' style='background:#eafaf1;'><div class='n' style='color:#1a5c35;'>"+totalPaid+"</div><div class='l'>Paid Enrollments</div></div>"
+    +"<div class='sc' style='background:"+cvBg(totalPaidCvr,PAID_TARGET)+";'><div class='n' style='color:"+cvColor(totalPaidCvr,PAID_TARGET)+";'>"+totalPaidCvr+"%</div><div class='l'>Paid CVR (target "+PAID_TARGET+"%)</div></div>"
+    +"<div class='sc' style='background:"+cvBg(totalCvr2,TOTAL_TARGET)+";'><div class='n' style='color:"+cvColor(totalCvr2,TOTAL_TARGET)+";'>"+totalCvr2+"%</div><div class='l'>Total CVR (target "+TOTAL_TARGET+"%)</div></div>"
+    +"</div>"
+    +"<p style='font-size:11px;font-weight:700;color:#003087;text-transform:uppercase;margin:20px 0 8px;'>Weekly Breakdown</p>"
+    +"<table><thead><tr><th>Week of</th><th>Calls</th><th>Paid</th><th>Trial</th><th>Paid CVR</th><th>Total CVR</th><th>vs Target</th></tr></thead><tbody>"+weekRows+"</tbody></table>"
+    +"<p style='font-size:11px;font-weight:700;color:#003087;text-transform:uppercase;margin:20px 0 8px;'>Period Summary vs Baseline</p>"
+    +"<table><thead><tr><th>Metric</th><th>Actual</th><th>Target</th><th>Gap</th><th>Status</th></tr></thead><tbody>"
+    +"<tr><td>Paid CVR</td><td>"+totalPaidCvr+"%</td><td>"+PAID_TARGET+"%</td>"
+    +"<td style='color:"+cvColor(totalPaidCvr,PAID_TARGET)+"'>"+(parseFloat(totalPaidCvr)-PAID_TARGET).toFixed(1)+"%</td>"
+    +"<td>"+(parseFloat(totalPaidCvr)>=PAID_TARGET?"Met":"Not met")+"</td></tr>"
+    +"<tr><td>Total CVR</td><td>"+totalCvr2+"%</td><td>"+TOTAL_TARGET+"%</td>"
+    +"<td style='color:"+cvColor(totalCvr2,TOTAL_TARGET)+"'>"+(parseFloat(totalCvr2)-TOTAL_TARGET).toFixed(1)+"%</td>"
+    +"<td>"+(parseFloat(totalCvr2)>=TOTAL_TARGET?"Met":"Not met")+"</td></tr>"
+    +"</tbody></table>"
+    +"<div class='footer'>ESC Break Manager · Auto-generated · "+new Date().toISOString()+"</div>"
+    +"</body></html>";
+  const w=window.open("","_blank");
+  w.document.write(html);
+  w.document.close();
+}
+
+// ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
+function PipCallCount({pipAgent,pipFrom,pipTo,kpiRows}) {
+  if(!pipAgent||!pipFrom||!pipTo) return null;
+  const from=new Date(pipFrom+"T00:00:00Z"); const to=new Date(pipTo+"T23:59:59Z");
+  const count=kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to).length;
+  return <p style={{margin:"0 0 14px",fontSize:12,color:"#1a5c35",fontWeight:600}}>✅ {count} calls found for {pipAgent} in this period</p>;
+}
+
+function LunchTodayBanner({myRep}) {
+  const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const todayKey=DAYS_SHORT[new Date().getDay()];
+  const sched=(myRep.lunch_schedule||{})[todayKey];
+  const lunchTime=sched?.time;
+  const dur=sched?.duration||60;
+  if(!lunchTime) return null;
+  const [lh,lm]=lunchTime.split(":").map(Number);
+  const endMin=lh*60+lm+dur;
+  const endStr=`${String(Math.floor(endMin/60)%24).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
+  return (
+    <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+      <span style={{fontSize:20}}>🥗</span>
+      <div>
+        <p style={{margin:0,fontSize:12,fontWeight:700,color:"#b85c00"}}>Your lunch today</p>
+        <p style={{margin:0,fontSize:14,fontWeight:800,color:"#7a3d00"}}>{lunchTime} – {endStr} <span style={{fontSize:11,fontWeight:400,color:"#b85c00"}}>({dur}min)</span></p>
+      </div>
+    </div>
+  );
+}
+
 // ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
 function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKpiData }) {
   const [kpiTab, setKpiTab]   = useState("summary");
@@ -1418,118 +1516,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
 
   const kpiTabs = [{k:"summary",l:"Summary"},{k:"monthly",l:"Monthly"},{k:"weekly",l:"Weekly"},{k:"ramp",l:"📈 Ramp"},{k:"pip",l:"📄 PIP PDF"}];
 
-  const generatePIP = () => {
-    if(!pipAgent||!pipFrom||!pipTo){ alert("Select an agent and date range first"); return; }
-    const from = new Date(pipFrom+"T00:00:00Z");
-    const to   = new Date(pipTo+"T23:59:59Z");
-    const agRows = kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to);
-
-    // Build weekly breakdown
-    const weekMap={};
-    agRows.forEach(r=>{
-      const wk=getWeekKey(r.hs_call_timestamp);
-      if(!weekMap[wk]) weekMap[wk]={calls:0,paid:0,trial:0};
-      weekMap[wk].calls++;
-      if(PAID_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].paid++;
-      if(TRIAL_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].trial++;
-    });
-    const weeks=Object.entries(weekMap).sort(([a],[b])=>a.localeCompare(b));
-
-    const totalCalls=agRows.length;
-    const totalPaid=agRows.filter(r=>PAID_DISPS.has(r.hs_call_disposition_label)).length;
-    const totalTrial=agRows.filter(r=>TRIAL_DISPS.has(r.hs_call_disposition_label)).length;
-    const totalPaidCvr=totalCalls?(totalPaid/totalCalls*100).toFixed(1):0;
-    const totalCvr2=totalCalls?((totalPaid+totalTrial)/totalCalls*100).toFixed(1):0;
-
-    const cvColor=(v,t)=>parseFloat(v)>=t?"#1a5c35":parseFloat(v)>=t-5?"#b85c00":"#c0392b";
-    const cvBg=(v,t)=>parseFloat(v)>=t?"#eafaf1":parseFloat(v)>=t-5?"#fff8ee":"#fdf0ee";
-
-    const html=`<!DOCTYPE html><html><head><title>Performance Report – ${pipAgent}</title>
-    <style>
-      body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#1a1a1a;font-size:13px;}
-      h1{font-size:20px;color:#003087;margin:0 0 4px;}
-      .sub{color:#888;font-size:12px;margin:0 0 20px;}
-      .meta{display:flex;gap:20px;margin-bottom:20px;}
-      .meta-box{background:#f8f8f8;border-radius:8px;padding:12px 16px;flex:1;}
-      .meta-box .val{font-size:24px;font-weight:700;color:#003087;}
-      .meta-box .lbl{font-size:11px;color:#888;margin-top:2px;}
-      table{width:100%;border-collapse:collapse;margin-bottom:20px;}
-      th{background:#003087;color:#fff;padding:8px 10px;font-size:11px;text-align:left;}
-      td{padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;}
-      tr:nth-child(even) td{background:#f9f9f9;}
-      .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;}
-      .footer{margin-top:30px;font-size:10px;color:#bbb;border-top:1px solid #eee;padding-top:10px;}
-      .section-title{font-size:11px;font-weight:700;color:#003087;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 8px;}
-      .summary-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
-      .sum-card{border-radius:8px;padding:12px;text-align:center;}
-      .sum-card .n{font-size:22px;font-weight:800;}
-      .sum-card .l{font-size:10px;color:#888;margin-top:2px;}
-      @media print{body{padding:16px;} .no-print{display:none;}}
-    </style></head><body>
-    <div class="no-print" style="margin-bottom:16px;">
-      <button onclick="window.print()" style="padding:8px 20px;background:#003087;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Print / Save PDF</button>
-    </div>
-    <h1>Performance Report — ${pipAgent}</h1>
-    <p class="sub">Period: ${pipFrom} to ${pipTo} &nbsp;|&nbsp; Generated ${new Date().toLocaleDateString()}</p>
-    <p class="sub" style="margin-top:-12px;color:#c0392b;font-size:11px;">⚠️ CONFIDENTIAL — FOR MANAGEMENT USE ONLY</p>
-
-    <div class="summary-grid">
-      <div class="sum-card" style="background:#e8f0fe;">
-        <div class="n" style="color:#003087;">${totalCalls}</div>
-        <div class="l">Total Calls</div>
-      </div>
-      <div class="sum-card" style="background:#eafaf1;">
-        <div class="n" style="color:#1a5c35;">${totalPaid}</div>
-        <div class="l">Paid Enrollments</div>
-      </div>
-      <div class="sum-card" style="background:${cvBg(totalPaidCvr,PAID_TARGET)};">
-        <div class="n" style="color:${cvColor(totalPaidCvr,PAID_TARGET)};">${totalPaidCvr}%</div>
-        <div class="l">Paid CVR (target ${PAID_TARGET}%)</div>
-      </div>
-      <div class="sum-card" style="background:${cvBg(totalCvr2,TOTAL_TARGET)};">
-        <div class="n" style="color:${cvColor(totalCvr2,TOTAL_TARGET)};">${totalCvr2}%</div>
-        <div class="l">Total CVR (target ${TOTAL_TARGET}%)</div>
-      </div>
-    </div>
-
-    <p class="section-title">Weekly Breakdown</p>
-    <table>
-      <thead><tr><th>Week of</th><th>Calls</th><th>Paid</th><th>Trial</th><th>Paid CVR</th><th>Total CVR</th><th>vs Target</th></tr></thead>
-      <tbody>
-        ${weeks.map(([wk,d])=>{
-          const pc=(d.paid/d.calls*100).toFixed(1);
-          const tc=((d.paid+d.trial)/d.calls*100).toFixed(1);
-          const status=parseFloat(tc)>=TOTAL_TARGET?"✅ On target":parseFloat(tc)>=TOTAL_TARGET-5?"⚠️ Watch":"❌ Below target";
-          return `<tr>
-            <td>${wk}</td><td>${d.calls}</td><td>${d.paid}</td><td>${d.trial}</td>
-            <td><span class="badge" style="background:${cvBg(pc,PAID_TARGET)};color:${cvColor(pc,PAID_TARGET)}">${pc}%</span></td>
-            <td><span class="badge" style="background:${cvBg(tc,TOTAL_TARGET)};color:${cvColor(tc,TOTAL_TARGET)}">${tc}%</span></td>
-            <td>${status}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>
-
-    <p class="section-title">Period Summary vs Baseline</p>
-    <table>
-      <thead><tr><th>Metric</th><th>Actual</th><th>Target</th><th>Gap</th><th>Status</th></tr></thead>
-      <tbody>
-        <tr><td>Paid CVR</td><td>${totalPaidCvr}%</td><td>${PAID_TARGET}%</td>
-          <td style="color:${parseFloat(totalPaidCvr)>=PAID_TARGET?"#1a5c35":"#c0392b"}">${(parseFloat(totalPaidCvr)-PAID_TARGET).toFixed(1)}%</td>
-          <td>${parseFloat(totalPaidCvr)>=PAID_TARGET?"✅ Met":"❌ Not met"}</td></tr>
-        <tr><td>Total CVR</td><td>${totalCvr2}%</td><td>${TOTAL_TARGET}%</td>
-          <td style="color:${parseFloat(totalCvr2)>=TOTAL_TARGET?"#1a5c35":"#c0392b"}">${(parseFloat(totalCvr2)-TOTAL_TARGET).toFixed(1)}%</td>
-          <td>${parseFloat(totalCvr2)>=TOTAL_TARGET?"✅ Met":"❌ Not met"}</td></tr>
-      </tbody>
-    </table>
-
-    <div class="footer">ESC Break Manager · Auto-generated performance report · ${new Date().toISOString()}</div>
-    </body></html>`;
-
-    const w=window.open("","_blank");
-    w.document.write(html);
-    w.document.close();
-  };
+  const generatePIP = () => generatePIPReport({pipAgent,pipFrom,pipTo,kpiRows,PAID_TARGET,TOTAL_TARGET,PAID_DISPS,TRIAL_DISPS,getWeekKey});
 
   // Summary data
   const summaryMap = agg(null, r=>r.hs_agent_name);
@@ -1795,6 +1782,9 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
               </div>
             );
           })}
+        </div>
+      )}
+
       {/* PIP PDF */}
       {kpiTab==="pip"&&(
         <div>
@@ -1820,11 +1810,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
               </div>
             </div>
 
-            {pipAgent&&pipFrom&&pipTo&&(()=>{
-              const from=new Date(pipFrom+"T00:00:00Z"); const to=new Date(pipTo+"T23:59:59Z");
-              const count=kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to).length;
-              return <p style={{margin:"0 0 14px",fontSize:12,color:"#1a5c35",fontWeight:600}}>✅ {count} calls found for {pipAgent} in this period</p>;
-            })()}
+            <PipCallCount pipAgent={pipAgent} pipFrom={pipFrom} pipTo={pipTo} kpiRows={kpiRows}/>
 
             <button onClick={generatePIP} disabled={!pipAgent||!pipFrom||!pipTo}
               style={{padding:"11px 24px",borderRadius:10,background:pipAgent&&pipFrom&&pipTo?"#003087":"#ccc",color:"#fff",border:"none",cursor:pipAgent&&pipFrom&&pipTo?"pointer":"default",fontSize:13,fontWeight:700}}>
@@ -2507,26 +2493,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
 
       <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>My Status</p>
       {/* Today's lunch time banner */}
-      {(()=>{
-        const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-        const todayKey=DAYS_SHORT[new Date().getDay()];
-        const sched=(myRep.lunch_schedule||{})[todayKey];
-        const lunchTime=sched?.time;
-        const dur=sched?.duration||60;
-        if(!lunchTime) return null;
-        const [lh,lm]=lunchTime.split(":").map(Number);
-        const endMin=lh*60+lm+dur;
-        const endStr=`${String(Math.floor(endMin/60)%24).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
-        return (
-          <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:20}}>🥗</span>
-            <div>
-              <p style={{margin:0,fontSize:12,fontWeight:700,color:"#b85c00"}}>Your lunch today</p>
-              <p style={{margin:0,fontSize:14,fontWeight:800,color:"#7a3d00"}}>{lunchTime} – {endStr} <span style={{fontSize:11,fontWeight:400,color:"#b85c00"}}>({dur}min)</span></p>
-            </div>
-          </div>
-        );
-      })()}
+      <LunchTodayBanner myRep={myRep}/>
       <div style={{background:cfg.bg,border:`2px solid ${cfg.border}`,borderRadius:18,padding:"20px 18px",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:isOOO||isOff?0:14}}>
           <div style={{width:48,height:48,borderRadius:"50%",background:isOff?"#eee":onBreak?(myRep.status==="health"?"#d6eaf8":"#fdebd0"):"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:isOff?"#bbb":onBreak?(myRep.status==="health"?"#1a6291":"#9c5a00"):"#1a5c35"}}>
@@ -2692,10 +2659,11 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
               );
             })}
           </div>
-          {targetId&&(()=>{
-            const t=reps.find(r=>r.id===parseInt(targetId));
-            return t?<p style={{fontSize:12,color:"#8e44ad",margin:"0 0 12px",padding:"8px 12px",background:"#f5eefb",borderRadius:8}}>You give: <strong>{myTodayLunch()}</strong> · You get: <strong>{theirTodayLunch(t)}</strong></p>:null;
-          })()}
+          {targetId&&reps.find(r=>r.id===parseInt(targetId))&&(
+            <p style={{fontSize:12,color:"#8e44ad",margin:"0 0 12px",padding:"8px 12px",background:"#f5eefb",borderRadius:8}}>
+              You give: <strong>{myTodayLunch()}</strong> · You get: <strong>{theirTodayLunch(reps.find(r=>r.id===parseInt(targetId)))}</strong>
+            </p>
+          )}
           <div style={{display:"flex",gap:8}}>
             <Btn label="Cancel" onClick={()=>setReqModal(false)} outline color="#888" small/>
             <Btn label="Send Request" onClick={submitSwap} color="#8e44ad"/>
