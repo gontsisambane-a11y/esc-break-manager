@@ -782,13 +782,13 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
     const prev = kpiRows;
     const next = typeof updater==="function" ? updater(prev) : updater;
     setKpiRows(next);
-    const existingIds = new Set(prev.map(r=>r.hs_deal_id));
-    const newRows = next.filter(r=>!existingIds.has(r.hs_deal_id));
-    if(newRows.length===0) return;
-    // Upsert in chunks of 500
-    for(let i=0;i<newRows.length;i+=500){
-      const chunk=newRows.slice(i,i+500);
-      await fetch(`${SB_URL}/rest/v1/kpi_bookings`,{
+    // Upsert ALL rows — unique constraint on hs_deal_id handles deduplication
+    const rows = Array.isArray(next) ? next : [];
+    if(rows.length===0) return;
+    console.log(`Upserting ${rows.length} rows to kpi_bookings...`);
+    for(let i=0;i<rows.length;i+=500){
+      const chunk=rows.slice(i,i+500);
+      const res = await fetch(`${SB_URL}/rest/v1/kpi_bookings`,{
         method:"POST",
         headers:{
           apikey:SB_KEY,
@@ -797,7 +797,13 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
           "Prefer":"resolution=merge-duplicates,return=minimal"
         },
         body:JSON.stringify(chunk)
-      }).catch(e=>console.warn("KPI insert error",e));
+      });
+      if(!res.ok){
+        const err = await res.text();
+        console.error(`KPI upsert chunk ${i/500} failed:`, res.status, err);
+      } else {
+        console.log(`KPI chunk ${i/500+1} saved (${chunk.length} rows)`);
+      }
     }
   };
 
@@ -1841,12 +1847,18 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
     setUploading(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const parsed = parseCSV(ev.target.result);
-      const filtered = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
-      // Use persist function — saves to Supabase and deduplicates
-      await setKpiRows(filtered);
-      await setKpiFileNamePersist(file.name);
-      setUploading(false);
+      try {
+        const parsed = parseCSV(ev.target.result);
+        const filtered = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
+        console.log(`KPI upload: ${parsed.length} rows parsed, ${filtered.length} matched ESC agents`);
+        await setKpiRows(filtered);
+        await setKpiFileName(file.name);
+        console.log("KPI save complete");
+      } catch(err) {
+        console.error("KPI upload error:", err);
+      } finally {
+        setUploading(false);
+      }
     };
     reader.readAsText(file);
   };
