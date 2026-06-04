@@ -322,7 +322,15 @@ const businessDayStr = (isoDate) => {
   return adjusted.toISOString().split('T')[0];
 };
 const todayDay = () => DAYS[new Date().getDay()];
-const todayLabel = () => { const now=new Date(); const tz=Intl.DateTimeFormat().resolvedOptions().timeZone; const city=tz.split('/').pop().replace(/_/g,' '); return now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' · '+city; };
+const TZ_IANA = { Central:"America/Chicago", Eastern:"America/New_York", Pacific:"America/Los_Angeles", SA:"Africa/Johannesburg", GMT:"Europe/London", IST:"Asia/Kolkata" };
+const todayLabel = (repTz) => {
+  const iana = repTz ? (TZ_IANA[repTz]||"America/Chicago") : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = new Date();
+  const date = now.toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric",timeZone:iana});
+  const time = now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",timeZone:iana,hour12:true});
+  const city = iana.split("/").pop().replace(/_/g," ");
+  return `${date} · ${time} ${city}`;
+};
 const fmtTime = s => { if(s<=0)return"0:00"; return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; };
 const fmtDur = s => { if(!s||s<=0)return"0m"; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; };
 const elapsedSec = iso => Math.floor((Date.now()-new Date(iso).getTime())/1000);
@@ -2555,7 +2563,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   const capLeft = maxOut - totalOut;
 
   const myAB = activeBreaks.find(b=>b.rep_id===repInfo.id);
-  const cooldownActive = !!(myRep.last_break_returned_at && elapsedSec(myRep.last_break_returned_at)<COOLDOWN_SEC);
+  const cooldownActive = !!(myRep.health_time_banked>=HEALTH_MAX_SEC && myRep.last_break_returned_at && elapsedSec(myRep.last_break_returned_at)<COOLDOWN_SEC);
   const cooldownLeft = cooldownActive ? COOLDOWN_SEC - elapsedSec(myRep.last_break_returned_at||new Date().toISOString()) : 0;
   const timeUsedToday = myRep.health_time_today||0;
   const breaksLeft = HEALTH_PER_DAY - (myRep.health_breaks_today||0);
@@ -2695,7 +2703,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
           <div>
             <p style={{margin:0,fontSize:10,color:DS.accent,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>execo · esc</p>
             <h1 style={{margin:"2px 0 1px",fontSize:20,fontWeight:700,color:DS.textPri}}>Hey, {repInfo.name}</h1>
-            <p style={{margin:0,fontSize:11,color:DS.textSec}}>{todayLabel()}</p>
+            <p style={{margin:0,fontSize:11,color:DS.textSec}}>{todayLabel(myRep?.timezone)}</p>
           </div>
           <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Switch</button>
         </div>
