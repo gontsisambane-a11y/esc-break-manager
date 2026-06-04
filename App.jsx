@@ -39,7 +39,190 @@ const gStyle = `
   ::-webkit-scrollbar-thumb { background: ${DS.border}; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: ${DS.borderHi}; }
 `;
-// ── CONFIG ────────────────────────────────────────────────────────────
+// ── AI INSIGHTS ENGINE ────────────────────────────────────────────────
+async function callClaude(prompt, system="You are an operations analyst for a swim school enrollment call centre. Be concise, specific, and actionable. Never use bullet points — write in plain short sentences. Max 2 sentences unless instructed otherwise.") {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model:"claude-sonnet-4-20250514",
+      max_tokens:300,
+      system,
+      messages:[{role:"user",content:prompt}]
+    })
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text||"";
+}
+
+// 1. BREAK RECOMMENDATION — shown on rep screen
+function BreakRecommendation({ repName, reps, settings, kpiRows, onAdmin, onLunch, onHealth, canTakeAdmin, canTakeHealth, cooldownActive }) {
+  const [insight, setInsight] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(()=>{
+    if(!repName) return;
+    const key = `break_rec_${repName}_${new Date().toISOString().slice(0,13)}`;
+    const cached = sessionStorage.getItem(key);
+    if(cached){ setInsight(cached); return; }
+
+    setLoading(true);
+    const activeCount = reps.filter(r=>r.status==="available"&&(r.rep_stage||"active")==="active").length;
+    const totalCount = reps.filter(r=>(r.rep_stage||"active")==="active").length;
+    const hour = new Date().getHours();
+    const ctHour = ((hour*60 - 300) % 1440) / 60;
+    const isPeak = ctHour>=14&&ctHour<17;
+
+    const paid_disps = ["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"];
+    const myRows = kpiRows.filter(r=>r.hs_agent_name?.split(" ")[0]?.toLowerCase()===repName.split(" ")[0]?.toLowerCase());
+    const thisWeek = myRows.filter(r=>{ const d=new Date(r.hs_call_timestamp); const day=d.getDay(); const mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1)); return (new Date()-mon)<7*24*3600*1000; });
+    const paidCvr = thisWeek.length ? (thisWeek.filter(r=>paid_disps.includes(r.hs_call_disposition_label)).length/thisWeek.length*100).toFixed(1) : null;
+
+    callClaude(`Rep: ${repName}. Team available: ${activeCount}/${totalCount}. Current CT hour: ${ctHour.toFixed(0)}. Peak window (3-5pm CT): ${isPeak}. On health: ${onHealth}. On lunch: ${onLunch}. On admin: ${onAdmin}. Can take health break: ${canTakeHealth}. On cooldown: ${cooldownActive}. Can take admin: ${canTakeAdmin}. Rep paid CVR this week: ${paidCvr||"unknown"}%. Peak mode: ${settings.peak_mode}.
+
+Give a one-sentence recommendation: is now a good time to take a break, do admin, or stay on the phones? Consider team coverage and call volume timing.`)
+      .then(text=>{ setInsight(text); sessionStorage.setItem(key,text); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[repName]);
+
+  if(!insight&&!loading) return null;
+  return (
+    <div style={{background:DS.accentDim,border:`1px solid ${DS.borderHi}`,borderRadius:DS.radiusSm,padding:"8px 12px",marginTop:10,display:"flex",gap:8,alignItems:"flex-start"}}>
+      <span style={{fontSize:12,color:DS.accent,flexShrink:0,marginTop:1}}>AI</span>
+      <p style={{margin:0,fontSize:11,color:DS.textPri,lineHeight:1.5}}>
+        {loading?"Analysing team coverage…":insight}
+      </p>
+    </div>
+  );
+}
+
+// 2. COACHING NUDGE — shown on rep KPI widget
+function CoachingNudge({ repName, weeks }) {
+  const [nudge, setNudge] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(()=>{
+    if(!repName||weeks.length<2) return;
+    const key = `nudge_${repName}_${new Date().toISOString().slice(0,10)}`;
+    const cached = sessionStorage.getItem(key);
+    if(cached){ setNudge(cached); return; }
+
+    setLoading(true);
+    const recent = weeks.slice(-4).map(w=>`Week ${w.wk}: ${w.calls} calls, paid CVR ${w.paidCvr}%, total CVR ${w.totalCvr}%`).join(". ");
+    const trend = weeks.length>=2 ? weeks[weeks.length-1].totalCvr - weeks[weeks.length-2].totalCvr : 0;
+
+    callClaude(`Rep: ${repName}. Performance last 4 weeks: ${recent}. Week on week change: ${trend>0?"+":""}${trend.toFixed(1)}%. Paid CVR target: 20%. Total CVR target: 45%.
+
+Give ONE specific, actionable coaching insight in one sentence. If above target, reinforce what's working. If below, give a concrete technique to improve. Do not mention the rep's name.`)
+      .then(text=>{ setNudge(text); sessionStorage.setItem(key,text); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[repName]);
+
+  if(!nudge&&!loading) return null;
+  return (
+    <div onClick={()=>setOpen(!open)} style={{background:DS.accentDim,border:`1px solid ${DS.borderHi}`,borderRadius:DS.radiusSm,padding:"6px 10px",marginTop:8,cursor:"pointer",display:"flex",gap:6,alignItems:"flex-start"}}>
+      <span style={{fontSize:10,color:DS.accent,fontWeight:700,flexShrink:0,marginTop:1}}>AI</span>
+      <p style={{margin:0,fontSize:10,color:DS.textPri,lineHeight:1.5}}>{loading?"Generating coaching insight…":nudge}</p>
+    </div>
+  );
+}
+
+// 3. ADHOC DECISION SUPPORT — shown in MgrRequests when reviewing
+function AdHocDecisionSupport({ req, reps, settings }) {
+  const [insight, setInsight] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(()=>{
+    if(!req) return;
+    setLoading(true);
+    const activeCount = reps.filter(r=>r.status==="available"&&(r.rep_stage||"active")==="active").length;
+    const onLunchNow = reps.filter(r=>r.status==="lunch").length;
+    const totalActive = reps.filter(r=>(r.rep_stage||"active")==="active").length;
+    const prefTime = req.preferred_time ? `Preferred CT: ${req.preferred_time} ${req.rep_timezone}` : "No preferred time given";
+    const ctHour = new Date().getHours() - 5;
+    const isPeak = ctHour>=14&&ctHour<17;
+
+    callClaude(`Manager is deciding whether to approve an ad hoc lunch for ${req.rep_name}. ${prefTime}. Current time CT: ~${ctHour}:00. Peak window (3-5pm CT): ${isPeak}. Currently on lunch: ${onLunchNow}. Available agents: ${activeCount}/${totalActive}. Peak mode: ${settings.peak_mode}. Note from rep: "${req.note||"none"}".
+
+One sentence: should the manager approve now, delay, or decline? Consider call volume risk and coverage.`)
+      .then(text=>{ setInsight(text); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[req?.id]);
+
+  if(!insight&&!loading) return null;
+  return (
+    <div style={{background:DS.accentDim,border:`1px solid ${DS.borderHi}`,borderRadius:DS.radiusSm,padding:"7px 10px",marginBottom:8,display:"flex",gap:6,alignItems:"flex-start"}}>
+      <span style={{fontSize:10,color:DS.accent,fontWeight:700,flexShrink:0,marginTop:1}}>AI</span>
+      <p style={{margin:0,fontSize:11,color:DS.textPri,lineHeight:1.5}}>{loading?"Assessing coverage risk…":insight}</p>
+    </div>
+  );
+}
+
+// 4. WEEKLY TEAM SUMMARY — shown in KPI tab after CSV upload
+function WeeklyTeamSummary({ kpiRows, reps }) {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [generated, setGenerated] = useState(false);
+
+  const generate = async () => {
+    if(loading||generated) return;
+    setLoading(true);
+
+    const PAID = ["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"];
+    const TRIAL = ["Registered: Trial","Outbound - Trial"];
+
+    const getWeek = ts => { const d=new Date(ts); const day=d.getDay(); const m=new Date(d); m.setDate(d.getDate()-(day===0?6:day-1)); return m.toISOString().split("T")[0]; };
+    const weeks = [...new Set(kpiRows.map(r=>getWeek(r.hs_call_timestamp)))].sort().slice(-2);
+
+    const weekStats = weeks.map(wk => {
+      const rows = kpiRows.filter(r=>getWeek(r.hs_call_timestamp)===wk);
+      const paid = rows.filter(r=>PAID.includes(r.hs_call_disposition_label)).length;
+      const trial = rows.filter(r=>TRIAL.includes(r.hs_call_disposition_label)).length;
+      return { wk, calls:rows.length, paid, trial, paidCvr:(paid/rows.length*100).toFixed(1), totalCvr:((paid+trial)/rows.length*100).toFixed(1) };
+    });
+
+    const activeFirstNames = new Set(reps.map(r=>r.name));
+    const agentStats = [...new Set(kpiRows.map(r=>r.hs_agent_name))].filter(n=>{ const fn=n?.split(" ")[0]; return activeFirstNames.has(fn); }).map(name=>{
+      const thisWk = kpiRows.filter(r=>r.hs_agent_name===name&&getWeek(r.hs_call_timestamp)===weeks[weeks.length-1]);
+      const lastWk = weeks.length>1 ? kpiRows.filter(r=>r.hs_agent_name===name&&getWeek(r.hs_call_timestamp)===weeks[weeks.length-2]) : [];
+      const cvr = r => r.length ? ((r.filter(x=>PAID.includes(x.hs_call_disposition_label)).length+r.filter(x=>TRIAL.includes(x.hs_call_disposition_label)).length)/r.length*100).toFixed(1) : null;
+      return { name, thisCvr:cvr(thisWk), lastCvr:cvr(lastWk), calls:thisWk.length };
+    }).filter(a=>a.thisCvr!==null);
+
+    const top3 = [...agentStats].sort((a,b)=>parseFloat(b.thisCvr)-parseFloat(a.thisCvr)).slice(0,3).map(a=>`${a.name} ${a.thisCvr}%`).join(", ");
+    const flagged = agentStats.filter(a=>parseFloat(a.thisCvr)<40).map(a=>`${a.name} ${a.thisCvr}%`).join(", ");
+    const improved = agentStats.filter(a=>a.lastCvr&&parseFloat(a.thisCvr)-parseFloat(a.lastCvr)>5).map(a=>`${a.name} +${(parseFloat(a.thisCvr)-parseFloat(a.lastCvr)).toFixed(1)}%`).join(", ");
+
+    const prompt = `Weekly ESC team performance summary. Targets: Paid CVR 20%, Total CVR 45%.
+
+${weekStats.map(w=>`Week ${w.wk}: ${w.calls} calls, paid CVR ${w.paidCvr}%, total CVR ${w.totalCvr}%`).join(". ")}.
+Top performers this week: ${top3||"none"}. Below 40% total CVR: ${flagged||"none"}. Most improved vs last week: ${improved||"none"}.
+
+Write a 3-4 sentence plain-English team summary a manager would send to leadership. Cover overall trend, standouts, and one specific action item. Be direct and use names.`;
+
+    callClaude(prompt, "You are a sales operations analyst. Write in plain sentences, no bullet points, no headers. Tone is professional but direct.")
+      .then(text=>{ setSummary(text); setLoading(false); setGenerated(true); })
+      .catch(()=>setLoading(false));
+  };
+
+  return (
+    <div style={{background:DS.bgSurf,border:`1px solid ${DS.border}`,borderRadius:DS.radius,padding:"14px",marginBottom:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:summary?12:0}}>
+        <div>
+          <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>AI Weekly Summary</p>
+          <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Plain-English team performance digest</p>
+        </div>
+        {!generated&&<button onClick={generate} disabled={loading} style={{padding:"7px 14px",borderRadius:DS.radiusSm,background:DS.accent,color:"#fff",border:"none",cursor:loading?"default":"pointer",fontSize:12,fontWeight:600,opacity:loading?.7:1}}>
+          {loading?"Generating…":"Generate"}
+        </button>}
+      </div>
+      {summary&&<p style={{margin:0,fontSize:13,color:DS.textPri,lineHeight:1.7,borderTop:`1px solid ${DS.border}`,paddingTop:12}}>{summary}</p>}
+    </div>
+  );
+}
+
+
 const SB_URL      = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "2024";
@@ -952,9 +1135,11 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                   </div>
                 </div>
 
+                <AdHocDecisionSupport req={r} reps={reps} settings={settings}/>
+
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>handleAdHoc(r,false)} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
-                  <button onClick={()=>handleAdHoc(r,true)} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:"#1a5c35",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:700}}>✅ Approve</button>
+                  <button onClick={()=>handleAdHoc(r,false)} style={{padding:"7px 14px",borderRadius:DS.radiusSm,border:`1px solid ${DS.red}40`,background:DS.redDim,cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
+                  <button onClick={()=>handleAdHoc(r,true)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,border:"none",background:DS.accent,cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Approve</button>
                 </div>
               </div>
             );
@@ -1712,6 +1897,9 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           </div>
         ))}
       </div>
+
+      {/* AI Weekly Summary */}
+      <WeeklyTeamSummary kpiRows={kpiRows} reps={reps}/>
 
       {/* Sub tabs */}
       <div style={{display:"flex",borderBottom:"1.5px solid #ebebeb",marginBottom:14,overflowX:"auto"}}>
@@ -2530,6 +2718,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
 
         {settings.peak_mode&&<div style={{marginTop:10,background:DS.redDim,border:`1px solid ${DS.red}30`,borderRadius:DS.radiusSm,padding:"6px 12px",fontSize:11,color:DS.red,fontWeight:600}}>⚡ Peak mode — health breaks limited to 1 at a time</div>}
         {kpiRows.length>0&&<div style={{marginTop:10}}><RepKPI repName={repInfo.name} kpiRows={kpiRows}/></div>}
+        <BreakRecommendation repName={repInfo.name} reps={reps} settings={settings} kpiRows={kpiRows} onAdmin={onAdmin} onLunch={onLunch} onHealth={onHealth} canTakeAdmin={canTakeAdmin} canTakeHealth={canTakeHealth} cooldownActive={cooldownActive}/>
       </div>
 
       {/* Rep Tabs */}
@@ -2669,6 +2858,7 @@ function RepKPI({ repName, kpiRows=[] }) {
           </div>
         </div>
       )}
+      <CoachingNudge repName={repName} weeks={weeks}/>
     </div>
   );
 }
