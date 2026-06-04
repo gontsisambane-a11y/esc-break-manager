@@ -464,9 +464,16 @@ async function loadAll() {
   const today = businessDayStr();
   const todayPTONames = todayPTO.map(p=>p.rep_name);
   for(const r of reps) {
-    if(r.updated_at && businessDayStr(r.updated_at) !== today && (r.health_breaks_today>0||r.health_time_banked>0)) {
+    const isNewDay = r.updated_at && businessDayStr(r.updated_at) !== today;
+    // Reset health counters on new day
+    if(isNewDay && (r.health_breaks_today>0||r.health_time_banked>0)) {
       await sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_today:0,health_time_banked:0,last_break_returned_at:null});
       r.health_breaks_today=0; r.health_time_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
+    }
+    // Reset stuck break/admin statuses from previous day
+    if(isNewDay && ["health","lunch","admin"].includes(r.status)) {
+      await sbPatch("rep_status",r.id,{status:"available",updated_at:new Date().toISOString()});
+      r.status="available";
     }
     // auto-apply today's PTO from DB
     if(todayPTONames.includes(r.name) && r.status==="available") {
@@ -752,7 +759,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
-  const maxOut = settings.custom_limit ?? Math.floor(activeReps.length * 0.3);
+  const maxOut = settings.custom_limit ?? Math.max(2, Math.floor(activeReps.length * 0.3));
   const totalOut = reps.filter(r=>["health","lunch","admin"].includes(r.status)).length;
   const onHealth = reps.filter(r=>r.status==="health").length;
   const onLunch  = reps.filter(r=>r.status==="lunch").length;
@@ -2552,11 +2559,11 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
 
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
-  const onLunch = reps.filter(r=>r.status==="lunch").length;
+  const onLunch  = reps.filter(r=>r.status==="lunch").length;
   const onHealth = reps.filter(r=>r.status==="health").length;
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
-  const maxOut = settings.custom_limit ?? Math.floor(activeReps.length*0.3);
-  const totalOut = reps.filter(r=>["health","lunch"].includes(r.status)).length;
+  const maxOut = settings.custom_limit ?? Math.max(2, Math.floor(activeReps.length*0.3));
+  const totalOut = reps.filter(r=>["health","lunch","admin"].includes(r.status)).length;
   const hLimit = settings.peak_mode ? H_LIMIT_PEAK : H_LIMIT_NORMAL;
   const lunchLeft = LUNCH_LIMIT - onLunch;
   const healthLeft = hLimit - onHealth;
@@ -2875,24 +2882,23 @@ function AdHocLunchModal({ onSubmit, onClose }) {
   const [preferredTime, setPreferredTime] = useState("");
   const [note, setNote] = useState("");
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#fff",borderRadius:20,padding:"24px 20px",width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.18)"}}>
-        <p style={{margin:"0 0 4px",fontSize:16,fontWeight:800,color:"#1a1a1a"}}>🥗 Request Ad Hoc Lunch</p>
-        <p style={{margin:"0 0 18px",fontSize:12,color:"#888"}}>Outside your scheduled window. Suggest a preferred time in your timezone.</p>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:DS.radiusLg,padding:"24px 20px",width:"100%",maxWidth:340,animation:"popIn .2s ease"}}>
+        <p style={{margin:"0 0 2px",fontSize:11,color:DS.accent,fontWeight:600,textTransform:"uppercase",letterSpacing:1.5}}>Ad Hoc Request</p>
+        <p style={{margin:"0 0 4px",fontSize:16,fontWeight:700,color:DS.textPri}}>Request Lunch</p>
+        <p style={{margin:"0 0 18px",fontSize:12,color:DS.textSec}}>Outside your scheduled window. Suggest a preferred time.</p>
         <div style={{marginBottom:12}}>
-          <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>Preferred time (your timezone)</label>
-          <input type="time" value={preferredTime} onChange={e=>setPreferredTime(e.target.value)}
-            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none"}}/>
-          <p style={{margin:"4px 0 0",fontSize:10,color:"#aaa"}}>Optional but helpful — manager will convert to their timezone</p>
+          <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:6,fontWeight:600}}>Preferred time (your timezone)</label>
+          <input type="time" value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} style={{width:"100%",fontSize:14}}/>
+          <p style={{margin:"4px 0 0",fontSize:10,color:DS.textMut}}>Optional — manager will convert to their timezone</p>
         </div>
         <div style={{marginBottom:16}}>
-          <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>Note (optional)</label>
-          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. Running late, still active on calls"
-            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:6,fontWeight:600}}>Note (optional)</label>
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. Running late, still active on calls" style={{width:"100%",fontSize:13}}/>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={onClose} style={{flex:1,padding:"10px",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#888",cursor:"pointer",fontSize:13,fontWeight:600}}>Cancel</button>
-          <button onClick={()=>onSubmit(preferredTime,note)} style={{flex:2,padding:"10px",borderRadius:10,border:"none",background:"#e07b00",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700}}>Send Request 📩</button>
+          <button onClick={onClose} style={{flex:1,padding:"10px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:13,fontWeight:600}}>Cancel</button>
+          <button onClick={()=>onSubmit(preferredTime,note)} style={{flex:2,padding:"10px",borderRadius:DS.radiusSm,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Send Request</button>
         </div>
       </div>
     </div>
