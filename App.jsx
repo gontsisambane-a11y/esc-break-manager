@@ -475,20 +475,10 @@ function LoginScreen({ onSelect, reps, users=[] }) {
 }
 
 // ── MANAGER VIEW ──────────────────────────────────────────────────────
-function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissions=[], pendingCount=0 }) {
+function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissions=[], pendingCount=0, kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName }) {
   const { reps, settings, adHoc, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("overview");
-  const [toast, setToast] = useState(null);
-  const [kpiRows, setKpiRows] = useState([]);
-  const [kpiFileName, setKpiFileName] = useState(null);
-
-  // Load KPI data from Supabase on mount
-  useEffect(()=>{
-    sb("kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=200000")
-      .then(rows=>{ setKpiRows(rows||[]); })
-      .catch(()=>{});
-    sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); });
-  },[]); // empty deps — only run once on mount
+  const [toast, setToast] = useState(null); // empty deps — only run once on mount
 
   const setKpiRowsPersist = async (updater) => {
     const prev = kpiRows;
@@ -2307,7 +2297,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
 }
 
 // ── REP VIEW ──────────────────────────────────────────────────────────
-function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
+function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   const { reps, settings, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("my");
   const [toast, setToast] = useState(null);
@@ -2488,7 +2478,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
           ))}
         </div>
         {settings.peak_mode&&<div style={{marginTop:10,background:"rgba(231,76,60,.2)",borderRadius:8,padding:"6px 12px",fontSize:11,color:"#ffaaaa",fontWeight:600}}>⚡ Peak mode active — health breaks limited to 1 at a time</div>}
-
+        {kpiRows.length>0&&<div style={{marginTop:12}}><RepKPI repName={repInfo.name} kpiRows={kpiRows}/></div>}
       </div>
 
       {/* Rep Tabs */}
@@ -2508,6 +2498,131 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
       </div>
       {tab==="hub"&&HUB_ENABLED&&<HubView isManager={false}/>}
+    </div>
+  );
+}
+
+function RepKPI({ repName, kpiRows=[] }) {
+  const PAID_DISPS  = new Set(["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"]);
+  const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
+  const PAID_TARGET  = 20;
+  const TOTAL_TARGET = 45;
+
+  // Match by first name
+  const firstName = repName?.split(" ")[0]||repName;
+  const myRows = kpiRows.filter(r=>{
+    const fn = r.hs_agent_name?.split(" ")[0]||"";
+    return fn.toLowerCase()===firstName.toLowerCase();
+  });
+
+  if(!myRows.length) return null;
+
+  // Get week key
+  const getWeekKey = (ts) => {
+    const d = new Date(ts);
+    const day = d.getDay();
+    const mon = new Date(d);
+    mon.setDate(d.getDate()-(day===0?6:day-1));
+    return mon.toISOString().split("T")[0];
+  };
+
+  // Build weekly stats
+  const weekMap = {};
+  myRows.forEach(r=>{
+    const wk = getWeekKey(r.hs_call_timestamp);
+    if(!weekMap[wk]) weekMap[wk]={calls:0,paid:0,trial:0};
+    weekMap[wk].calls++;
+    if(PAID_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].paid++;
+    if(TRIAL_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].trial++;
+  });
+
+  const weeks = Object.entries(weekMap)
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([wk,d])=>({
+      wk, calls:d.calls, paid:d.paid, trial:d.trial,
+      paidCvr: d.calls ? parseFloat((d.paid/d.calls*100).toFixed(1)) : 0,
+      totalCvr: d.calls ? parseFloat(((d.paid+d.trial)/d.calls*100).toFixed(1)) : 0,
+    }));
+
+  if(!weeks.length) return null;
+
+  const current = weeks[weeks.length-1];
+  const prev    = weeks.length>1 ? weeks[weeks.length-2] : null;
+  const last4   = weeks.slice(-4);
+
+  const paidDiff  = prev ? (current.paidCvr  - prev.paidCvr).toFixed(1)  : null;
+  const totalDiff = prev ? (current.totalCvr - prev.totalCvr).toFixed(1) : null;
+
+  const metPaid  = current.paidCvr  >= PAID_TARGET;
+  const metTotal = current.totalCvr >= TOTAL_TARGET;
+
+  const trendIcon = (diff) => {
+    if(diff===null) return "";
+    const n = parseFloat(diff);
+    if(n > 0)  return "↑";
+    if(n < 0)  return "↓";
+    return "→";
+  };
+  const trendColor = (diff, met) => {
+    if(diff===null) return "#888";
+    const n = parseFloat(diff);
+    if(n > 0) return "#1a5c35";
+    if(n < 0) return "#c0392b";
+    return "#888";
+  };
+
+  // Sparkline max
+  const maxCvr = Math.max(...last4.map(w=>w.totalCvr), TOTAL_TARGET+10);
+
+  return (
+    <div style={{background:"rgba(255,255,255,.1)",borderRadius:14,padding:"14px 16px",marginBottom:14,border:"1px solid rgba(255,255,255,.15)"}}>
+      <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:1}}>My Performance — This Week</p>
+
+      {/* Two KPI tiles */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        {[
+          {label:"Paid CVR",val:current.paidCvr,target:PAID_TARGET,diff:paidDiff,met:metPaid},
+          {label:"Total CVR",val:current.totalCvr,target:TOTAL_TARGET,diff:totalDiff,met:metTotal},
+        ].map(m=>(
+          <div key={m.label} style={{background:m.met?"rgba(26,92,53,.35)":"rgba(192,57,43,.25)",borderRadius:10,padding:"10px 12px",border:`1px solid ${m.met?"rgba(26,92,53,.5)":"rgba(192,57,43,.4)"}`}}>
+            <p style={{margin:"0 0 2px",fontSize:10,color:"rgba(255,255,255,.6)"}}>{m.label}</p>
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <span style={{fontSize:22,fontWeight:800,color:"#fff"}}>{m.val}%</span>
+              {m.diff!==null&&<span style={{fontSize:11,fontWeight:700,color:trendColor(m.diff,m.met)}}>{trendIcon(m.diff)}{Math.abs(parseFloat(m.diff))}%</span>}
+            </div>
+            <p style={{margin:"3px 0 0",fontSize:10,color:"rgba(255,255,255,.5)"}}>
+              {m.met?"✅ Above":"⚠️ Below"} {m.target}% target · {current.calls} calls
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Mini sparkline — last 4 weeks */}
+      {last4.length>1&&(
+        <div>
+          <p style={{margin:"0 0 6px",fontSize:10,color:"rgba(255,255,255,.5)"}}>Last {last4.length} weeks — Total CVR</p>
+          <div style={{display:"flex",alignItems:"flex-end",gap:4,height:32}}>
+            {last4.map((w,i)=>{
+              const h = Math.max(4, Math.round((w.totalCvr/maxCvr)*32));
+              const isLast = i===last4.length-1;
+              const col = w.totalCvr>=TOTAL_TARGET?"#4ade80":w.totalCvr>=TOTAL_TARGET-5?"#fbbf24":"#f87171";
+              return (
+                <div key={w.wk} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                  <span style={{fontSize:8,color:"rgba(255,255,255,.4)"}}>{w.totalCvr}%</span>
+                  <div style={{width:"100%",height:h,borderRadius:3,background:col,opacity:isLast?1:.65}}/>
+                  <span style={{fontSize:8,color:"rgba(255,255,255,.35)"}}>{w.wk.slice(5)}</span>
+                </div>
+              );
+            })}
+            {/* Target line visual */}
+          </div>
+          <div style={{marginTop:6,display:"flex",gap:8}}>
+            <span style={{fontSize:9,color:"#4ade80"}}>● Above target</span>
+            <span style={{fontSize:9,color:"#fbbf24"}}>● Near target</span>
+            <span style={{fontSize:9,color:"#f87171"}}>● Below target</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5313,6 +5428,16 @@ export default function App() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // KPI data at root level so reps and managers both see it
+  const [kpiRows, setKpiRows] = useState([]);
+  const [kpiFileName, setKpiFileName] = useState(null);
+
+  useEffect(()=>{
+    sb("kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=200000")
+      .then(rows=>{ setKpiRows(rows||[]); }).catch(()=>{});
+    sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); }).catch(()=>{});
+  },[]);
+
   const reload = useCallback(async()=>{
     try {
       const [d, u, subs] = await Promise.all([
@@ -5391,8 +5516,8 @@ export default function App() {
         else if(role==="client"){setCurrentUser(user);setView("client");}
         else{setCurrentRep(rep);setView("rep");}
       }} reps={data.reps} users={users}/>}
-      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"manager","session");setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount}/>}
-      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentRep?.name||"rep","session");setView("login");}} centreOpen={centreOpen}/>}
+      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"manager","session");setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
+      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentRep?.name||"rep","session");setView("login");}} centreOpen={centreOpen} kpiRows={kpiRows}/>}
       {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"client","session");setView("login");setCurrentUser(null);}}/>}
     </>
   );
