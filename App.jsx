@@ -778,16 +778,23 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
   const [tab, setTab] = useState("overview");
   const [toast, setToast] = useState(null); // empty deps — only run once on mount
 
+  const KPI_COLS = ["hs_deal_id","hs_agent_name","hs_call_timestamp","hs_call_disposition_label","hs_call_direction","contact_preferred_location","deal_stage"];
+
   const setKpiRowsPersist = async (updater) => {
     const prev = kpiRows;
     const next = typeof updater==="function" ? updater(prev) : updater;
     setKpiRows(next);
-    // Upsert ALL rows — unique constraint on hs_deal_id handles deduplication
     const rows = Array.isArray(next) ? next : [];
     if(rows.length===0) return;
-    console.log(`Upserting ${rows.length} rows to kpi_bookings...`);
-    for(let i=0;i<rows.length;i+=500){
-      const chunk=rows.slice(i,i+500);
+    // Strip to only the columns that exist in the table
+    const stripped = rows.map(r => {
+      const obj = {};
+      KPI_COLS.forEach(k => { obj[k] = r[k]||null; });
+      return obj;
+    });
+    console.log(`Upserting ${stripped.length} rows to kpi_bookings...`);
+    for(let i=0;i<stripped.length;i+=500){
+      const chunk=stripped.slice(i,i+500);
       const res = await fetch(`${SB_URL}/rest/v1/kpi_bookings`,{
         method:"POST",
         headers:{
@@ -802,7 +809,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
         const err = await res.text();
         console.error(`KPI upsert chunk ${i/500} failed:`, res.status, err);
       } else {
-        console.log(`KPI chunk ${i/500+1} saved (${chunk.length} rows)`);
+        console.log(`KPI chunk ${Math.floor(i/500)+1} saved (${chunk.length} rows)`);
       }
     }
   };
