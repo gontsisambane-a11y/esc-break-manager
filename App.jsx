@@ -208,14 +208,6 @@ const sbPost  = (tbl,d)    => sb(tbl,{method:"POST",body:JSON.stringify(d)});
 const sbDel   = (tbl,id)   => sb(`${tbl}?id=eq.${id}`,{method:"DELETE"});
 
 // SOC 2 CC7.2 — Audit logging
-const auditLog = (event_type, actor, target, details={}) => {
-  sbPost("audit_log",{
-    event_type, actor, target,
-    details,
-    ip_hint: navigator.userAgent.substring(0,120),
-    created_at: new Date().toISOString()
-  }).catch(()=>{}); // never block on audit log failure
-};
 
 async function loadAll() {
   const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue,todayPTO] = await Promise.all([
@@ -349,16 +341,13 @@ function LoginScreen({ onSelect, reps, users=[] }) {
     if(user?.locked_until && new Date(user.locked_until) > new Date()){
       const mins = Math.ceil((new Date(user.locked_until)-new Date())/60000);
       setPinErr(true);
-      auditLog("login_blocked", username||"legacy", "manager", {reason:"account_locked"});
       return;
     }
 
     if(user) {
       await sbPatch("app_users",user.id,{failed_attempts:0,locked_until:null}).catch(()=>{});
-      auditLog("login", user.display_name||user.username, "manager");
       onSelect("manager", null, user);
     } else if(legacyOk) {
-      auditLog("login", "management", "manager", {method:"legacy_pin"});
       onSelect("manager", null, {username:"management",display_name:"Management",role:"management"});
     } else {
       // Increment failed attempts
@@ -367,7 +356,6 @@ function LoginScreen({ onSelect, reps, users=[] }) {
         const lockUntil = attempts >= 5 ? new Date(Date.now() + 15*60*1000).toISOString() : null;
         await sbPatch("app_users",user.id,{failed_attempts:attempts,locked_until:lockUntil}).catch(()=>{});
       }
-      auditLog("login_failed", username||"unknown", "manager");
       setPinErr(true);
     }
   };
@@ -378,12 +366,10 @@ function LoginScreen({ onSelect, reps, users=[] }) {
 
     if(found?.locked_until && new Date(found.locked_until) > new Date()){
       setPinErr(true);
-      auditLog("login_blocked", username, "client", {reason:"account_locked"});
       return;
     }
     if(user) {
       await sbPatch("app_users",user.id,{failed_attempts:0,locked_until:null}).catch(()=>{});
-      auditLog("login", user.display_name||user.username, "client");
       onSelect("client", null, user);
     } else {
       if(found) {
@@ -391,7 +377,6 @@ function LoginScreen({ onSelect, reps, users=[] }) {
         const lockUntil = attempts >= 5 ? new Date(Date.now()+15*60*1000).toISOString() : null;
         await sbPatch("app_users",found.id,{failed_attempts:attempts,locked_until:lockUntil}).catch(()=>{});
       }
-      auditLog("login_failed", username||"unknown", "client");
       setPinErr(true);
     }
   };
@@ -4962,7 +4947,6 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
 
   const reject = async (s) => {
     await sbPatch("hub_submissions",s.id,{status:"rejected",reviewed_by:currentUser?.display_name||"Manager",reviewed_at:new Date().toISOString()});
-    auditLog("reject", currentUser?.display_name||"Manager", `${s.type}:${s.payload?.title||s.payload?.location_name||s.id}`);
     fire("info","Submission rejected");
     reload();
   };
@@ -5508,6 +5492,8 @@ export default function App() {
     </div>
   );
 
+  const pendingCount = submissions.filter(s=>s.status==="pending").length;
+
   return (
     <>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
@@ -5516,9 +5502,9 @@ export default function App() {
         else if(role==="client"){setCurrentUser(user);setView("client");}
         else{setCurrentRep(rep);setView("rep");}
       }} reps={data.reps} users={users}/>}
-      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"manager","session");setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
-      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentRep?.name||"rep","session");setView("login");}} centreOpen={centreOpen} kpiRows={kpiRows}/>}
-      {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"client","session");setView("login");setCurrentUser(null);}}/>}
+      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
+      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen} kpiRows={kpiRows}/>}
+      {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
     </>
   );
 }
