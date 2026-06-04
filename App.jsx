@@ -2576,11 +2576,11 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   const timeUsedToday = myRep.health_time_today||0;
   const breaksLeft = HEALTH_PER_DAY - (myRep.health_breaks_today||0);
 
-  const canTakeHealth = healthLeft>0 && capLeft>0 && !cooldownActive && breaksLeft>0 && myRep.status==="available";
+  const canTakeHealth = healthLeft>0 && !cooldownActive && breaksLeft>0 && myRep.status==="available";
   const canTakeLunch  = lunchLeft>0 && capLeft>0 && myRep.status==="available";
   const adminLimit    = settings.admin_limit ?? 2;
   const onAdmin       = reps.filter(r=>r.status==="admin").length;
-  const canTakeAdmin  = onAdmin<adminLimit && capLeft>0 && myRep.status==="available";
+  const canTakeAdmin  = onAdmin<adminLimit && myRep.status==="available";
 
   // Queue helpers
   const myQueueEntry = breakQueue.find(q=>q.rep_id===repInfo.id);
@@ -2623,11 +2623,13 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   };
 
   const startBreak = async (type) => {
-    if(capLeft<=0){
-      if(type==="health"&&!myQueueEntry&&breaksLeft>0&&!cooldownActive){
+    if(type!=="health" && capLeft<=0){
+      fire("declined","Team cap reached — all break slots full");return;
+    }
+    if(type==="health"&&capLeft<=0){
+      if(!myQueueEntry&&breaksLeft>0&&!cooldownActive){
         await joinQueue(); return;
       }
-      fire("declined","Team cap reached — all break slots full");return;
     }
     if(type==="health"){
       if(healthLeft<=0){
@@ -2919,9 +2921,6 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
     <div>
       {showBreakModal&&(
         <Modal title="Request Break" sub="BREAK REQUEST" onClose={()=>setShowBreakModal(false)}>
-          <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"8px 10px",marginBottom:12,fontSize:10,color:DS.textSec,fontFamily:"monospace"}}>
-            healthLeft={healthLeft} capLeft={capLeft} breaksLeft={breaksLeft} cooldown={cooldownActive?"Y":"N"} status={myRep.status} maxOut={maxOut} totalOut={totalOut} hLimit={hLimit} onHealth={onHealth}
-          </div>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
