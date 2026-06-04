@@ -1840,16 +1840,12 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
     if(!file) return;
     setUploading(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const parsed = parseCSV(ev.target.result);
       const filtered = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
-      // Merge with existing rows — deduplicate by hs_deal_id
-      setKpiRows(prev => {
-        const existingIds = new Set(prev.map(r=>r.hs_deal_id));
-        const newRows = filtered.filter(r=>!existingIds.has(r.hs_deal_id));
-        return [...prev, ...newRows];
-      });
-      setKpiFileName(file.name);
+      // Use persist function — saves to Supabase and deduplicates
+      await setKpiRows(filtered);
+      await setKpiFileNamePersist(file.name);
       setUploading(false);
     };
     reader.readAsText(file);
