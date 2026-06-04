@@ -1003,17 +1003,17 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
               {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:"#fff3cd",color:DS.amber,padding:"2px 5px",borderRadius:4}}>Override</span>}
               {rep.rep_stage&&rep.rep_stage!=="active"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).text,border:`1px solid ${(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).border}`,fontWeight:700}}>{rep.rep_stage==="training"?"🎓 Training":rep.rep_stage==="not_started"?"⏳ Not Started":rep.rep_stage==="ramping"?"📈 Ramping":"Unknown"}</span>}
             </div>
-            {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:"#aaa"}}>{rep.ooo_note}</p>}
+            {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:DS.textMut}}>{rep.ooo_note}</p>}
             {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
-            {rep.status==="health"&&<p style={{margin:"2px 0 0",fontSize:10,color:"#888"}}>Breaks today: {rep.health_breaks_today||0}/{HEALTH_PER_DAY}</p>}
+            {rep.status==="health"&&<p style={{margin:"2px 0 0",fontSize:10,color:DS.textSec}}>Breaks today: {rep.health_breaks_today||0}/{HEALTH_PER_DAY}</p>}
             {rep.status==="admin"&&ab&&<p style={{margin:"2px 0 0",fontSize:10,color:"#1d4ed8"}}>🗂️ Admin — {fmtDur(elapsedSec(ab.started_at))} / 30m</p>}
           </div>
           <div style={{display:"flex",gap:5,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
             {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#555",fontWeight:600}}>Back 👋</button>}
             {isOOO&&<button onClick={()=>handleClear(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #c8a8e0",background:"#f5eefb",cursor:"pointer",fontSize:11,color:"#7a1a5c",fontWeight:600}}>Clear</button>}
-            {!isBreak&&!isOOO&&!isOff&&<button onClick={()=>setOooModal(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ebebeb",background:"#fafafa",cursor:"pointer",fontSize:10,color:"#aaa"}}>Mark Out</button>}
+            {!isBreak&&!isOOO&&!isOff&&<button onClick={()=>setOooModal(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ebebeb",background:"#fafafa",cursor:"pointer",fontSize:10,color:DS.textMut}}>Mark Out</button>}
             {settings.peak_mode&&rep.status==="health"&&<button onClick={()=>handleOverridePeak(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f0ad4e",background:"#fff3cd",cursor:"pointer",fontSize:10,color:DS.amber}}>Override</button>}
-            {!isOff&&<button onClick={()=>resetBalance(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>Reset Breaks</button>}
+            {!isOff&&<button onClick={()=>resetBalance(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red}}>Reset Breaks</button>}
           </div>
         </div>
       </div>
@@ -1165,7 +1165,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
       {adHoc.length===0&&swaps.length===0&&(
         <div style={{textAlign:"center",padding:"44px 0",color:"#bbb"}}>
           <p style={{fontSize:32,margin:"0 0 8px"}}>✅</p>
-          <p style={{fontWeight:600,fontSize:15,color:"#888"}}>No pending requests</p>
+          <p style={{fontWeight:600,fontSize:15,color:DS.textSec}}>No pending requests</p>
         </div>
       )}
       {adHoc.length>0&&(
@@ -1183,7 +1183,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
                   <div>
                     <p style={{margin:0,fontWeight:700,fontSize:14}}>{r.rep_name}</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Requested at: {r.requested_time} · TZ: {r.rep_timezone||"Central"}</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Requested at: {r.requested_time} · TZ: {r.rep_timezone||"Central"}</p>
                     {r.note&&<p style={{margin:"4px 0 0",fontSize:12,color:"#555",fontStyle:"italic"}}>"{r.note}"</p>}
                   </div>
                 </div>
@@ -1191,7 +1191,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                 {/* Preferred time */}
                 {ctTime&&(
                   <div style={{background:"#fff",borderRadius:8,padding:"8px 10px",marginBottom:8,border:"1px solid #f0c080"}}>
-                    <p style={{margin:0,fontSize:12,fontWeight:600,color:"#1a1a1a"}}>⏰ Preferred time: <span style={{color:"#e07b00"}}>{r.preferred_time} {r.rep_timezone} → {ctTime}</span></p>
+                    <p style={{margin:0,fontSize:12,fontWeight:600,color:DS.textPri}}>⏰ Preferred time: <span style={{color:"#e07b00"}}>{r.preferred_time} {r.rep_timezone} → {ctTime}</span></p>
                   </div>
                 )}
 
@@ -1199,12 +1199,12 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                 <div style={{background:"#f9f9f9",borderRadius:8,padding:"8px 10px",marginBottom:10}}>
                   <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#555"}}>📊 Impact Analysis</p>
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {peak&&<p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
+                    {peak&&<p style={{margin:0,fontSize:11,color:DS.red,fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
                     {!peak&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ Off-peak window — lower call volume</p>}
                     {conflicts.length>0&&<p style={{margin:0,fontSize:11,color:"#b85c00"}}>⚠️ Already on lunch at that time: {conflicts.join(", ")}</p>}
                     {conflicts.length===0&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ No schedule conflicts at preferred time</p>}
                     <p style={{margin:0,fontSize:11,color:capLeft<=0?"#c0392b":"#555"}}>Team cap: {reps.filter(x=>["health","lunch","admin"].includes(x.status)).length} out now · {capLeft} slot{capLeft!==1?"s":""} remaining</p>
-                    {onLunchNow>0&&<p style={{margin:0,fontSize:11,color:"#888"}}>{onLunchNow} rep{onLunchNow!==1?"s":""} currently on lunch</p>}
+                    {onLunchNow>0&&<p style={{margin:0,fontSize:11,color:DS.textSec}}>{onLunchNow} rep{onLunchNow!==1?"s":""} currently on lunch</p>}
                   </div>
                 </div>
 
@@ -1227,10 +1227,10 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
                 <div>
                   <p style={{margin:0,fontWeight:600,fontSize:14}}>{s.requester_name} ↔ {s.target_name}</p>
-                  <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>{s.requester_name}: {s.requester_date} · {s.target_name}: {s.target_date}</p>
+                  <p style={{margin:"3px 0 0",fontSize:12,color:DS.textSec}}>{s.requester_name}: {s.requester_date} · {s.target_name}: {s.target_date}</p>
                 </div>
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>handleSwap(s,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
+                  <button onClick={()=>handleSwap(s,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
                   <button onClick={()=>handleSwap(s,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#8e44ad",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Approve</button>
                 </div>
               </div>
@@ -1269,7 +1269,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
       {addModal&&<AddRepModal onClose={()=>setAddModal(false)} onAdd={async(d)=>{await sbPost("rep_status",d);fire("approved",`${d.name} added`);setAddModal(false);reload();}}/>}
       {deleteModal&&(
         <Modal title={`Delete ${deleteModal.name}?`} sub="PERMANENT" onClose={()=>{setDeleteModal(null);setDeleteConfirm("");}}>
-          <p style={{fontSize:13,color:"#888",marginBottom:14}}>This will permanently remove {deleteModal.name} and all their break history. Type their name to confirm.</p>
+          <p style={{fontSize:13,color:DS.textSec,marginBottom:14}}>This will permanently remove {deleteModal.name} and all their break history. Type their name to confirm.</p>
           <input value={deleteConfirm} onChange={e=>setDeleteConfirm(e.target.value)} placeholder={deleteModal.name} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,marginBottom:14,outline:"none"}}/>
           <div style={{display:"flex",gap:8}}>
             <Btn label="Cancel" onClick={()=>{setDeleteModal(null);setDeleteConfirm("");}} outline color="#888" small/>
@@ -1318,13 +1318,13 @@ function MgrTeam({ reps, settings, reload, fire }) {
                     <option value="not_started">⏳ Not Started</option>
                     <option value="ramping">📈 Ramping</option>
                   </select>
-                  <span style={{fontSize:10,color:"#aaa"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} today</span>
+                  <span style={{fontSize:10,color:DS.textMut}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} today</span>
                   {cooldownActive&&<span style={{fontSize:10,color:"#e07b00"}}>⏳ {fmtTime(cooldownLeft)}</span>}
                 </div>
               </div>
               <div style={{display:"flex",gap:5,flexShrink:0}}>
-                <button onClick={()=>handleLogCalloff(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b",fontWeight:600}}>Call-off</button>
-                <button onClick={()=>setDeleteModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Delete</button>
+                <button onClick={()=>handleLogCalloff(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red,fontWeight:600}}>Call-off</button>
+                <button onClick={()=>setDeleteModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textMut}}>Delete</button>
               </div>
             </div>
           </div>
@@ -1362,7 +1362,7 @@ function AddRepModal({ onClose, onAdd }) {
             <label style={{fontSize:12,color:"#1d4ed8",display:"block",marginBottom:4,fontWeight:600}}>📈 Ramp Start Date</label>
             <input type="date" value={form.ramp_start_date} onChange={e=>set("ramp_start_date",e.target.value)}
               style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #bfdbfe",fontSize:13,outline:"none",background:"#eff6ff",color:"#1d4ed8"}}/>
-            <p style={{margin:"4px 0 0",fontSize:10,color:"#888"}}>Week 1 targets start from this date</p>
+            <p style={{margin:"4px 0 0",fontSize:10,color:DS.textSec}}>Week 1 targets start from this date</p>
           </div>
         )}
         <div>
@@ -1383,11 +1383,11 @@ function AddRepModal({ onClose, onAdd }) {
           <div>
             <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
             <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
-              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
-              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
-              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
-              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Lunch time</span>
-              <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
+              <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Day</span>
+              <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Start</span>
+              <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>End</span>
+              <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Lunch time</span>
+              <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Duration</span>
             </div>
             {form.shift_days.map(d=>(
               <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
@@ -1550,11 +1550,11 @@ function MgrSchedules({ reps, reload, fire }) {
               <div>
                 <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
                 <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Day</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Start</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>End</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Lunch time</span>
-                  <span style={{fontSize:10,color:"#aaa",fontWeight:600}}>Duration</span>
+                  <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Day</span>
+                  <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Start</span>
+                  <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>End</span>
+                  <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Lunch time</span>
+                  <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Duration</span>
                 </div>
                 {form.shift_days.map(d=>(
                   <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
@@ -1605,7 +1605,7 @@ function MgrSchedules({ reps, reload, fire }) {
       <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>📅 Today's Roster — {todayKey}</p>
-          <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:"#aaa"}}>{viewerTz}</strong></span>
+          <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:DS.textMut}}>{viewerTz}</strong></span>
         </div>
 
         {inToday.length===0&&(
@@ -1616,7 +1616,7 @@ function MgrSchedules({ reps, reload, fire }) {
           const tz = TZ_C[rep.timezone]||TZ_C.Central;
           const diffTz = repTz !== viewerTz;
           return (
-            <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
+            <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${DS.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",color:DS.green,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <div>
@@ -1642,15 +1642,15 @@ function MgrSchedules({ reps, reload, fire }) {
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
             <p style={{margin:"0 0 6px",fontSize:10,color:"#ccc",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Not scheduled today ({notInToday.length})</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {notInToday.map(r=><span key={r.id} style={{fontSize:11,background:"#f5f5f5",color:"#aaa",padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
+              {notInToday.map(r=><span key={r.id} style={{fontSize:11,background:"#f5f5f5",color:DS.textMut,padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
             </div>
           </div>
         )}
         {oooToday.length>0&&(
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
-            <p style={{margin:"0 0 6px",fontSize:10,color:"#c0392b",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Out today ({oooToday.length})</p>
+            <p style={{margin:"0 0 6px",fontSize:10,color:DS.red,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Out today ({oooToday.length})</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {oooToday.map(r=><span key={r.id} style={{fontSize:11,background:"#fdf0ee",color:"#c0392b",padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
+              {oooToday.map(r=><span key={r.id} style={{fontSize:11,background:"#fdf0ee",color:DS.red,padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
             </div>
           </div>
         )}
@@ -1679,8 +1679,8 @@ function MgrSchedules({ reps, reload, fire }) {
                   <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
                   {scheduledToday&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>IN TODAY</span>}
                 </div>
-                <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{days}</p>
-                {scheduledToday&&startConverted&&<p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Today: {fmt12h(startConverted)} – {endConverted?fmt12h(endConverted):"?"} <span style={{color:"#ccc"}}>({viewerTz})</span></p>}
+                <p style={{margin:"2px 0 0",fontSize:11,color:DS.textMut}}>{days}</p>
+                {scheduledToday&&startConverted&&<p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Today: {fmt12h(startConverted)} – {endConverted?fmt12h(endConverted):"?"} <span style={{color:"#ccc"}}>({viewerTz})</span></p>}
               </div>
               <span style={{fontSize:12,color:"#bbb"}}>✏️</span>
             </div>
@@ -1924,15 +1924,15 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
   };
 
   const thStyle = {fontSize:10,fontWeight:700,color:"#999",padding:"6px 8px",background:DS.bgSurf,borderBottom:`1px solid ${DS.border}`,textAlign:"center",whiteSpace:"nowrap"};
-  const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"center"};
-  const nameStyle = {fontSize:12,fontWeight:600,color:"#1a1a1a",padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"left",whiteSpace:"nowrap"};
+  const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:`1px solid ${DS.border}`,textAlign:"center"};
+  const nameStyle = {fontSize:12,fontWeight:600,color:DS.textPri,padding:"7px 8px",borderBottom:`1px solid ${DS.border}`,textAlign:"left",whiteSpace:"nowrap"};
 
   if(!kpiRows.length) return (
     <div style={{marginTop:16}}>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"32px 20px",textAlign:"center"}}>
         <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
-        <p style={{fontSize:15,fontWeight:700,color:"#1a1a1a",margin:"0 0 6px"}}>KPI Dashboard</p>
-        <p style={{fontSize:12,color:"#888",margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data. Data is shared across all managers automatically.</p>
+        <p style={{fontSize:15,fontWeight:700,color:DS.textPri,margin:"0 0 6px"}}>KPI Dashboard</p>
+        <p style={{fontSize:12,color:DS.textSec,margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data. Data is shared across all managers automatically.</p>
         <button onClick={()=>fileRef.current?.click()} style={{padding:"10px 24px",borderRadius:10,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
           {uploading?"Processing…":"📂 Upload bookings CSV"}
         </button>
@@ -1947,14 +1947,14 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {/* Header with upload */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
-          <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>📊 KPI Dashboard</p>
-          <p style={{margin:0,fontSize:10,color:"#aaa"}}>{kpiFileName} · {kpiRows.length.toLocaleString()} calls</p>
+          <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.textPri}}>📊 KPI Dashboard</p>
+          <p style={{margin:0,fontSize:10,color:DS.textMut}}>{kpiFileName} · {kpiRows.length.toLocaleString()} calls</p>
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:DS.green,cursor:"pointer",fontSize:11,fontWeight:700}}>
             ➕ Add Weekly CSV
           </button>
-          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:700}}>
+          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:700}}>
             🗑 Clear
           </button>
         </div>
@@ -1966,7 +1966,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
         {[{l:"Paid CVR baseline",v:"20%",c:"#1a5c35"},{l:"Total CVR baseline",v:"45%",c:"#1d4ed8"}].map(p=>(
           <div key={p.l} style={{background:DS.bgSurf,border:`1px solid ${p.c}20`,borderRadius:8,padding:"5px 10px",display:"flex",gap:6,alignItems:"center"}}>
             <span style={{fontSize:14,fontWeight:800,color:p.c}}>{p.v}</span>
-            <span style={{fontSize:10,color:"#888"}}>{p.l}</span>
+            <span style={{fontSize:10,color:DS.textSec}}>{p.l}</span>
           </div>
         ))}
       </div>
@@ -2013,7 +2013,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {/* MONTHLY */}
       {kpiTab==="monthly"&&(
         <div style={{overflowX:"auto"}}>
-          <p style={{fontSize:10,color:"#888",marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 6 months</p>
+          <p style={{fontSize:10,color:DS.textSec,marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 6 months</p>
           <table style={{borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef",minWidth:"100%"}}>
             <thead>
               <tr>
@@ -2047,7 +2047,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {/* WEEKLY */}
       {kpiTab==="weekly"&&(
         <div style={{overflowX:"auto"}}>
-          <p style={{fontSize:10,color:"#888",marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 8 weeks (week starting Mon)</p>
+          <p style={{fontSize:10,color:DS.textSec,marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 8 weeks (week starting Mon)</p>
           <table style={{borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef",minWidth:"100%"}}>
             <thead>
               <tr>
@@ -2084,7 +2084,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           {/* Target table */}
           <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8"}}>
-              <p style={{margin:0,fontSize:12,fontWeight:700,color:"#1a1a1a"}}>Ramp Targets — All started 29 May 2026</p>
+              <p style={{margin:0,fontSize:12,fontWeight:700,color:DS.textPri}}>Ramp Targets — All started 29 May 2026</p>
             </div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
@@ -2110,8 +2110,8 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           {NEW_JOINERS.length===0&&(
             <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"24px",textAlign:"center"}}>
               <p style={{fontSize:20,margin:"0 0 8px"}}>📈</p>
-              <p style={{fontSize:13,fontWeight:600,color:"#1a1a1a",margin:"0 0 4px"}}>No agents currently ramping</p>
-              <p style={{fontSize:11,color:"#aaa",margin:0}}>Tag an agent as Ramping in the Team tab to track their progress here</p>
+              <p style={{fontSize:13,fontWeight:600,color:DS.textPri,margin:"0 0 4px"}}>No agents currently ramping</p>
+              <p style={{fontSize:11,color:DS.textMut,margin:0}}>Tag an agent as Ramping in the Team tab to track their progress here</p>
             </div>
           )}
           {NEW_JOINERS.map(agent=>{
@@ -2122,7 +2122,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
               <div key={agent} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
                 <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.green}}>{agent}</p>
-                  <p style={{margin:0,fontSize:10,color:"#aaa"}}>{agRows.length} total calls · started {rampStartStr}</p>
+                  <p style={{margin:0,fontSize:10,color:DS.textMut}}>{agRows.length} total calls · started {rampStartStr}</p>
                 </div>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead>
@@ -2147,7 +2147,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
                       return (
                         <tr key={wk} style={{background:upcoming?"#fafafa":"#fff"}}>
                           <td style={{...tdStyle,color:upcoming?"#ccc":"#1a1a1a",fontWeight:700}}>W{wk}</td>
-                          <td style={{...tdStyle,fontSize:10,color:"#888"}}>{RAMP_TARGETS[wk].dates}</td>
+                          <td style={{...tdStyle,fontSize:10,color:DS.textSec}}>{RAMP_TARGETS[wk].dates}</td>
                           <td style={tdStyle}>{upcoming?"—":calls}</td>
                           <td style={tdStyle}>{upcoming?"—":paid}</td>
                           <td style={tdStyle}>{upcoming?"—":trial}</td>
@@ -2171,8 +2171,8 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {kpiTab==="pip"&&(
         <div>
           <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"20px",marginBottom:14}}>
-            <p style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:"#1a1a1a"}}>📄 Performance Report Generator</p>
-            <p style={{margin:"0 0 16px",fontSize:12,color:"#888"}}>Generate a printable PDF report for any agent over a custom date range. Use for PIPs, reviews or coaching sessions.</p>
+            <p style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:DS.textPri}}>📄 Performance Report Generator</p>
+            <p style={{margin:"0 0 16px",fontSize:12,color:DS.textSec}}>Generate a printable PDF report for any agent over a custom date range. Use for PIPs, reviews or coaching sessions.</p>
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
               <div>
@@ -2198,7 +2198,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
               style={{padding:"11px 24px",borderRadius:10,background:pipAgent&&pipFrom&&pipTo?"#003087":"#ccc",color:"#fff",border:"none",cursor:pipAgent&&pipFrom&&pipTo?"pointer":"default",fontSize:13,fontWeight:700}}>
               📄 Generate PDF Report
             </button>
-            <p style={{margin:"8px 0 0",fontSize:10,color:"#aaa"}}>Opens in a new tab — use browser Print (Cmd+P / Ctrl+P) and select "Save as PDF"</p>
+            <p style={{margin:"8px 0 0",fontSize:10,color:DS.textMut}}>Opens in a new tab — use browser Print (Cmd+P / Ctrl+P) and select "Save as PDF"</p>
           </div>
 
           <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px"}}>
@@ -2277,7 +2277,7 @@ function MgrReports({ reps }) {
         </div>
         <button onClick={exportCSV} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export Excel</button>
       </div>
-      {loading&&<p style={{textAlign:"center",color:"#aaa",padding:"30px 0"}}>Loading…</p>}
+      {loading&&<p style={{textAlign:"center",color:DS.textMut,padding:"30px 0"}}>Loading…</p>}
       {!loading&&data&&(
         <div>
           <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden"}}>
@@ -2287,10 +2287,10 @@ function MgrReports({ reps }) {
               ))}
             </div>
             {repStats.map(({rep,hb,hMins,lb,sick,calloff})=>(
-              <div key={rep.id} style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",gap:0,padding:"10px 12px",borderBottom:"1px solid #f5f5f5",alignItems:"center"}}>
-                <span style={{fontSize:12,fontWeight:600,color:"#1a1a1a"}}>{rep.name}</span>
+              <div key={rep.id} style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",gap:0,padding:"10px 12px",borderBottom:`1px solid ${DS.border}`,alignItems:"center"}}>
+                <span style={{fontSize:12,fontWeight:600,color:DS.textPri}}>{rep.name}</span>
                 <span style={{fontSize:12,color:hb>=HEALTH_PER_DAY?"#e74c3c":"#1a1a1a",fontWeight:hb>=HEALTH_PER_DAY?700:400}}>{hb}</span>
-                <span style={{fontSize:11,color:"#888"}}>{hMins}m</span>
+                <span style={{fontSize:11,color:DS.textSec}}>{hMins}m</span>
                 <span style={{fontSize:12}}>{lb}</span>
                 <span style={{fontSize:12,color:sick>0?"#c0392b":"#888"}}>{sick}</span>
                 <span style={{fontSize:12,color:calloff>0?"#e07b00":"#888"}}>{calloff}</span>
@@ -2305,8 +2305,8 @@ function MgrReports({ reps }) {
             ].map(s=>(
               <div key={s.label} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",textAlign:"center"}}>
                 <p style={{margin:"0 0 4px",fontSize:22}}>{s.icon}</p>
-                <p style={{margin:0,fontSize:20,fontWeight:800,color:"#1a1a1a"}}>{s.val}</p>
-                <p style={{margin:0,fontSize:10,color:"#aaa"}}>{s.label}</p>
+                <p style={{margin:0,fontSize:20,fontWeight:800,color:DS.textPri}}>{s.val}</p>
+                <p style={{margin:0,fontSize:10,color:DS.textMut}}>{s.label}</p>
               </div>
             ))}
           </div>
@@ -2388,7 +2388,7 @@ function MgrPTO({ reps, reload, fire }) {
       {/* Week nav */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <button onClick={()=>setWeekOffset(p=>p-1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:13}}>← Prev</button>
-        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>
+        <span style={{fontSize:13,fontWeight:600,color:DS.textPri}}>
           {weekOffset===0?"This Week":weekOffset===1?"Next Week":weekOffset===-1?"Last Week":`${weekDays[0].toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${weekDays[6].toLocaleDateString("en-US",{month:"short",day:"numeric"})}`}
         </span>
         <button onClick={()=>setWeekOffset(p=>p+1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:13}}>Next →</button>
@@ -2414,7 +2414,7 @@ function MgrPTO({ reps, reload, fire }) {
             <div key={rep.id} style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f8f8f8"}}>
               <div style={{padding:"7px 10px",display:"flex",alignItems:"center",gap:6}}>
                 <div style={{width:22,height:22,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
-                <span style={{fontSize:11,fontWeight:600,color:"#1a1a1a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rep.name}</span>
+                <span style={{fontSize:11,fontWeight:600,color:DS.textPri,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rep.name}</span>
               </div>
               {weekDays.map((d,i)=>{
                 const ds=d.toISOString().split('T')[0];
@@ -2442,9 +2442,9 @@ function MgrPTO({ reps, reload, fire }) {
 
       {/* Legend */}
       <div style={{marginTop:12,padding:"10px 14px",background:"#fff",borderRadius:10,border:"1.5px solid #efefef",display:"flex",gap:16,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#8e44ad",fontWeight:700,background:"#f5eefb",padding:"2px 6px",borderRadius:4}}>PTO</span><span style={{fontSize:11,color:"#888"}}>Pre-loaded from calendar</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:11,color:"#ccc"}}>+</span><span style={{fontSize:11,color:"#888"}}>Click to add PTO for that day</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#e74c3c"}}>✕</span><span style={{fontSize:11,color:"#888"}}>Click to remove</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#8e44ad",fontWeight:700,background:"#f5eefb",padding:"2px 6px",borderRadius:4}}>PTO</span><span style={{fontSize:11,color:DS.textSec}}>Pre-loaded from calendar</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:11,color:"#ccc"}}>+</span><span style={{fontSize:11,color:DS.textSec}}>Click to add PTO for that day</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#e74c3c"}}>✕</span><span style={{fontSize:11,color:DS.textSec}}>Click to remove</span></div>
       </div>
     </div>
   );
@@ -2507,7 +2507,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div>
             <p style={{margin:0,fontWeight:700,fontSize:14}}>⚡ Peak Mode</p>
-            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Limits health breaks to 1 at a time</p>
+            <p style={{margin:"3px 0 0",fontSize:12,color:DS.textSec}}>Limits health breaks to 1 at a time</p>
           </div>
           <div onClick={togglePeak} style={{width:46,height:26,borderRadius:13,background:settings.peak_mode?"#1a5c35":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
             <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.peak_mode?23:3,transition:"left .2s"}}/>
@@ -2521,7 +2521,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div>
             <p style={{margin:0,fontWeight:700,fontSize:14}}>🗂️ Admin Time</p>
-            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Allow reps to take 30-min admin slots for emails and tickets</p>
+            <p style={{margin:"3px 0 0",fontSize:12,color:DS.textSec}}>Allow reps to take 30-min admin slots for emails and tickets</p>
           </div>
           <div onClick={toggleAdmin} style={{width:46,height:26,borderRadius:13,background:settings.admin_mode?"#1d4ed8":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
             <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
@@ -2531,7 +2531,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
           <p style={{margin:"0 0 8px",fontSize:12,color:"#555"}}>Active team: {activeReps.length}</p>
           <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
             <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
-            <span style={{fontSize:13,color:"#888"}}>max people on admin at once</span>
+            <span style={{fontSize:13,color:DS.textSec}}>max people on admin at once</span>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn label="Reset to 2" onClick={resetAdminLimit} outline color="#888" small/>
@@ -2544,7 +2544,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
       {/* Notification Preferences */}
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 GChat Notification Preferences</p>
-        <p style={{margin:"0 0 14px",fontSize:12,color:"#888"}}>Choose which events ping GChat. All are on by default.</p>
+        <p style={{margin:"0 0 14px",fontSize:12,color:DS.textSec}}>Choose which events ping GChat. All are on by default.</p>
         {["main","execo"].map(ch=>(
           <div key={ch} style={{marginBottom:14}}>
             <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#555",textTransform:"uppercase",letterSpacing:.5}}>
@@ -2571,11 +2571,11 @@ function MgrSettings({ settings, reps, reload, fire }) {
           await sbPatch("app_settings",1,{notif_prefs:{},updated_at:new Date().toISOString()});
           fire("info","All notifications reset to on");
           reload();
-        }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>Reset all to ON</button>
+        }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Reset all to ON</button>
       </div>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 Execo Managers GChat</p>
-        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Separate space for ad hoc lunch requests and approvals — for when you are unavailable</p>
+        <p style={{margin:"0 0 12px",fontSize:12,color:DS.textSec}}>Separate space for ad hoc lunch requests and approvals — for when you are unavailable</p>
         <input value={settings.execo_webhook||""} onChange={async e=>{
           await sbPatch("app_settings",1,{execo_webhook:e.target.value||null,updated_at:new Date().toISOString()});
           reload();
@@ -2585,10 +2585,10 @@ function MgrSettings({ settings, reps, reload, fire }) {
       </div>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>👥 Team Break Cap</p>
-        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Default: 30% of active team = {Math.floor(reps.length*0.3)} max out at once</p>
+        <p style={{margin:"0 0 12px",fontSize:12,color:DS.textSec}}>Default: 30% of active team = {Math.floor(reps.length*0.3)} max out at once</p>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
           <input type="number" min={1} max={reps.length} value={customCap} onChange={e=>setCustomCap(parseInt(e.target.value))} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
-          <span style={{fontSize:13,color:"#888"}}>max people out at once</span>
+          <span style={{fontSize:13,color:DS.textSec}}>max people out at once</span>
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn label="Reset to 30%" onClick={resetCap} outline color="#888" small/>
@@ -3025,7 +3025,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
             {repInfo.avatar||avatar(repInfo.name)}
           </div>
           <div>
-            <p style={{margin:0,fontWeight:700,fontSize:16,color:"#1a1a1a"}}>{repInfo.name}</p>
+            <p style={{margin:0,fontWeight:700,fontSize:16,color:DS.textPri}}>{repInfo.name}</p>
             <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
               <StatusDot status={myRep.status}/>
               <span style={{fontSize:12,color:cfg.dot,fontWeight:600}}>{cfg.label}</span>
@@ -3036,7 +3036,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
         {!isOOO&&!isOff&&(
           <div style={{borderTop:onBreak?"1.5px solid rgba(0,0,0,.06)":"none",paddingTop:onBreak?12:0}}>
             <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,color:"#888"}}>🌿 {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} full breaks · banked {fmtDur(myRep.health_time_banked||0)}/10m{cooldownActive?` · Cooldown: ${fmtTime(cooldownLeft)}`:""}</span>
+              <span style={{fontSize:11,color:DS.textSec}}>🌿 {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} full breaks · banked {fmtDur(myRep.health_time_banked||0)}/10m{cooldownActive?` · Cooldown: ${fmtTime(cooldownLeft)}`:""}</span>
               {cooldownActive&&<span style={{fontSize:11,color:"#e07b00",fontWeight:600}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
             </div>
             {onBreak?(
@@ -3062,13 +3062,13 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
                   </div>
                 )}
                 {breakQueue.filter(q=>q.status==="waiting").length>0&&!myQueueEntry&&(
-                  <p style={{margin:"8px 0 0",fontSize:11,color:"#aaa",textAlign:"center"}}>{breakQueue.filter(q=>q.status==="waiting").length} rep{breakQueue.filter(q=>q.status==="waiting").length>1?"s are":" is"} in the health break queue</p>
+                  <p style={{margin:"8px 0 0",fontSize:11,color:DS.textMut,textAlign:"center"}}>{breakQueue.filter(q=>q.status==="waiting").length} rep{breakQueue.filter(q=>q.status==="waiting").length>1?"s are":" is"} in the health break queue</p>
                 )}
               </>
             )}
           </div>
         )}
-        {isOOO&&<p style={{margin:"12px 0 0",fontSize:13,color:"#888",textAlign:"center"}}>You're marked as out today. See your manager to update.</p>}
+        {isOOO&&<p style={{margin:"12px 0 0",fontSize:13,color:DS.textSec,textAlign:"center"}}>You're marked as out today. See your manager to update.</p>}
         {isOff&&<p style={{margin:"12px 0 0",fontSize:13,color:"#bbb",textAlign:"center"}}>Today is your scheduled day off. Enjoy! 🎉</p>}
       </div>
     </div>
@@ -3092,14 +3092,14 @@ function RepTeam({ reps, myId, activeBreaks }) {
                 <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{rep.name}{isMe?" (you)":""}</span>
+                    <span style={{fontWeight:600,fontSize:13,color:DS.textPri}}>{rep.name}{isMe?" (you)":""}</span>
                     <StatusDot status={rep.status}/>
                     <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
                   </div>
                   <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                    <span style={{fontSize:10,color:"#888"}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
+                    <span style={{fontSize:10,color:DS.textSec}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
                     {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
-                    {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:"#aaa"}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
+                    {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:DS.textMut}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
                   </div>
                   {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
                 </div>
@@ -3166,7 +3166,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
       {reqModal&&(
         <Modal title="Request Lunch Swap" sub="SWAP REQUEST" onClose={()=>setReqModal(false)} wide>
           <p style={{fontSize:12,color:"#666",margin:"0 0 12px"}}>Your lunch today: <strong style={{color:DS.green}}>{myTodayLunch()}</strong></p>
-          <p style={{fontSize:11,color:"#aaa",margin:"0 0 10px",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Team lunch schedule today</p>
+          <p style={{fontSize:11,color:DS.textMut,margin:"0 0 10px",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Team lunch schedule today</p>
           <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
             {reps.filter(r=>r.id!==repInfo.id&&!["off","pto","sick"].includes(r.status)).map(r=>{
               const lunch=theirTodayLunch(r);
@@ -3175,10 +3175,10 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
                 <div key={r.id} onClick={()=>setTargetId(String(r.id))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:isSelected?"2px solid #8e44ad":"1.5px solid #e8e8e8",background:isSelected?"#f5eefb":"#fff",cursor:"pointer"}}>
                   <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
                   <div style={{flex:1}}>
-                    <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</span>
-                    <span style={{fontSize:11,color:"#888",marginLeft:8}}>{lunch}</span>
+                    <span style={{fontWeight:600,fontSize:13,color:DS.textPri}}>{r.name}</span>
+                    <span style={{fontSize:11,color:DS.textSec,marginLeft:8}}>{lunch}</span>
                   </div>
-                  <span style={{fontSize:11,color:"#aaa"}}>🥗 {theirTodayLunch(r)}</span>
+                  <span style={{fontSize:11,color:DS.textMut}}>🥗 {theirTodayLunch(r)}</span>
                   {isSelected&&<span style={{color:"#8e44ad",fontSize:16}}>✓</span>}
                 </div>
               );
@@ -3204,7 +3204,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
       {myIncoming.length===0&&myOutgoing.length===0&&(
         <div style={{textAlign:"center",padding:"32px 0",color:"#bbb"}}>
           <p style={{fontSize:24,margin:"0 0 6px"}}>🔄</p>
-          <p style={{fontSize:13,color:"#aaa"}}>No pending swaps</p>
+          <p style={{fontSize:13,color:DS.textMut}}>No pending swaps</p>
         </div>
       )}
 
@@ -3216,10 +3216,10 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
             return (
               <div key={s.id} style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:12,padding:"12px 13px",marginBottom:8}}>
                 <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{s.requester_name} wants to swap lunches</p>
-                <p style={{margin:"0 0 8px",fontSize:11,color:"#888"}}>They give: {s.requester_date} · You give: {s.target_date}</p>
-                {requester&&<p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Their lunch today: 🥗 {theirTodayLunch(requester)}</p>}
+                <p style={{margin:"0 0 8px",fontSize:11,color:DS.textSec}}>They give: {s.requester_date} · You give: {s.target_date}</p>
+                {requester&&<p style={{margin:"0 0 8px",fontSize:11,color:DS.textMut}}>Their lunch today: 🥗 {theirTodayLunch(requester)}</p>}
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>declineSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:"#c0392b",fontWeight:600}}>Decline</button>
+                  <button onClick={()=>declineSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
                   <button onClick={()=>acceptSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"none",background:"#8e44ad",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Accept ✓</button>
                 </div>
               </div>
@@ -3230,11 +3230,11 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
 
       {myOutgoing.length>0&&(
         <div>
-          <p style={{fontSize:11,color:"#aaa",fontWeight:600,margin:"0 0 8px"}}>Sent requests</p>
+          <p style={{fontSize:11,color:DS.textMut,fontWeight:600,margin:"0 0 8px"}}>Sent requests</p>
           {myOutgoing.map(s=>(
             <div key={s.id} style={{background:"#f7f7f7",border:"1.5px solid #e8e8e8",borderRadius:12,padding:"11px 13px",marginBottom:8}}>
               <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>→ {s.target_name}</p>
-              <p style={{margin:0,fontSize:11,color:"#aaa"}}>Your slot: {s.requester_date} · Their slot: {s.target_date} · Pending</p>
+              <p style={{margin:0,fontSize:11,color:DS.textMut}}>Your slot: {s.requester_date} · Their slot: {s.target_date} · Pending</p>
             </div>
           ))}
         </div>
@@ -3468,10 +3468,10 @@ function HubView({ isManager }) {
   ] : [];
   const allTabs = [...repTabs,...mgrOnlyTabs];
 
-  if(loading) return <div style={{padding:"40px 0",textAlign:"center",color:"#aaa",fontSize:13}}>Loading hub…</div>;
+  if(loading) return <div style={{padding:"40px 0",textAlign:"center",color:DS.textMut,fontSize:13}}>Loading hub…</div>;
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f0f4f8",paddingBottom:60}}>
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:DS.bg,paddingBottom:60}}>
       <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
@@ -3484,7 +3484,7 @@ function HubView({ isManager }) {
       {editModal?.type==="alert"&&<HubAlertModal item={editModal.item} onClose={()=>setEditModal(null)} onSave={saveAlert} onDelete={deleteAlert}/>}
 
       {/* Header */}
-      <div style={{background:"#003087",padding:"14px 18px 0",color:"#fff"}}>
+      <div style={{background:DS.accent,padding:"14px 18px 0",color:"#fff"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <span style={{fontSize:22}}>🏊</span>
           <div style={{flex:1}}>
@@ -3498,8 +3498,8 @@ function HubView({ isManager }) {
           <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:15,opacity:.5}}>🔍</span>
           <input value={q} onChange={e=>{setQ(e.target.value);if(e.target.value)setTab("home");}}
             placeholder="Search anything — location, price, promo code…"
-            style={{width:"100%",boxSizing:"border-box",padding:"10px 36px",borderRadius:10,border:"none",fontSize:13,outline:"none",background:"rgba(255,255,255,.95)",color:"#1a1a1a"}}/>
-          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#aaa"}}>✕</button>}
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 36px",borderRadius:10,border:"none",fontSize:13,outline:"none",background:"rgba(255,255,255,.1)",color:"#fff"}}/>
+          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:DS.textMut}}>✕</button>}
         </div>
         {/* Tabs */}
         <div style={{display:"flex",gap:0,overflowX:"auto",marginLeft:-18,paddingLeft:18,marginRight:-18}}>
@@ -3516,11 +3516,11 @@ function HubView({ isManager }) {
           <div>
             {/* Active closures banner */}
             {closures.length>0&&(
-              <div style={{background:"#fde8e8",border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-                <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#c0392b",letterSpacing:1,textTransform:"uppercase"}}>🚫 Active Closures</p>
+              <div style={{background:DS.redDim,border:`1px solid ${DS.red}40`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+                <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.red,letterSpacing:1,textTransform:"uppercase"}}>🚫 Active Closures</p>
                 {closures.map((c,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<closures.length-1?6:0}}>
-                    <div><p style={{margin:0,fontWeight:600,fontSize:13,color:"#7a1a1a"}}>{c.location_name}</p><p style={{margin:0,fontSize:11,color:"#c0392b"}}>{c.start_date} → {c.end_date} · {c.reason}</p></div>
+                    <div><p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p><p style={{margin:0,fontSize:11,color:DS.red}}>{c.start_date} → {c.end_date} · {c.reason}</p></div>
                   </div>
                 ))}
               </div>
@@ -3537,7 +3537,7 @@ function HubView({ isManager }) {
                 )}
                 {matchPromo.length>0&&(
                   <div style={{marginBottom:14}}>
-                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:"0 0 8px",fontWeight:700}}>🎯 Promos</p>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.red,margin:"0 0 8px",fontWeight:700}}>🎯 Promos</p>
                     {matchPromo.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
                   </div>
                 )}
@@ -3554,7 +3554,7 @@ function HubView({ isManager }) {
                   </div>
                 )}
                 {matchLoc.length===0&&matchPromo.length===0&&matchTeam.length===0&&matchDocs.length===0&&(
-                  <div style={{textAlign:"center",padding:"36px 0",color:"#aaa"}}><p style={{fontSize:28,margin:"0 0 6px"}}>🤔</p><p style={{fontWeight:600,fontSize:14,color:"#888"}}>No results for "{q}"</p></div>
+                  <div style={{textAlign:"center",padding:"36px 0",color:DS.textMut}}><p style={{fontSize:28,margin:"0 0 6px"}}>🤔</p><p style={{fontWeight:600,fontSize:14,color:DS.textSec}}>No results for "{q}"</p></div>
                 )}
               </div>
             )}
@@ -3569,13 +3569,13 @@ function HubView({ isManager }) {
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
                       {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
                     </div>
-                    {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed #ddd",background:"transparent",cursor:"pointer",fontSize:12,color:"#aaa",marginTop:6}}>+ Add Promo</button>}
+                    {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed #ddd",background:"transparent",cursor:"pointer",fontSize:12,color:DS.textMut,marginTop:6}}>+ Add Promo</button>}
                   </div>
                 )}
                 {promos.length===0&&(
-                  <div style={{background:"#fffdf8",border:"1.5px solid #f0c080",borderRadius:12,padding:"14px",marginBottom:16,textAlign:"center"}}>
+                  <div style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:12,padding:"14px",marginBottom:16,textAlign:"center"}}>
                     <p style={{margin:0,fontSize:13,color:DS.amber}}>🎯 No active promotions right now</p>
-                    {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{marginTop:8,padding:"6px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Promo</button>}
+                    {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{marginTop:8,padding:"6px 14px",borderRadius:8,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Promo</button>}
                   </div>
                 )}
                 {/* Quick access */}
@@ -3586,10 +3586,10 @@ function HubView({ isManager }) {
                     {icon:"📄",label:"Documents",sub:"Scripts, SOPs, pricing",action:()=>setTab("docs"),color:"#8e44ad",bg:"#f5eefb"},
                     {icon:"👤",label:"Team Extensions",sub:"Copy any extension",action:()=>setTab("team"),color:"#e07b00",bg:"#fff8ee"},
                   ].map((c,i)=>(
-                    <div key={i} onClick={c.action} style={{background:"#fff",borderRadius:12,padding:"14px",border:`1.5px solid ${c.bg}`,cursor:"pointer",transition:"all .15s"}}>
+                    <div key={i} onClick={c.action} style={{background:DS.bgCard,borderRadius:12,padding:"14px",border:`1px solid ${c.bg}40`,cursor:"pointer",transition:"all .15s"}}>
                       <span style={{fontSize:22}}>{c.icon}</span>
                       <p style={{margin:"6px 0 2px",fontWeight:600,fontSize:13,color:c.color}}>{c.label}</p>
-                      <p style={{margin:0,fontSize:11,color:"#aaa"}}>{c.sub}</p>
+                      <p style={{margin:0,fontSize:11,color:DS.textMut}}>{c.sub}</p>
                     </div>
                   ))}
                 </div>
@@ -3600,7 +3600,7 @@ function HubView({ isManager }) {
                     {events.map((e,i)=>(
                       <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<events.length-1?6:0}}>
                         <p style={{margin:0,fontSize:13,fontWeight:500}}>{e.name}</p>
-                        <span style={{fontSize:11,color:"#888"}}>{e.event_date}{e.note?` · ${e.note}`:""}</span>
+                        <span style={{fontSize:11,color:DS.textSec}}>{e.event_date}{e.note?` · ${e.note}`:""}</span>
                       </div>
                     ))}
                   </div>
@@ -3613,18 +3613,18 @@ function HubView({ isManager }) {
         {/* LOCATIONS */}
         {tab==="locations"&&(
           <div>
-            <div style={{position:"sticky",top:0,zIndex:10,paddingBottom:10,paddingTop:4,background:"#f0f4f8"}}>
+            <div style={{position:"sticky",top:0,zIndex:10,paddingBottom:10,paddingTop:4,background:DS.bg}}>
   <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <div style={{position:"relative",flex:1}}>
                   <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, region, or extension…"
                     style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
-                  {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#aaa"}}>✕</button>}
+                  {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:DS.textMut}}>✕</button>}
                 </div>
               </div>
               <ZipFinder locations={locations} closures={closureMap} isManager={isManager} onEdit={(l)=>setEditModal({type:"loc",item:l})}/>
             </div>
             {matchLoc.length===0&&term&&(
-              <p style={{textAlign:"center",color:"#aaa",padding:"30px 0",fontSize:13}}>No locations found for "{q}"</p>
+              <p style={{textAlign:"center",color:DS.textMut,padding:"30px 0",fontSize:13}}>No locations found for "{q}"</p>
             )}
             {matchLoc.length>0&&Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
               <div key={region} style={{marginBottom:16}}>
@@ -3664,7 +3664,7 @@ function HubView({ isManager }) {
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:DS.amber,fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
-              <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
+              <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
               {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={true} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
@@ -3674,21 +3674,21 @@ function HubView({ isManager }) {
         {tab==="closures"&&isManager&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:0,fontWeight:700}}>Active Closures ({closures.length})</p>
+              <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.red,margin:0,fontWeight:700}}>Active Closures ({closures.length})</p>
               <button onClick={()=>setEditModal({type:"closure",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Log Closure</button>
             </div>
-            {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#bbb"}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No active closures</p></div>}
+            {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#bbb"}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No active closures</p></div>}
             {closures.map((c,i)=>(
               <div key={i} style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:7,display:"flex",alignItems:"flex-start",gap:10}}>
                 <span style={{fontSize:18}}>🚫</span>
                 <div style={{flex:1}}>
-                  <p style={{margin:0,fontWeight:600,fontSize:13,color:"#7a1a1a"}}>{c.location_name}</p>
-                  <p style={{margin:"2px 0",fontSize:11,color:"#c0392b"}}>{c.start_date} → {c.end_date}</p>
-                  <p style={{margin:0,fontSize:11,color:"#888"}}>{c.reason}</p>
+                  <p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p>
+                  <p style={{margin:"2px 0",fontSize:11,color:DS.red}}>{c.start_date} → {c.end_date}</p>
+                  <p style={{margin:0,fontSize:11,color:DS.textSec}}>{c.reason}</p>
                 </div>
                 <div style={{display:"flex",gap:5}}>
-                  <button onClick={()=>setEditModal({type:"closure",item:c})} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>
-                  <button onClick={()=>deleteClosure(c.id)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>Remove</button>
+                  <button onClick={()=>setEditModal({type:"closure",item:c})} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>
+                  <button onClick={()=>deleteClosure(c.id)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red}}>Remove</button>
                 </div>
               </div>
             ))}
@@ -3719,8 +3719,8 @@ function HubView({ isManager }) {
             {events.map((e,i)=>(
               <div key={i} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"11px 14px",marginBottom:7,display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:20}}>🏊</span>
-                <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:13}}>{e.name}</p><p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{e.event_date}{e.note?` · ${e.note}`:""}</p></div>
-                <button onClick={()=>setEditModal({type:"event",item:e})} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>
+                <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:13}}>{e.name}</p><p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>{e.event_date}{e.note?` · ${e.note}`:""}</p></div>
+                <button onClick={()=>setEditModal({type:"event",item:e})} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>
               </div>
             ))}
           </div>
@@ -3884,13 +3884,13 @@ function LevelTool() {
                 <div style={{flex:1,height:4,background:"#f0f0f0",borderRadius:4,overflow:"hidden"}}>
                   <div style={{width:`${(node.qNum/node.qTotal)*100}%`,height:"100%",background:"#1a5c35",transition:"width .3s"}}/>
                 </div>
-                <span style={{fontSize:11,color:"#aaa",whiteSpace:"nowrap"}}>Q{node.qNum} of {node.qTotal}</span>
+                <span style={{fontSize:11,color:DS.textMut,whiteSpace:"nowrap"}}>Q{node.qNum} of {node.qTotal}</span>
               </div>
 
               {/* Question */}
               <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"14px 16px",marginBottom:16}}>
                 <p style={{margin:"0 0 4px",fontSize:10,color:DS.green,fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>Ask the parent:</p>
-                <p style={{margin:0,fontSize:14,fontWeight:600,color:"#1a1a1a",lineHeight:1.6}}>{node.ask}</p>
+                <p style={{margin:0,fontSize:14,fontWeight:600,color:DS.textPri,lineHeight:1.6}}>{node.ask}</p>
               </div>
 
               {/* YES / NO */}
@@ -3900,12 +3900,12 @@ function LevelTool() {
                   ✅ YES
                 </button>
                 <button onClick={()=>goTo(node.no)}
-                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #c0392b",background:"#fdf0ee",cursor:"pointer",fontSize:16,fontWeight:800,color:"#c0392b",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #c0392b",background:"#fdf0ee",cursor:"pointer",fontSize:16,fontWeight:800,color:DS.red,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                   ❌ NO
                 </button>
               </div>
 
-              {history.length>0&&<button onClick={goBack} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#aaa",padding:0}}>← Back</button>}
+              {history.length>0&&<button onClick={goBack} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:DS.textMut,padding:0}}>← Back</button>}
             </div>
           )}
 
@@ -3913,7 +3913,7 @@ function LevelTool() {
           {isResult&&(
             <div>
               {/* Level badge */}
-              <div style={{background:"linear-gradient(135deg,#1a5c35,#2ecc71)",borderRadius:12,padding:"16px",marginBottom:14,textAlign:"center"}}>
+              <div style={{background:`linear-gradient(135deg,${DS.green},${DS.accent})`,borderRadius:12,padding:"16px",marginBottom:14,textAlign:"center"}}>
                 <p style={{margin:"0 0 2px",fontSize:10,color:"rgba(255,255,255,.7)",letterSpacing:1.5,textTransform:"uppercase"}}>Recommended Level</p>
                 <p style={{margin:"0 0 6px",fontSize:26,fontWeight:800,color:"#fff"}}>{node.level}</p>
                 <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
@@ -3930,10 +3930,10 @@ function LevelTool() {
 
               <div style={{display:"flex",gap:8}}>
                 <button onClick={copyScript}
-                  style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,transition:"background .2s"}}>
+                  style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:copied?DS.green:DS.accent,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,transition:"background .2s"}}>
                   {copied?"✓ Script Copied to Clipboard!":"📋 Copy Script"}
                 </button>
-                {history.length>0&&<button onClick={goBack} style={{padding:"12px 14px",borderRadius:10,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>← Back</button>}
+                {history.length>0&&<button onClick={goBack} style={{padding:"12px 14px",borderRadius:10,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec}}>← Back</button>}
               </div>
             </div>
           )}
@@ -3969,11 +3969,11 @@ function LevelTool() {
                 ["Swim Team Prep","6+, post-L11","Competitive conditioning","Varies"],
                 ["Adult","12+","Customized to goals","4"],
               ].map(([l,a,s,m],i)=>(
-                <tr key={i} style={{borderBottom:"1px solid #f5f5f5",background:i%2===0?"#fff":"#fafcff"}}>
+                <tr key={i} style={{borderBottom:`1px solid ${DS.border}`,background:i%2===0?DS.bgCard:DS.bgSurf}}>
                   <td style={{padding:"6px 8px",fontWeight:600,color:DS.green}}>{l}</td>
                   <td style={{padding:"6px 8px",color:"#555"}}>{a}</td>
                   <td style={{padding:"6px 8px",color:"#555"}}>{s}</td>
-                  <td style={{padding:"6px 8px",fontWeight:600,color:"#1a1a1a"}}>{m}</td>
+                  <td style={{padding:"6px 8px",fontWeight:600,color:DS.textPri}}>{m}</td>
                 </tr>
               ))}
             </tbody>
@@ -4006,7 +4006,7 @@ function ZipFinder({ locations, closures, isManager, onEdit }) {
   const getClosures = n => (closures[n.toLowerCase()])||[];
 
   return (
-    <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e0e8f5",padding:"12px 14px",marginBottom:8}}>
+    <div style={{background:DS.bgCard,borderRadius:10,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:8}}>
       <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:.5}}>🔍 Find by Zip Code</p>
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <input
@@ -4016,12 +4016,12 @@ function ZipFinder({ locations, closures, isManager, onEdit }) {
           maxLength={5}
           style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",letterSpacing:2,fontWeight:600}}
         />
-        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888"}}>Clear</button>}
+        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec}}>Clear</button>}
       </div>
       {zip.length>=3&&results!==null&&(
         <div style={{marginTop:10}}>
           {results.length===0&&(
-            <div style={{textAlign:"center",padding:"12px 0",color:"#aaa"}}>
+            <div style={{textAlign:"center",padding:"12px 0",color:DS.textMut}}>
               <p style={{margin:0,fontSize:13}}>No schools found near {zip}</p>
               <p style={{margin:"4px 0 0",fontSize:11}}>Try a nearby zip or search by name above</p>
             </div>
@@ -4051,42 +4051,42 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
   const snInstructors = instructors.filter(i=>i.sn==='Y');
   const langInstructors = instructors.filter(i=>i.lang&&i.lang.toLowerCase()!=='english'&&i.lang.toLowerCase()!=='english ');
   return (
-    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${hasClosure?"#f5b7b1":"#e0e8f5"}`,marginBottom:8,overflow:"hidden"}}>
+    <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${hasClosure?DS.red+"40":DS.border}`,marginBottom:8,overflow:"hidden"}}>
       <div style={{padding:"12px 14px"}}>
         {hasClosure&&closures.map((c,i)=>(
           <div key={i} style={{background:"#fde8e8",borderRadius:7,padding:"5px 9px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontSize:12}}>🚫</span>
-            <p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>{c.start_date} to {c.end_date} · {c.reason}</p>
+            <p style={{margin:0,fontSize:11,color:DS.red,fontWeight:600}}>{c.start_date} to {c.end_date} · {c.reason}</p>
           </div>
         ))}
         <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
           <div style={{flex:1}}>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
-              <span style={{fontWeight:700,fontSize:15,color:"#1a1a1a"}}>{loc.name}</span>
+              <span style={{fontWeight:700,fontSize:15,color:DS.textPri}}>{loc.name}</span>
               <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:DS.accent,fontWeight:700}}>{loc.region}</span>
-              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?"#fff3cd":"#e8f4fd",color:loc.pool==="Salt"?"#856404":"#0d6efd",fontWeight:700}}>{loc.pool}</span>
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?DS.amberDim:DS.accentDim,color:loc.pool==="Salt"?DS.amber:DS.accent,fontWeight:700}}>{loc.pool}</span>
               {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:DS.green,fontWeight:700}}>20min Privates</span>}
             </div>
-            <p style={{margin:"0 0 4px",fontSize:11,color:"#aaa"}}>📍 {loc.addr}</p>
-            {loc.direct_phone&&<p style={{margin:"0 0 4px",fontSize:12,color:"#1a1a1a",fontWeight:500}}>📞 {loc.direct_phone}</p>}
-            {loc.gm_name&&<p style={{margin:"0 0 6px",fontSize:11,color:"#888"}}>👤 GM: {loc.gm_name}</p>}
+            <p style={{margin:"0 0 4px",fontSize:11,color:DS.textMut}}>📍 {loc.addr}</p>
+            {loc.direct_phone&&<p style={{margin:"0 0 4px",fontSize:12,color:DS.textPri,fontWeight:500}}>📞 {loc.direct_phone}</p>}
+            {loc.gm_name&&<p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>👤 GM: {loc.gm_name}</p>}
             {pricing&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
                 <span style={{fontSize:11,background:"#e8f0fe",color:DS.accent,padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
-                <span style={{fontSize:11,background:"#f0f4f8",color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
+                <span style={{fontSize:11,background:DS.bg,color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
                 <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
-                <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
+                <span style={{fontSize:11,background:DS.amberDim,color:DS.amber,padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
               </div>
             )}
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <p style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:DS.accent,letterSpacing:1}}>{loc.ext}</p>
             <div style={{display:"flex",gap:5,justifyContent:"flex-end",marginBottom:5}}>
-              <button onClick={()=>{navigator.clipboard?.writeText(loc.ext);setCopiedExt(true);setTimeout(()=>setCopiedExt(false),1500);}} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #003087",background:copiedExt?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copiedExt?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedExt?"✓ Copied":"Copy Ext"}</button>
-              {isManager&&<button onClick={onEdit} style={{padding:"5px 8px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Edit</button>}
+              <button onClick={()=>{navigator.clipboard?.writeText(loc.ext);setCopiedExt(true);setTimeout(()=>setCopiedExt(false),1500);}} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #003087",background:copiedExt?DS.accent:DS.accentDim,cursor:"pointer",fontSize:11,color:copiedExt?"#fff":DS.accent,fontWeight:600,transition:"all .2s"}}>{copiedExt?"✓ Copied":"Copy Ext"}</button>
+              {isManager&&<button onClick={onEdit} style={{padding:"5px 8px",borderRadius:7,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textMut}}>Edit</button>}
             </div>
             {loc.direct_phone&&(
-              <button onClick={()=>{navigator.clipboard?.writeText(loc.direct_phone);setCopiedPhone(true);setTimeout(()=>setCopiedPhone(false),1500);}} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #1a5c35",background:copiedPhone?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:10,color:copiedPhone?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s",width:"100%"}}>{copiedPhone?"✓ Phone Copied":"Copy Phone"}</button>
+              <button onClick={()=>{navigator.clipboard?.writeText(loc.direct_phone);setCopiedPhone(true);setTimeout(()=>setCopiedPhone(false),1500);}} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #1a5c35",background:copiedPhone?DS.green:DS.greenDim,cursor:"pointer",fontSize:10,color:copiedPhone?"#fff":DS.green,fontWeight:600,transition:"all .2s",width:"100%"}}>{copiedPhone?"✓ Phone Copied":"Copy Phone"}</button>
             )}
           </div>
         </div>
@@ -4108,7 +4108,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 10px"}}>
                 {days.map(d=>(
                   <div key={d} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0",borderBottom:"1px solid #f0f0f0"}}>
-                    <span style={{color:"#888",fontWeight:500}}>{d.slice(0,3)}</span>
+                    <span style={{color:DS.textSec,fontWeight:500}}>{d.slice(0,3)}</span>
                     <span style={{color:hours[d]==='CLOSED'?"#e74c3c":"#1a1a1a",fontWeight:hours[d]==='CLOSED'?600:400}}>{hours[d]||'—'}</span>
                   </div>
                 ))}
@@ -4118,9 +4118,9 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
           {/* Pool specs */}
           {(loc.pool_dim||loc.pool_depth)&&(
             <div style={{marginBottom:12,display:"flex",gap:10}}>
-              {loc.pool_dim&&<span style={{fontSize:11,background:"#e8f4fd",color:"#0d6efd",padding:"3px 9px",borderRadius:7}}>📐 {loc.pool_dim}</span>}
-              {loc.pool_depth&&<span style={{fontSize:11,background:"#e8f4fd",color:"#0d6efd",padding:"3px 9px",borderRadius:7}}>↕ {loc.pool_depth}</span>}
-              <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"3px 9px",borderRadius:7}}>🌡 90°F</span>
+              {loc.pool_dim&&<span style={{fontSize:11,background:DS.accentDim,color:DS.accent,padding:"3px 9px",borderRadius:7}}>📐 {loc.pool_dim}</span>}
+              {loc.pool_depth&&<span style={{fontSize:11,background:DS.accentDim,color:DS.accent,padding:"3px 9px",borderRadius:7}}>↕ {loc.pool_depth}</span>}
+              <span style={{fontSize:11,background:DS.amberDim,color:DS.amber,padding:"3px 9px",borderRadius:7}}>🌡 90°F</span>
             </div>
           )}
           {/* Special needs & languages highlight */}
@@ -4136,10 +4136,10 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
               <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>👩‍🏫 Instructors ({instructors.length})</p>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {instructors.map((ins,i)=>(
-                  <div key={i} style={{background:"#fff",borderRadius:9,padding:"8px 10px",border:"1px solid #efefef"}}>
+                  <div key={i} style={{background:DS.bgSurf,borderRadius:9,padding:"8px 10px",border:`1px solid ${DS.border}`}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:ins.desc?3:0}}>
                       <span style={{fontWeight:600,fontSize:12}}>{ins.name}</span>
-                      {ins.level&&<span style={{fontSize:9,background:ins.level.toLowerCase().includes('manager')?"#e8f0fe":"#f0f4f8",color:ins.level.toLowerCase().includes('manager')?"#003087":"#888",padding:"1px 5px",borderRadius:3,fontWeight:600}}>{ins.level}</span>}
+                      {ins.level&&<span style={{fontSize:9,background:ins.level.toLowerCase().includes("manager")?DS.accentDim:DS.bgSurf,color:ins.level.toLowerCase().includes("manager")?DS.accent:DS.textSec,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{ins.level}</span>}
                       {ins.sn==='Y'&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
                       {ins.lang&&ins.lang.toLowerCase()!=='english'&&ins.lang.toLowerCase()!=='english '&&<span style={{fontSize:9,background:"#f5eefb",color:"#8e44ad",padding:"1px 5px",borderRadius:3}}>{ins.lang}</span>}
                     </div>
@@ -4166,7 +4166,7 @@ function HubPromoCard({promo,isManager,onEdit}) {
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
             <span style={{fontWeight:700,fontSize:13}}>{promo.title}</span>
             {promo.proactive&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
-            {!promo.proactive&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
+            {!promo.proactive&&<span style={{fontSize:9,background:"#fdf0ee",color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
             {promo.expires_on&&<span style={{fontSize:9,background:isExpiring?"#fde8e8":"#fff3cd",color:isExpiring?"#c0392b":"#856404",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Exp: {promo.expires_on}</span>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -4175,13 +4175,13 @@ function HubPromoCard({promo,isManager,onEdit}) {
           </div>
         </div>
         <div style={{display:"flex",gap:5,flexShrink:0}}>
-          {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>}
-          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#aaa"}}>{expanded?"▲":"▼"}</button>
+          {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>}
+          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:DS.textMut}}>{expanded?"▲":"▼"}</button>
         </div>
       </div>
       {expanded&&(
         <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f5f5f5"}}>
-          <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:"#888",letterSpacing:.5,textTransform:"uppercase"}}>Full Rules</p>
+          <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:DS.textSec,letterSpacing:.5,textTransform:"uppercase"}}>Full Rules</p>
           <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.7,whiteSpace:"pre-line"}}>{promo.rules}</p>
         </div>
       )}
@@ -4207,7 +4207,7 @@ function HubDocCard({doc,isManager,onEdit}) {
       if(trimmed.startsWith('→')||trimmed.includes(' → '))
         return <p key={i} style={{margin:"3px 0",fontSize:12,color:"#8e44ad",fontWeight:500,paddingLeft:8}}>{trimmed}</p>;
       if(trimmed.match(/^\d+\./)||trimmed.match(/^(STEP|Step)\s+\d+/))
-        return <p key={i} style={{margin:"6px 0 2px",fontSize:12,fontWeight:700,color:"#1a1a1a"}}>{trimmed}</p>;
+        return <p key={i} style={{margin:"6px 0 2px",fontSize:12,fontWeight:700,color:DS.textPri}}>{trimmed}</p>;
       return <p key={i} style={{margin:"2px 0",fontSize:12,color:"#444",lineHeight:1.6}}>{trimmed}</p>;
     });
   };
@@ -4217,11 +4217,11 @@ function HubDocCard({doc,isManager,onEdit}) {
       <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={()=>setExpanded(!expanded)}>
         <span style={{fontSize:18,flexShrink:0}}>📄</span>
         <div style={{flex:1}}>
-          <p style={{margin:0,fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{doc.title}</p>
+          <p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{doc.title}</p>
         </div>
         <div style={{display:"flex",gap:5,flexShrink:0}}>
-          {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>}
-          <span style={{fontSize:14,color:"#aaa",padding:"3px 6px"}}>{expanded?"▲":"▼"}</span>
+          {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>}
+          <span style={{fontSize:14,color:DS.textMut,padding:"3px 6px"}}>{expanded?"▲":"▼"}</span>
         </div>
       </div>
       {expanded&&doc.content&&(
@@ -4240,10 +4240,10 @@ function PartnerLocRow({loc}) {
     <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
       <div style={{flex:1}}>
         <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{loc.name}</p>
-        <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{loc.addr}</p>
+        <p style={{margin:"0 0 3px",fontSize:11,color:DS.textMut}}>{loc.addr}</p>
         <div style={{display:"flex",gap:10}}>
-          <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:DS.accent}}>{loc.current}</strong></span>
-          <span style={{fontSize:11,color:"#888"}}>New: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
+          <span style={{fontSize:11,color:DS.textSec}}>Current: <strong style={{color:DS.accent}}>{loc.current}</strong></span>
+          <span style={{fontSize:11,color:DS.textSec}}>New: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
         </div>
       </div>
       <button onClick={()=>{navigator.clipboard?.writeText(loc.current);setCop(true);setTimeout(()=>setCop(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #ddd",background:cop?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:cop?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{cop?"✓":"Copy"}</button>
@@ -4515,17 +4515,17 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
           >
             <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md,.csv" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
             {extracting?(
-              <div><p style={{margin:0,fontSize:13,color:"#8e44ad",fontWeight:600}}>Extracting content…</p><p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>This may take a few seconds</p></div>
+              <div><p style={{margin:0,fontSize:13,color:"#8e44ad",fontWeight:600}}>Extracting content…</p><p style={{margin:"4px 0 0",fontSize:11,color:DS.textMut}}>This may take a few seconds</p></div>
             ):(
               <div>
                 <p style={{margin:0,fontSize:22}}>📂</p>
                 <p style={{margin:"6px 0 2px",fontSize:13,fontWeight:600,color:"#8e44ad"}}>Drop a file or click to upload</p>
-                <p style={{margin:0,fontSize:11,color:"#aaa"}}>PDF · Word (.docx) · CSV · TXT — category auto-detected from filename</p>
+                <p style={{margin:0,fontSize:11,color:DS.textMut}}>PDF · Word (.docx) · CSV · TXT — category auto-detected from filename</p>
               </div>
             )}
           </div>
         )}
-        {uploadErr&&<div style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:9,padding:"9px 12px"}}><p style={{margin:0,fontSize:12,color:"#c0392b"}}>{uploadErr}</p></div>}
+        {uploadErr&&<div style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:9,padding:"9px 12px"}}><p style={{margin:0,fontSize:12,color:DS.red}}>{uploadErr}</p></div>}
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
           <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Auto-filled from filename" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
           <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Category</label>
@@ -4537,7 +4537,7 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
         <div>
           <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Content {f.content&&<span style={{color:DS.green,fontWeight:600}}>✓ Extracted</span>}</label>
           <textarea value={f.content} onChange={e=>set("content",e.target.value)} rows={10} placeholder="Upload a file above or paste content here…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1.5px solid ${f.content?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",resize:"vertical",lineHeight:1.7,fontFamily:"inherit"}}/>
-          <p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>Review and edit extracted content before saving.</p>
+          <p style={{margin:"4px 0 0",fontSize:11,color:DS.textMut}}>Review and edit extracted content before saving.</p>
         </div>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Delete Doc" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
@@ -4830,7 +4830,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 value={locSearch||""}
                 style={{width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}
               />
-              {locSearch&&<button onClick={()=>{setLocSearch("");}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#aaa"}}>✕</button>}
+              {locSearch&&<button onClick={()=>{setLocSearch("");}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:DS.textMut}}>✕</button>}
             </div>
             <select value={locId} onChange={e=>setLocId(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
               <option value="">Select location…</option>
@@ -4899,7 +4899,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 <input value={student.name} onChange={e=>updStudent(student.id,"name",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none"}} placeholder="Child name"/>
                 {si>0&&canSibDiscount&&<span style={{fontSize:10,background:"#eafaf1",color:DS.green,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>10% off group (3 mo)</span>}
                 {si>0&&!canSibDiscount&&isPartner&&<span style={{fontSize:10,background:"#e8f0fe",color:DS.accent,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>ICP auto-sibling</span>}
-                {si>0&&<button onClick={()=>remStudent(student.id)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b"}}>Remove</button>}
+                {si>0&&<button onClick={()=>remStudent(student.id)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:DS.red}}>Remove</button>}
               </div>
               {student.lessons.map((lesson,li)=>{
                 const lt = LESSON_TYPES.find(t=>t.key===lesson.type);
@@ -4911,20 +4911,20 @@ function QuoteCalculator({locations, activePromos=[]}) {
                       {LESSON_TYPES.map(t=>{
                         const r = getRate(t.key);
                         // FIX 14: show ⚠️ for lesson types with no price data
-                        if(!r && t.priceKey !== "price_mf") return <option key={t.key} value={t.key} disabled style={{color:"#aaa"}}>{t.label} — no price data</option>;
+                        if(!r && t.priceKey !== "price_mf") return <option key={t.key} value={t.key} disabled style={{color:DS.textMut}}>{t.label} — no price data</option>;
                         return <option key={t.key} value={t.key}>{t.label}{r?` — $${r}/class`:""}</option>;
                       })}
                     </select>
                     {canMultiHere&&<span style={{fontSize:10,color:DS.green,fontWeight:700,whiteSpace:"nowrap"}}>−10%</span>}
-                    {!canMultiHere&&li>0&&<span style={{fontSize:10,color:"#aaa",whiteSpace:"nowrap"}}>no disc</span>}
-                    {li>0&&<button onClick={()=>remLesson(student.id,lesson.id)} style={{padding:"5px 7px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>✕</button>}
+                    {!canMultiHere&&li>0&&<span style={{fontSize:10,color:DS.textMut,whiteSpace:"nowrap"}}>no disc</span>}
+                    {li>0&&<button onClick={()=>remLesson(student.id,lesson.id)} style={{padding:"5px 7px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red}}>✕</button>}
                     {li===0&&<div style={{width:54}}/>}
                   </div>
                 );
               })}
               <button onClick={()=>addLesson(student.id)} style={{marginTop:2,padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#e8f0fe",cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>+ Lesson</button>
               {calc&&loc&&(
-                <p style={{margin:"8px 0 0",fontSize:11,color:"#888"}}>Monthly: {fmt(calc.ongoing1to3)}{calc.hasSibDisc?` (→ ${fmt(calc.ongoing4plus)} from month 4)`:""}</p>
+                <p style={{margin:"8px 0 0",fontSize:11,color:DS.textSec}}>Monthly: {fmt(calc.ongoing1to3)}{calc.hasSibDisc?` (→ ${fmt(calc.ongoing4plus)} from month 4)`:""}</p>
               )}
             </div>
           );
@@ -4943,13 +4943,13 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 </div>
                 <div style={{flex:1}}>
                   <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.title} <span style={{fontSize:11,fontWeight:700,color:DS.accent,background:"#e8f0fe",padding:"1px 6px",borderRadius:4}}>{p.code}</span></p>
-                  <p style={{margin:"2px 0 0",fontSize:10,color:"#888"}}>
+                  <p style={{margin:"2px 0 0",fontSize:10,color:DS.textSec}}>
                     {p.discount_type==="fixed"?`$${p.discount_fixed} off per student`:p.discount_type==="one_class_pct"?`${p.discount_pct}% off 1 class/week`:`${p.discount_pct}% off`}
                     {" · "}{p.applies_to==="continuous"?"Continuous only":p.applies_to==="group"?"Group only":"All lessons"}
                     {p.requires_mention&&" · Customer must mention"}
                     {p.proactive&&" · May offer proactively"}
                   </p>
-                  {p.rules&&<p style={{margin:"3px 0 0",fontSize:10,color:"#aaa"}}>{p.rules.slice(0,100)}{p.rules.length>100?"…":""}</p>}
+                  {p.rules&&<p style={{margin:"3px 0 0",fontSize:10,color:DS.textMut}}>{p.rules.slice(0,100)}{p.rules.length>100?"…":""}</p>}
                 </div>
               </div>
               {/* Scenario selector for one_class_pct promos */}
@@ -4962,7 +4962,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                         style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:`1px solid ${scenarioMap[p.code]===sc.key?DS.green:DS.border}`,background:scenarioMap[p.code]===sc.key?DS.bgSurf:DS.bg,cursor:"pointer"}}>
                         <div>
                           <span style={{fontSize:13,fontWeight:600,color:scenarioMap[p.code]===sc.key?"#1a5c35":"#444"}}>{sc.label}</span>
-                          <span style={{fontSize:11,color:"#888",marginLeft:8}}>{sc.sub}</span>
+                          <span style={{fontSize:11,color:DS.textSec,marginLeft:8}}>{sc.sub}</span>
                         </div>
                         <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${scenarioMap[p.code]===sc.key?"#1a5c35":"#ccc"}`,background:scenarioMap[p.code]===sc.key?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                           {scenarioMap[p.code]===sc.key&&<div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
@@ -4980,13 +4980,13 @@ function QuoteCalculator({locations, activePromos=[]}) {
       )}
       {eligiblePromos.length===0&&loc&&(
         <div style={{background:DS.bgSurf,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
-          <p style={{margin:0,fontSize:12,color:"#aaa"}}>No active promotions apply to this customer / month combination.</p>
+          <p style={{margin:0,fontSize:12,color:DS.textMut}}>No active promotions apply to this customer / month combination.</p>
           {activePromos.length>0&&<p style={{margin:"4px 0 0",fontSize:11,color:"#bbb"}}>{activePromos.length} promo{activePromos.length>1?"s":""} in DB — check discount_type and customer_types fields are filled in the Hub → Promos tab</p>}
         </div>
       )}
       {eligiblePromos.length===0&&!loc&&activePromos.length>0&&(
         <div style={{background:DS.bgSurf,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
-          <p style={{margin:0,fontSize:12,color:"#aaa"}}>Select a location to see available promotions ({activePromos.filter(p=>p.discount_type||p.discount_pct).length} configured)</p>
+          <p style={{margin:0,fontSize:12,color:DS.textMut}}>Select a location to see available promotions ({activePromos.filter(p=>p.discount_type||p.discount_pct).length} configured)</p>
         </div>
       )}
 
@@ -5026,7 +5026,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
             </div>
           ))}
           {/* Grand totals */}
-          <div style={{background:"#003087",borderRadius:10,padding:"14px"}}>
+          <div style={{background:DS.accent,borderRadius:10,padding:"14px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>TOTAL DUE TODAY</span>
               <span style={{fontSize:24,fontWeight:800,color:"#fff"}}>{fmt(grandToday)}</span>
@@ -5055,7 +5055,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
         <div style={{background:"#f4fbf6",borderRadius:12,border:"1.5px solid #c8e6c9",padding:"14px",marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase",letterSpacing:.5}}>📢 Read to Customer</p>
-            <button onClick={copyScript} style={{padding:"5px 12px",borderRadius:8,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,transition:"background .2s"}}>{copied?"✓ Copied":"Copy Script"}</button>
+            <button onClick={copyScript} style={{padding:"5px 12px",borderRadius:8,border:"none",background:copied?DS.green:DS.accent,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,transition:"background .2s"}}>{copied?"✓ Copied":"Copy Script"}</button>
           </div>
           <div style={{fontSize:13,color:"#2c3e50",lineHeight:1.9}}>
             <p style={{margin:"0 0 6px",fontStyle:"italic"}}>"Today's total is <strong style={{color:DS.accent}}>{fmt(grandToday)}</strong>, which includes:"</p>
@@ -5137,7 +5137,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
     <div>
       {/* ENROLLMENT CHECKLIST */}
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
-        <div style={{background:"#003087",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{background:DS.accent,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
             <p style={{margin:0,fontSize:10,color:"rgba(255,255,255,.6)",letterSpacing:1.5,textTransform:"uppercase"}}>Before you submit</p>
             <p style={{margin:"2px 0 0",fontSize:15,fontWeight:700,color:"#fff"}}>📋 Enrollment Checklist</p>
@@ -5171,7 +5171,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
               ))}
             </div>
           ))}
-          <button onClick={resetChecklist} style={{width:"100%",padding:"9px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:"#888",marginTop:4,fontWeight:500}}>
+          <button onClick={resetChecklist} style={{width:"100%",padding:"9px",borderRadius:9,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec,marginTop:4,fontWeight:500}}>
             ↺ Reset for next customer
           </button>
         </div>
@@ -5180,17 +5180,17 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
       {/* RULES REFERENCE */}
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#c0392b",margin:0,fontWeight:700}}>⚠️ Common Mistakes — Rules</p>
+          <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.red,margin:0,fontWeight:700}}>⚠️ Common Mistakes — Rules</p>
           {isManager&&<button onClick={onAdd} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Reminder</button>}
         </div>
         {Object.entries(alertsByCat).map(([cat,catAlerts])=>(
           <div key={cat} style={{marginBottom:12}}>
             <button onClick={()=>setOpenCat(openCat===cat?null:cat)}
               style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #efefef",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:openCat===cat?8:0}}>
-              <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{cat}</span>
+              <span style={{fontSize:13,fontWeight:600,color:DS.textPri}}>{cat}</span>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:10,background:"#f0f4f8",color:"#888",padding:"2px 7px",borderRadius:10}}>{catAlerts.length} rules</span>
-                <span style={{fontSize:14,color:"#aaa"}}>{openCat===cat?"▲":"▼"}</span>
+                <span style={{fontSize:10,background:DS.bg,color:DS.textSec,padding:"2px 7px",borderRadius:10}}>{catAlerts.length} rules</span>
+                <span style={{fontSize:14,color:DS.textMut}}>{openCat===cat?"▲":"▼"}</span>
               </div>
             </button>
             {openCat===cat&&catAlerts.map((a,i)=>{
@@ -5202,7 +5202,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
                     <p style={{margin:"0 0 3px",fontWeight:700,fontSize:13,color:style.text}}>{a.title}</p>
                     <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.6}}>{a.body}</p>
                   </div>
-                  {isManager&&<button onClick={()=>onEdit(a)} style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888",flexShrink:0}}>Edit</button>}
+                  {isManager&&<button onClick={()=>onEdit(a)} style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec,flexShrink:0}}>Edit</button>}
                 </div>
               );
             })}
@@ -5294,7 +5294,7 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
   return (
     <div style={{marginTop:16}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <p style={{margin:0,fontSize:14,fontWeight:700,color:"#1a1a1a"}}>🏊 Hub Submission Queue</p>
+        <p style={{margin:0,fontSize:14,fontWeight:700,color:DS.textPri}}>🏊 Hub Submission Queue</p>
         <div style={{display:"flex",gap:6}}>
           {["pending","approved","rejected","all"].map(f=>(
             <button key={f} onClick={()=>setFilter(f)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${filter===f?"#003087":"#ddd"}`,background:filter===f?"#003087":"#fff",color:filter===f?"#fff":"#888",cursor:"pointer",fontSize:11,fontWeight:600,textTransform:"capitalize"}}>{f}</button>
@@ -5302,32 +5302,32 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
         </div>
       </div>
 
-      {filtered.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No {filter} submissions</p></div>}
+      {filtered.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No {filter} submissions</p></div>}
 
       {filtered.map(s=>(
         <div key={s.id} style={{background:"#fff",borderRadius:12,border:`1.5px solid ${s.urgent?"#e74c3c":"#efefef"}`,padding:"14px",marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>{TYPE_LABELS[s.type]||s.type}</span>
-              {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 8px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+              {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:DS.red,padding:"2px 8px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
               <span style={{fontSize:11,color:"#bbb"}}>{new Date(s.submitted_at).toLocaleString()}</span>
             </div>
             <span style={{fontSize:11,fontWeight:600,color:s.status==="pending"?"#b85c00":s.status==="approved"?"#1a5c35":"#c0392b",background:s.status==="pending"?"#fff8ee":s.status==="approved"?"#eafaf1":"#fdf0ee",padding:"2px 8px",borderRadius:4}}>{s.status}</span>
           </div>
           <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12,color:"#444"}}>
             <p style={{margin:"0 0 4px",fontWeight:600}}>{s.payload.title||s.payload.location_name||s.payload.name||"Update"}</p>
-            {s.payload.rules&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.rules}</p>}
-            {s.payload.reason&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.reason}</p>}
-            {s.payload.body&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.body}</p>}
+            {s.payload.rules&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.rules}</p>}
+            {s.payload.reason&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.reason}</p>}
+            {s.payload.body&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.body}</p>}
             {s.payload.code&&<p style={{margin:"0 0 2px",color:DS.accent,fontWeight:600}}>Code: {s.payload.code}</p>}
-            {s.payload.expires_on&&<p style={{margin:"0 0 2px",color:"#888"}}>Expires: {s.payload.expires_on}</p>}
+            {s.payload.expires_on&&<p style={{margin:"0 0 2px",color:DS.textSec}}>Expires: {s.payload.expires_on}</p>}
           </div>
-          <p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Submitted by: {s.submitted_by}</p>
-          {s.reviewed_by&&<p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Reviewed by: {s.reviewed_by}</p>}
+          <p style={{margin:"0 0 8px",fontSize:11,color:DS.textMut}}>Submitted by: {s.submitted_by}</p>
+          {s.reviewed_by&&<p style={{margin:"0 0 8px",fontSize:11,color:DS.textMut}}>Reviewed by: {s.reviewed_by}</p>}
           {s.status==="pending"&&(
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>approve(s)} style={{flex:1,padding:"9px",borderRadius:9,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:700}}>✅ Approve & Publish</button>
-              <button onClick={()=>reject(s)} style={{padding:"9px 16px",borderRadius:9,background:"#fdf0ee",color:"#c0392b",border:"1.5px solid #c0392b",cursor:"pointer",fontSize:12,fontWeight:700}}>Reject</button>
+              <button onClick={()=>reject(s)} style={{padding:"9px 16px",borderRadius:9,background:"#fdf0ee",color:DS.red,border:"1.5px solid #c0392b",cursor:"pointer",fontSize:12,fontWeight:700}}>Reject</button>
             </div>
           )}
         </div>
@@ -5369,11 +5369,11 @@ function MgrUsers({ reload, fire }) {
 
   return (
     <div style={{marginTop:16}}>
-      <p style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#1a1a1a"}}>👥 Users & Roles</p>
+      <p style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:DS.textPri}}>👥 Users & Roles</p>
 
       {/* Add user form */}
       <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:16}}>
-        <p style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Add User</p>
+        <p style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:DS.textSec,textTransform:"uppercase",letterSpacing:.5}}>Add User</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
             <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Display Name</label>
@@ -5402,18 +5402,18 @@ function MgrUsers({ reload, fire }) {
       </div>
 
       {/* User list */}
-      {loading?<p style={{textAlign:"center",color:"#aaa",fontSize:13}}>Loading…</p>:users.map(u=>(
+      {loading?<p style={{textAlign:"center",color:DS.textMut,fontSize:13}}>Loading…</p>:users.map(u=>(
         <div key={u.id} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",gap:10,alignItems:"center"}}>
             <div style={{width:36,height:36,borderRadius:"50%",background:(ROLE_COLORS[u.role]||{bg:"#eee"}).bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
               {u.role==="management"?"🎛️":"🏊"}
             </div>
             <div>
-              <p style={{margin:0,fontWeight:700,fontSize:13,color:"#1a1a1a"}}>{u.display_name||u.username}</p>
-              <p style={{margin:0,fontSize:11,color:"#aaa"}}>@{u.username} · <span style={{color:(ROLE_COLORS[u.role]||{fg:"#888"}).fg,fontWeight:600}}>{u.role}</span></p>
+              <p style={{margin:0,fontWeight:700,fontSize:13,color:DS.textPri}}>{u.display_name||u.username}</p>
+              <p style={{margin:0,fontSize:11,color:DS.textMut}}>@{u.username} · <span style={{color:(ROLE_COLORS[u.role]||{fg:"#888"}).fg,fontWeight:600}}>{u.role}</span></p>
             </div>
           </div>
-          <button onClick={()=>remove(u.id)} style={{padding:"5px 12px",borderRadius:8,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:600}}>Remove</button>
+          <button onClick={()=>remove(u.id)} style={{padding:"5px 12px",borderRadius:8,background:"#fdf0ee",border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:600}}>Remove</button>
         </div>
       ))}
     </div>
@@ -5518,10 +5518,10 @@ function ClientView({ currentUser, data, reload, onLogout }) {
   const TYPE_LABELS={promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",pricing:"💰 Pricing",alert:"🔔 Reminder"};
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f0f4f8",paddingBottom:60}}>
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:DS.bg,paddingBottom:60}}>
       <style>{`*{box-sizing:border-box}`}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div style={{background:"#003087",padding:"16px 18px 0",color:"#fff"}}>
+      <div style={{background:DS.accent,padding:"16px 18px 0",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:24}}>🏊</span>
@@ -5539,7 +5539,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
         {tab==="home"&&<div>
           {/* Type selector */}
           <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:12}}>
-            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Submission type</p>
+            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textSec,textTransform:"uppercase",letterSpacing:.5}}>Submission type</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
               {[{k:"promo",l:"🎯 Promo"},{k:"closure",l:"🚫 Closure"},{k:"location",l:"📍 Location Update"},{k:"pricing",l:"💰 Pricing Update"},{k:"alert",l:"🔔 Reminder"}].map(t=>(
                 <div key={t.k} onClick={()=>setType(t.k)} style={{padding:"10px 12px",borderRadius:10,border:`2px solid ${type===t.k?"#003087":"#eee"}`,background:type===t.k?"#e8f0fe":"#fff",cursor:"pointer",fontWeight:type===t.k?700:500,fontSize:13,color:type===t.k?"#003087":"#555"}}>{t.l}</div>
@@ -5621,7 +5621,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
               <option value="">Select location…</option>
               {locations.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
             </select>
-            {locations.length===0&&<p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>Loading locations…</p>}
+            {locations.length===0&&<p style={{margin:"4px 0 0",fontSize:11,color:DS.textMut}}>Loading locations…</p>}
             </div>
             {loc.id!=null&&loc.name&&<>
               {g2(<div>{lbl("Extension")}<input value={loc.ext} onChange={e=>setL("ext",e.target.value)} placeholder="e.g. 1001" style={S}/></div>,
@@ -5687,7 +5687,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                   <div>{lbl("Registration Fee ($)")}<input type="number" value={pricing.reg_fee} onChange={e=>setPR("reg_fee",e.target.value)} placeholder="e.g. 25" style={S}/></div>
                 )}
               </div>
-              <p style={{margin:0,fontSize:11,color:"#888"}}>💡 Leave a field blank to keep the current price unchanged. Only filled fields will be updated.</p>
+              <p style={{margin:0,fontSize:11,color:DS.textSec}}>💡 Leave a field blank to keep the current price unchanged. Only filled fields will be updated.</p>
             </>}
           </div>}
 
@@ -5706,7 +5706,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           {/* Urgent toggle */}
           <div style={{background:"#fdf0ee",borderRadius:10,padding:"12px",border:"1.5px solid #f5b7b1",marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:urgent?10:0}}>
-              <div><p style={{margin:0,fontSize:12,fontWeight:700,color:"#c0392b"}}>🚨 Mark as Urgent</p><p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Bypasses approval — pings manager immediately</p></div>
+              <div><p style={{margin:0,fontSize:12,fontWeight:700,color:DS.red}}>🚨 Mark as Urgent</p><p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Bypasses approval — pings manager immediately</p></div>
               <div onClick={()=>setUrgent(!urgent)} style={{width:42,height:24,borderRadius:12,background:urgent?"#c0392b":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
                 <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:urgent?21:3,transition:"left .2s"}}/>
               </div>
@@ -5715,25 +5715,25 @@ function ClientView({ currentUser, data, reload, onLogout }) {
               style={{...S,border:`1.5px solid ${urgentWord.toUpperCase()==="URGENT"?"#c0392b":"#ddd"}`,background:"#fff"}}/>}
           </div>
 
-          <button onClick={submit} disabled={submitting} style={{width:"100%",padding:"12px",borderRadius:10,background:"#003087",color:"#fff",border:"none",cursor:submitting?"default":"pointer",fontSize:13,fontWeight:700,opacity:submitting?.7:1}}>
+          <button onClick={submit} disabled={submitting} style={{width:"100%",padding:"12px",borderRadius:10,background:DS.accent,color:"#fff",border:"none",cursor:submitting?"default":"pointer",fontSize:13,fontWeight:700,opacity:submitting?.7:1}}>
             {submitting?"Submitting…":"📤 Submit for Approval"}
           </button>
         </div>}
 
         {tab==="history"&&<div>
-          {submissions.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:"#aaa"}}>No submissions yet</p></div>}
+          {submissions.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:DS.textMut}}>No submissions yet</p></div>}
           {submissions.map(s=>(
             <div key={s.id} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>{TYPE_LABELS[s.type]||s.type}</span>
-                  {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+                  {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
                 </div>
                 <span style={{fontSize:11,fontWeight:600,color:(STATUS_CFG[s.status]||{}).fg,background:(STATUS_CFG[s.status]||{}).bg,padding:"2px 8px",borderRadius:4}}>{s.status}</span>
               </div>
               <p style={{margin:"0 0 4px",fontWeight:600,fontSize:13}}>{s.payload?.title||s.payload?.location_name||s.payload?.name||"Update"}</p>
-              <p style={{margin:0,fontSize:11,color:"#aaa"}}>{new Date(s.submitted_at).toLocaleString()}</p>
-              {s.reviewed_by&&<p style={{margin:"4px 0 0",fontSize:11,color:"#888"}}>Reviewed by {s.reviewed_by}</p>}
+              <p style={{margin:0,fontSize:11,color:DS.textMut}}>{new Date(s.submitted_at).toLocaleString()}</p>
+              {s.reviewed_by&&<p style={{margin:"4px 0 0",fontSize:11,color:DS.textSec}}>Reviewed by {s.reviewed_by}</p>}
             </div>
           ))}
         </div>}
