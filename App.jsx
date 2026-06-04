@@ -125,8 +125,8 @@ function BreakRecommendation({ repName, reps, settings, kpiRows, onAdmin, onLunc
     if(cached){ setInsight(cached); return; }
 
     setLoading(true);
-    const activeCount = reps.filter(r=>r.status==="available"&&(r.rep_stage||"active")==="active").length;
-    const totalCount = reps.filter(r=>(r.rep_stage||"active")==="active").length;
+    const activeCount = reps.filter(r=>r.status==="available"&&(r.rep_stage||"active")!=="not_started").length;
+    const totalCount = reps.filter(r=>(r.rep_stage||"active")!=="not_started").length;
     const hour = new Date().getHours();
     const ctHour = ((hour*60 - 300) % 1440) / 60;
     const isPeak = ctHour>=14&&ctHour<17;
@@ -194,9 +194,9 @@ function AdHocDecisionSupport({ req, reps, settings }) {
   useEffect(()=>{
     if(!req) return;
     setLoading(true);
-    const activeCount = reps.filter(r=>r.status==="available"&&(r.rep_stage||"active")==="active").length;
+    const activeCount = reps.filter(r=>r.status==="available"&&(r.rep_stage||"active")!=="not_started").length;
     const onLunchNow = reps.filter(r=>r.status==="lunch").length;
-    const totalActive = reps.filter(r=>(r.rep_stage||"active")==="active").length;
+    const totalActive = reps.filter(r=>(r.rep_stage||"active")!=="not_started").length;
     const prefTime = req.preferred_time ? `Preferred CT: ${req.preferred_time} ${req.rep_timezone}` : "No preferred time given";
     const ctHour = new Date().getHours() - 5;
     const isPeak = ctHour>=14&&ctHour<17;
@@ -816,7 +816,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
   };
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
 
-  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
+  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")!=="not_started");
   const maxOut = settings.custom_limit ?? Math.max(2, Math.floor(activeReps.length * 0.3));
   const totalOut = reps.filter(r=>["health","lunch","admin"].includes(r.status)).length;
   const onHealth = reps.filter(r=>r.status==="health").length;
@@ -868,7 +868,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
         {/* Stats row */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
           {[
-            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)&&(r.rep_stage||"active")==="active").length,l:"Available",c:DS.green},
+            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)&&(r.rep_stage||"active")!=="not_started").length,l:"Available",c:DS.green},
             {n:centreOpen?onHealth:0,l:`Health (/${hLimit})`,c:onHealth>=hLimit?DS.red:DS.accent},
             {n:centreOpen?onLunch:0,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?DS.red:DS.amber},
             {n:reps.filter(r=>["pto","sick","off"].includes(r.status)).length,l:"Out",c:DS.textSec},
@@ -977,9 +977,9 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
   };
 
   const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch"||r.status==="admin") : [];
-  const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r) && (r.rep_stage||"active")==="active");
-  const offShift  = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)) && (r.rep_stage||"active")==="active");
-  const inTraining = reps.filter(r=>r.status==="available" && (r.rep_stage==="training"||r.rep_stage==="not_started"||r.rep_stage==="ramping"));
+  const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r) && (r.rep_stage||"active")!=="not_started");
+  const offShift  = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)) && (r.rep_stage||"active")!=="not_started");
+  const inTraining = reps.filter(r=>r.status==="available" && r.rep_stage==="not_started");
   const out = reps.filter(r=>["pto","sick","off"].includes(r.status));
 
   function RepRow({rep}) {
@@ -2453,7 +2453,7 @@ function MgrPTO({ reps, reload, fire }) {
 // ── MGR: SETTINGS ─────────────────────────────────────────────────────
 function MgrSettings({ settings, reps, reload, fire }) {
   const [customCap, setCustomCap] = useState(settings.custom_limit??Math.floor(reps.length*0.3));
-  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
+  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")!=="not_started");
   const [adminLimit, setAdminLimit] = useState(settings.admin_limit??2);
   const notifPrefs = settings.notif_prefs||{};
   const ping = makePinger(notifPrefs, settings.execo_webhook);
