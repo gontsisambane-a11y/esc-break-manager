@@ -3404,10 +3404,16 @@ function HubView({ isManager }) {
   const [tab,setTab] = useState("home");
   const [editModal,setEditModal] = useState(null);
   const [toast,setToast] = useState(null);
+  const [hubSettings,setHubSettings] = useState({});
   const fire = (type,msg)=>setToast({type,msg,id:Date.now()});
+  const ping = makePinger(hubSettings.notif_prefs||{}, hubSettings.execo_webhook);
 
   const reload = async()=>{
-    try{ const d=await loadHubData(); setHubData(d); }
+    try{
+      const d=await loadHubData(); setHubData(d);
+      const s=await sb("app_settings?id=eq.1").catch(()=>[]);
+      if(s?.[0]) setHubSettings(s[0]);
+    }
     catch(e){ console.error(e); }
     finally{ setLoading(false); }
   };
