@@ -634,7 +634,7 @@ function HealthTimer({ startedAt, bankedSec }) {
   return (
     <div style={{marginTop:10}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-        <span style={{fontSize:11,color:"#666"}}>Health break</span>
+        <span style={{fontSize:11,color:DS.textSec}}>Health break</span>
         <span style={{fontSize:13,fontWeight:700,color}}>{over?`+${fmtTime(Math.abs(remaining))} over`:fmtTime(remaining)+" left"}</span>
       </div>
       <div style={{height:6,background:"#f0f0f0",borderRadius:3,overflow:"hidden"}}>
@@ -1022,7 +1022,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
             {rep.status==="admin"&&ab&&<p style={{margin:"2px 0 0",fontSize:10,color:"#1d4ed8"}}>🗂️ Admin — {fmtDur(elapsedSec(ab.started_at))} / 30m</p>}
           </div>
           <div style={{display:"flex",gap:5,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
-            {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#555",fontWeight:600}}>Back 👋</button>}
+            {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Back 👋</button>}
             {isOOO&&<button onClick={()=>handleClear(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #c8a8e0",background:"#f5eefb",cursor:"pointer",fontSize:11,color:"#7a1a5c",fontWeight:600}}>Clear</button>}
             {!isBreak&&!isOOO&&!isOff&&<button onClick={()=>setOooModal(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ebebeb",background:"#fafafa",cursor:"pointer",fontSize:10,color:DS.textMut}}>Mark Out</button>}
             {settings.peak_mode&&rep.status==="health"&&<button onClick={()=>handleOverridePeak(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f0ad4e",background:"#fff3cd",cursor:"pointer",fontSize:10,color:DS.amber}}>Override</button>}
@@ -1197,7 +1197,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                   <div>
                     <p style={{margin:0,fontWeight:700,fontSize:14}}>{r.rep_name}</p>
                     <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Requested at: {r.requested_time} · TZ: {r.rep_timezone||"Central"}</p>
-                    {r.note&&<p style={{margin:"4px 0 0",fontSize:12,color:"#555",fontStyle:"italic"}}>"{r.note}"</p>}
+                    {r.note&&<p style={{margin:"4px 0 0",fontSize:12,color:DS.textSec,fontStyle:"italic"}}>"{r.note}"</p>}
                   </div>
                 </div>
 
@@ -1210,7 +1210,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
 
                 {/* Conflict analysis */}
                 <div style={{background:"#f9f9f9",borderRadius:8,padding:"8px 10px",marginBottom:10}}>
-                  <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#555"}}>📊 Impact Analysis</p>
+                  <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:DS.textSec}}>📊 Impact Analysis</p>
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
                     {peak&&<p style={{margin:0,fontSize:11,color:DS.red,fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
                     {!peak&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ Off-peak window — lower call volume</p>}
@@ -1357,11 +1357,11 @@ function AddRepModal({ onClose, onAdd }) {
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
-            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Full Name</label>
+            <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Full Name</label>
             <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Jordan Smith" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
           </div>
           <div>
-            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Stage</label>
+            <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Stage</label>
             <select value={form.rep_stage} onChange={e=>set("rep_stage",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1.5px solid ${(STAGE_CFG[form.rep_stage]||STAGE_CFG.active).border}`,background:(STAGE_CFG[form.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[form.rep_stage]||STAGE_CFG.active).text,fontSize:13,outline:"none",fontWeight:600}}>
               <option value="not_started">⏳ Not Started</option>
               <option value="training">🎓 Training</option>
@@ -1379,13 +1379,13 @@ function AddRepModal({ onClose, onAdd }) {
           </div>
         )}
         <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Timezone</label>
+          <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Timezone</label>
           <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
             {TZLIST.map(t=><option key={t}>{t}</option>)}
           </select>
         </div>
         <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Working Days</label>
+          <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:6}}>Working Days</label>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {DAYS.map(d=>(
               <div key={d} onClick={()=>toggleDay(d)} style={{padding:"5px 10px",borderRadius:8,border:form.shift_days.includes(d)?"2px solid #1a5c35":"1.5px solid #ddd",background:form.shift_days.includes(d)?"#f0faf4":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:form.shift_days.includes(d)?"#1a5c35":"#555"}}>{d}</div>
@@ -1394,7 +1394,7 @@ function AddRepModal({ onClose, onAdd }) {
         </div>
         {form.shift_days.length>0&&(
           <div>
-            <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day</label>
+            <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:6}}>Schedule Per Day</label>
             <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
               <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Day</span>
               <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Start</span>
@@ -1541,18 +1541,18 @@ function MgrSchedules({ reps, reload, fire }) {
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Name</label>
+                <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Name</label>
                 <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
               </div>
               <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Timezone</label>
+                <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Timezone</label>
                 <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
                   {TZLIST.map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Working Days</label>
+              <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:6}}>Working Days</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {DAYS.map(d=>(
                   <div key={d} onClick={()=>toggleDay(d)} style={{padding:"5px 10px",borderRadius:8,border:form.shift_days.includes(d)?"2px solid #1a5c35":"1.5px solid #ddd",background:form.shift_days.includes(d)?"#f0faf4":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:form.shift_days.includes(d)?"#1a5c35":"#555"}}>{d}</div>
@@ -1561,7 +1561,7 @@ function MgrSchedules({ reps, reload, fire }) {
             </div>
             {form.shift_days.length>0&&(
               <div>
-                <label style={{fontSize:12,color:"#666",display:"block",marginBottom:6}}>Schedule Per Day <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
+                <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:6}}>Schedule Per Day <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
                 <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
                   <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Day</span>
                   <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Start</span>
@@ -1643,7 +1643,7 @@ function MgrSchedules({ reps, reload, fire }) {
               </div>
               <div style={{textAlign:"right"}}>
                 {(start||end)
-                  ? <span style={{fontSize:12,fontWeight:700,color:"#333"}}>{start?fmt12h(start):"?"} – {end?fmt12h(end):"?"}</span>
+                  ? <span style={{fontSize:12,fontWeight:700,color:DS.textPri}}>{start?fmt12h(start):"?"} – {end?fmt12h(end):"?"}</span>
                   : <span style={{fontSize:11,color:"#ccc"}}>No times set</span>
                 }
               </div>
@@ -2191,18 +2191,18 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
               <div>
-                <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>Agent</label>
+                <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4,fontWeight:600}}>Agent</label>
                 <select value={pipAgent} onChange={e=>setPipAgent(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
                   <option value="">Select agent…</option>
                   {[...ACTIVE_AGENTS].sort().map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>From</label>
+                <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4,fontWeight:600}}>From</label>
                 <input type="date" value={pipFrom} onChange={e=>setPipFrom(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
               </div>
               <div>
-                <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4,fontWeight:600}}>To</label>
+                <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4,fontWeight:600}}>To</label>
                 <input type="date" value={pipTo} onChange={e=>setPipTo(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
               </div>
             </div>
@@ -2378,18 +2378,18 @@ function MgrPTO({ reps, reload, fire }) {
         <Modal title="Add PTO" sub="NEW ENTRY" onClose={()=>setAdding(false)}>
           <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
             <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Rep</label>
+              <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Rep</label>
               <select value={addForm.rep_id} onChange={e=>setAddForm(p=>({...p,rep_id:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
                 <option value="">Select rep…</option>
                 {reps.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </div>
             <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Date</label>
+              <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Date</label>
               <input type="date" value={addForm.pto_date} onChange={e=>setAddForm(p=>({...p,pto_date:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
             </div>
             <div>
-              <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Note (optional)</label>
+              <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Note (optional)</label>
               <input value={addForm.note} onChange={e=>setAddForm(p=>({...p,note:e.target.value}))} placeholder="e.g. Annual leave" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
             </div>
           </div>
@@ -2402,11 +2402,11 @@ function MgrPTO({ reps, reload, fire }) {
 
       {/* Week nav */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <button onClick={()=>setWeekOffset(p=>p-1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:13}}>← Prev</button>
+        <button onClick={()=>setWeekOffset(p=>p-1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:13}}>← Prev</button>
         <span style={{fontSize:13,fontWeight:600,color:DS.textPri}}>
           {weekOffset===0?"This Week":weekOffset===1?"Next Week":weekOffset===-1?"Last Week":`${weekDays[0].toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${weekDays[6].toLocaleDateString("en-US",{month:"short",day:"numeric"})}`}
         </span>
-        <button onClick={()=>setWeekOffset(p=>p+1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:13}}>Next →</button>
+        <button onClick={()=>setWeekOffset(p=>p+1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:13}}>Next →</button>
       </div>
 
       {/* Weekly grid */}
@@ -2543,7 +2543,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
           </div>
         </div>
         {settings.admin_mode&&<>
-          <p style={{margin:"0 0 8px",fontSize:12,color:"#555"}}>Active team: {activeReps.length}</p>
+          <p style={{margin:"0 0 8px",fontSize:12,color:DS.textSec}}>Active team: {activeReps.length}</p>
           <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
             <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
             <span style={{fontSize:13,color:DS.textSec}}>max people on admin at once</span>
@@ -2562,7 +2562,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
         <p style={{margin:"0 0 14px",fontSize:12,color:DS.textSec}}>Choose which events ping GChat. All are on by default.</p>
         {["main","execo"].map(ch=>(
           <div key={ch} style={{marginBottom:14}}>
-            <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#555",textTransform:"uppercase",letterSpacing:.5}}>
+            <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.textSec,textTransform:"uppercase",letterSpacing:.5}}>
               {ch==="main"?"📢 Main ESC Space":"👔 Execo Managers Space"}
             </p>
             {NOTIF_EVENTS.filter(e=>e.ch===ch||e.ch==="both").map(e=>{
@@ -2586,7 +2586,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
           await sbPatch("app_settings",1,{notif_prefs:{},updated_at:new Date().toISOString()});
           fire("info","All notifications reset to on");
           reload();
-        }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Reset all to ON</button>
+        }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Reset all to ON</button>
       </div>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 Execo Managers GChat</p>
@@ -2624,7 +2624,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
           ].map(([i,t],n)=>(
             <div key={n} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
               <span style={{fontSize:14}}>{i}</span>
-              <span style={{fontSize:12,color:"#555",lineHeight:1.5}}>{t}</span>
+              <span style={{fontSize:12,color:DS.textSec,lineHeight:1.5}}>{t}</span>
             </div>
           ))}
         </div>
@@ -3064,9 +3064,9 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
                     <span style={{fontSize:20}}>🕐</span>
                     <div style={{flex:1}}>
                       <p style={{margin:0,fontWeight:700,fontSize:13,color:DS.accent}}>#{queuePosition} in the queue</p>
-                      <p style={{margin:"2px 0 0",fontSize:11,color:"#555"}}>{queuePosition===1?"You're up next!":"Waiting for a slot to open"}</p>
+                      <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>{queuePosition===1?"You're up next!":"Waiting for a slot to open"}</p>
                     </div>
-                    <button onClick={leaveQueue} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#fff",cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>Leave</button>
+                    <button onClick={leaveQueue} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #003087",background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>Leave</button>
                   </div>
                 )}
                 {isNotified&&(
@@ -3180,7 +3180,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
     <div>
       {reqModal&&(
         <Modal title="Request Lunch Swap" sub="SWAP REQUEST" onClose={()=>setReqModal(false)} wide>
-          <p style={{fontSize:12,color:"#666",margin:"0 0 12px"}}>Your lunch today: <strong style={{color:DS.green}}>{myTodayLunch()}</strong></p>
+          <p style={{fontSize:12,color:DS.textSec,margin:"0 0 12px"}}>Your lunch today: <strong style={{color:DS.green}}>{myTodayLunch()}</strong></p>
           <p style={{fontSize:11,color:DS.textMut,margin:"0 0 10px",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Team lunch schedule today</p>
           <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
             {reps.filter(r=>r.id!==repInfo.id&&!["off","pto","sick"].includes(r.status)).map(r=>{
@@ -3665,7 +3665,7 @@ function HubView({ isManager }) {
             {/* Group by category */}
             {Object.entries(docs.reduce((acc,d)=>{const cat=d.category||"General";if(!acc[cat])acc[cat]=[];acc[cat].push(d);return acc;},{})).map(([cat,catDocs])=>(
               <div key={cat} style={{marginBottom:16}}>
-                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 8px",fontWeight:700}}>{cat}</p>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.textSec,margin:"0 0 8px",fontWeight:700}}>{cat}</p>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
                   {catDocs.map((d,i)=><HubDocCard key={i} doc={d} isManager={isManager} onEdit={()=>setEditModal({type:"doc",item:d})}/>)}
                 </div>
@@ -3878,7 +3878,7 @@ function LevelTool() {
           {/* STEP 1 — Age selection */}
           {!nodeKey&&(
             <div>
-              <p style={{margin:"0 0 12px",fontSize:14,color:"#444",fontWeight:500}}>Step 1 — Select swimmer's age:</p>
+              <p style={{margin:"0 0 12px",fontSize:14,color:DS.textSec,fontWeight:500}}>Step 1 — Select swimmer's age:</p>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {AGE_BUCKETS.map((b,i)=>(
                   <button key={i} onClick={()=>goTo(b.node)}
@@ -3957,7 +3957,7 @@ function LevelTool() {
 
       {/* Quick reference table */}
       <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px"}}>
-        <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 10px",fontWeight:700}}>Quick Reference</p>
+        <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.textSec,margin:"0 0 10px",fontWeight:700}}>Quick Reference</p>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead>
@@ -3986,8 +3986,8 @@ function LevelTool() {
               ].map(([l,a,s,m],i)=>(
                 <tr key={i} style={{borderBottom:`1px solid ${DS.border}`,background:i%2===0?DS.bgCard:DS.bgSurf}}>
                   <td style={{padding:"6px 8px",fontWeight:600,color:DS.green}}>{l}</td>
-                  <td style={{padding:"6px 8px",color:"#555"}}>{a}</td>
-                  <td style={{padding:"6px 8px",color:"#555"}}>{s}</td>
+                  <td style={{padding:"6px 8px",color:DS.textSec}}>{a}</td>
+                  <td style={{padding:"6px 8px",color:DS.textSec}}>{s}</td>
                   <td style={{padding:"6px 8px",fontWeight:600,color:DS.textPri}}>{m}</td>
                 </tr>
               ))}
@@ -4088,7 +4088,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
             {pricing&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
                 <span style={{fontSize:11,background:"#e8f0fe",color:DS.accent,padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
-                <span style={{fontSize:11,background:DS.bg,color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
+                <span style={{fontSize:11,background:DS.bg,color:DS.textSec,padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
                 <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
                 <span style={{fontSize:11,background:DS.amberDim,color:DS.amber,padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
               </div>
@@ -4158,7 +4158,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
                       {ins.sn==='Y'&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
                       {ins.lang&&ins.lang.toLowerCase()!=='english'&&ins.lang.toLowerCase()!=='english '&&<span style={{fontSize:9,background:"#f5eefb",color:"#8e44ad",padding:"1px 5px",borderRadius:3}}>{ins.lang}</span>}
                     </div>
-                    {ins.desc&&<p style={{margin:0,fontSize:11,color:"#666",lineHeight:1.4}}>{ins.desc}</p>}
+                    {ins.desc&&<p style={{margin:0,fontSize:11,color:DS.textSec,lineHeight:1.4}}>{ins.desc}</p>}
                   </div>
                 ))}
               </div>
@@ -4191,13 +4191,13 @@ function HubPromoCard({promo,isManager,onEdit}) {
         </div>
         <div style={{display:"flex",gap:5,flexShrink:0}}>
           {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>}
-          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12,color:DS.textMut}}>{expanded?"▲":"▼"}</button>
+          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textMut}}>{expanded?"▲":"▼"}</button>
         </div>
       </div>
       {expanded&&(
         <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f5f5f5"}}>
           <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:DS.textSec,letterSpacing:.5,textTransform:"uppercase"}}>Full Rules</p>
-          <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.7,whiteSpace:"pre-line"}}>{promo.rules}</p>
+          <p style={{margin:0,fontSize:12,color:DS.textSec,lineHeight:1.7,whiteSpace:"pre-line"}}>{promo.rules}</p>
         </div>
       )}
     </div>
@@ -4218,12 +4218,12 @@ function HubDocCard({doc,isManager,onEdit}) {
       if(trimmed.startsWith('"')&&trimmed.endsWith('"'))
         return <p key={i} style={{margin:"4px 0",fontSize:12,color:DS.green,background:"#f0faf4",borderLeft:"3px solid #1a5c35",padding:"4px 8px",borderRadius:"0 6px 6px 0",lineHeight:1.6}}>{trimmed}</p>;
       if(trimmed.startsWith('☐')||trimmed.startsWith('✓'))
-        return <p key={i} style={{margin:"3px 0",fontSize:12,color:"#555",paddingLeft:8}}>{trimmed}</p>;
+        return <p key={i} style={{margin:"3px 0",fontSize:12,color:DS.textSec,paddingLeft:8}}>{trimmed}</p>;
       if(trimmed.startsWith('→')||trimmed.includes(' → '))
         return <p key={i} style={{margin:"3px 0",fontSize:12,color:"#8e44ad",fontWeight:500,paddingLeft:8}}>{trimmed}</p>;
       if(trimmed.match(/^\d+\./)||trimmed.match(/^(STEP|Step)\s+\d+/))
         return <p key={i} style={{margin:"6px 0 2px",fontSize:12,fontWeight:700,color:DS.textPri}}>{trimmed}</p>;
-      return <p key={i} style={{margin:"2px 0",fontSize:12,color:"#444",lineHeight:1.6}}>{trimmed}</p>;
+      return <p key={i} style={{margin:"2px 0",fontSize:12,color:DS.textSec,lineHeight:1.6}}>{trimmed}</p>;
     });
   };
 
@@ -4311,8 +4311,8 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
 
         {/* Basic info */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>PROMO TITLE</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. June Dive In" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-          <div><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>PROMO CODE</label><input value={f.code} onChange={e=>set("code",e.target.value)} placeholder="e.g. DIVEIN40" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>PROMO TITLE</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. June Dive In" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>PROMO CODE</label><input value={f.code} onChange={e=>set("code",e.target.value)} placeholder="e.g. DIVEIN40" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
         </div>
 
         {/* Discount settings */}
@@ -4320,7 +4320,7 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
           <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase",letterSpacing:.5}}>💰 Discount Settings</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div>
-              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT TYPE</label>
+              <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT TYPE</label>
               <select value={f.discount_type} onChange={e=>set("discount_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
                 <option value="pct">% off tuition</option>
                 <option value="one_class_pct">% off — 1 class/week only</option>
@@ -4329,14 +4329,14 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
             </div>
             <div>
               {(f.discount_type==="pct"||f.discount_type==="one_class_pct")
-                ? <><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT %</label><input type="number" min={1} max={100} value={f.discount_pct} onChange={e=>set("discount_pct",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
-                : <><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT AMOUNT ($)</label><input type="number" min={1} value={f.discount_fixed} onChange={e=>set("discount_fixed",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
+                ? <><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT %</label><input type="number" min={1} max={100} value={f.discount_pct} onChange={e=>set("discount_pct",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
+                : <><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT AMOUNT ($)</label><input type="number" min={1} value={f.discount_fixed} onChange={e=>set("discount_fixed",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
               }
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
-              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>APPLIES TO</label>
+              <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>APPLIES TO</label>
               <select value={f.applies_to} onChange={e=>set("applies_to",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
                 <option value="continuous">Continuous classes only (no ODL/clinic)</option>
                 <option value="group">Group classes only</option>
@@ -4362,7 +4362,7 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
         <div style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:10,padding:"12px 14px"}}>
           <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.amber,textTransform:"uppercase",letterSpacing:.5}}>🔒 Restrictions</p>
           <div style={{marginBottom:10}}>
-            <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:6}}>VALID FOR</label>
+            <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:6}}>VALID FOR</label>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {[{k:"lead",l:"New leads"},{k:"lapsed",l:"Lapsed"},{k:"active",l:"Active"}].map(t=>(
                 <div key={t.k} onClick={()=>toggleCustType(t.k)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${f.customer_types.includes(t.k)?"#e07b00":"#ddd"}`,background:f.customer_types.includes(t.k)?"#fff8ee":"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:f.customer_types.includes(t.k)?"#b85c00":"#888"}}>
@@ -4373,14 +4373,14 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
-              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>MONTH RESTRICTION</label>
+              <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>MONTH RESTRICTION</label>
               <select value={f.month_restriction} onChange={e=>set("month_restriction",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
                 <option value="">Any month</option>
                 {MONTHS_LIST.map((m,i)=><option key={i} value={String(i)}>{m}</option>)}
               </select>
             </div>
             <div>
-              <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>EXPIRY DATE</label>
+              <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>EXPIRY DATE</label>
               <input type="date" value={f.expires_on} onChange={e=>set("expires_on",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
             </div>
           </div>
@@ -4397,7 +4397,7 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
         </div>
 
         {/* Full rules text */}
-        <div><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>FULL RULES (shown when expanded)</label><textarea value={f.rules} onChange={e=>set("rules",e.target.value)} rows={4} placeholder="Full terms and conditions as stated in the promo brief…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6}}/></div>
+        <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>FULL RULES (shown when expanded)</label><textarea value={f.rules} onChange={e=>set("rules",e.target.value)} rows={4} placeholder="Full terms and conditions as stated in the promo brief…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6}}/></div>
 
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Remove Promo" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
@@ -4417,15 +4417,15 @@ function HubClosureModal({item,locations,onClose,onSave,onDelete}) {
     <Modal title={item?"Edit Closure":"Log Closure"} sub="POOL CLOSURE" onClose={onClose}>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
         <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Location</label>
+          <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Location</label>
           <input value={f.location_name} onChange={e=>set("location_name",e.target.value)} placeholder="e.g. Fort Worth" list="loc-list" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
           <datalist id="loc-list">{locations.map((l,i)=><option key={i} value={l.name}/>)}</datalist>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Start Date</label><input type="date" value={f.start_date} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>End Date</label><input type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Start Date</label><input type="date" value={f.start_date} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>End Date</label><input type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
         </div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Reason</label><input value={f.reason} onChange={e=>set("reason",e.target.value)} placeholder="e.g. Maintenance, Public Holiday" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Reason</label><input value={f.reason} onChange={e=>set("reason",e.target.value)} placeholder="e.g. Maintenance, Public Holiday" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Remove" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
           <div style={{flex:1}}/>
@@ -4542,15 +4542,15 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
         )}
         {uploadErr&&<div style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:9,padding:"9px 12px"}}><p style={{margin:0,fontSize:12,color:DS.red}}>{uploadErr}</p></div>}
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Auto-filled from filename" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Category</label>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Auto-filled from filename" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Category</label>
             <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
               {cats.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Content {f.content&&<span style={{color:DS.green,fontWeight:600}}>✓ Extracted</span>}</label>
+          <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Content {f.content&&<span style={{color:DS.green,fontWeight:600}}>✓ Extracted</span>}</label>
           <textarea value={f.content} onChange={e=>set("content",e.target.value)} rows={10} placeholder="Upload a file above or paste content here…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1.5px solid ${f.content?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",resize:"vertical",lineHeight:1.7,fontFamily:"inherit"}}/>
           <p style={{margin:"4px 0 0",fontSize:11,color:DS.textMut}}>Review and edit extracted content before saving.</p>
         </div>
@@ -4571,10 +4571,10 @@ function HubLocModal({item,onClose,onSave}) {
   return (
     <Modal title={`Edit — ${item?.name}`} sub="LOCATION" onClose={onClose}>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Extension</label><input value={f.ext} onChange={e=>set("ext",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Address</label><input value={f.addr} onChange={e=>set("addr",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Extension</label><input value={f.ext} onChange={e=>set("ext",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Address</label><input value={f.addr} onChange={e=>set("addr",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,alignItems:"center"}}>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Pool Type</label>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Pool Type</label>
             <select value={f.pool} onChange={e=>set("pool",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
               <option>Chlorine</option><option>Salt</option>
             </select>
@@ -4599,9 +4599,9 @@ function HubEventModal({item,onClose,onSave,onDelete}) {
   return (
     <Modal title={item?"Edit Event":"Add Event"} sub="EVENT" onClose={onClose}>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Event Name</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Date</label><input value={f.event_date} onChange={e=>set("event_date",e.target.value)} placeholder="e.g. Jul 11, 2026" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Note (optional)</label><input value={f.note} onChange={e=>set("note",e.target.value)} placeholder="e.g. Tentative" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Event Name</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Date</label><input value={f.event_date} onChange={e=>set("event_date",e.target.value)} placeholder="e.g. Jul 11, 2026" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Note (optional)</label><input value={f.note} onChange={e=>set("note",e.target.value)} placeholder="e.g. Tentative" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Remove" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
           <div style={{flex:1}}/>
@@ -4827,7 +4827,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
         <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>① Location & Customer</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Location</label>
             {/* Zip search input */}
             <div style={{position:"relative",marginBottom:6}}>
               <input
@@ -4864,7 +4864,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
             </select>
           </div>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Customer Type</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Customer Type</label>
             <select value={custType} onChange={e=>setCustType(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
               <option value="lead">New Lead (never enrolled)</option>
               <option value="lapsed">Lapsed (was enrolled before)</option>
@@ -4874,21 +4874,21 @@ function QuoteCalculator({locations, activePromos=[]}) {
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Start Month</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Start Month</label>
             <select value={enrollMo} onChange={e=>setEnrollMo(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
               {MONTHS.map((m,i)=><option key={i} value={i}>{m} 2026</option>)}
             </select>
           </div>
           <div>
             {/* FIX 8: global weeks */}
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Weeks this month</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Weeks this month</label>
             <select value={weeks} onChange={e=>setWeeks(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
               <option value={4}>4 weeks (standard)</option>
               <option value={5}>5 weeks (higher month)</option>
             </select>
           </div>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Reg fees used this year</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Reg fees used this year</label>
             <select value={regUsed} onChange={e=>setRegUsed(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
               <option value={0}>0 — new family</option>
               <option value={1}>1 — one child already enrolled</option>
@@ -5014,7 +5014,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
               <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13}}>{students[i].name||`Child ${i+1}`}</p>
               {c.linesWithPromo.map((l,li)=>(
                 <div key={li} style={{marginBottom:5,paddingLeft:8}}>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:DS.textSec}}>
                     <span>{l.lt?.label} ({l.isContinuous?`${weeks} × ${fmt(l.rate)}`:`${fmt(l.rate)}/class`}){li>0&&l.isContinuous?" — 10% multi-class":""}</span>
                     <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.afterMulti)}</span>
                   </div>
@@ -5025,7 +5025,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 </div>
               ))}
               {c.regFee>0&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#555",marginBottom:3,paddingLeft:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:DS.textSec,marginBottom:3,paddingLeft:8}}>
                   <span>Annual registration fee</span><span>{fmt(c.regFee)}</span>
                 </div>
               )}
@@ -5174,7 +5174,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
             return acc;
           },{})).map(([cat,items])=>(
             <div key={cat} style={{marginBottom:10}}>
-              <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:"#555",letterSpacing:.3}}>{cat}</p>
+              <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:DS.textSec,letterSpacing:.3}}>{cat}</p>
               {items.map(item=>(
                 <div key={item.id} onClick={()=>toggle(item.id)}
                   style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 10px",borderRadius:9,cursor:"pointer",background:checked[item.id]?"#f0faf4":"#fafafa",border:`1px solid ${checked[item.id]?"#c8e6c9":"#efefef"}`,marginBottom:5,transition:"all .15s"}}>
@@ -5201,7 +5201,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
         {Object.entries(alertsByCat).map(([cat,catAlerts])=>(
           <div key={cat} style={{marginBottom:12}}>
             <button onClick={()=>setOpenCat(openCat===cat?null:cat)}
-              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #efefef",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:openCat===cat?8:0}}>
+              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #efefef",background:DS.bgSurf,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:openCat===cat?8:0}}>
               <span style={{fontSize:13,fontWeight:600,color:DS.textPri}}>{cat}</span>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:10,background:DS.bg,color:DS.textSec,padding:"2px 7px",borderRadius:10}}>{catAlerts.length} rules</span>
@@ -5215,7 +5215,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
                   <span style={{fontSize:16,flexShrink:0}}>{style.icon}</span>
                   <div style={{flex:1}}>
                     <p style={{margin:"0 0 3px",fontWeight:700,fontSize:13,color:style.text}}>{a.title}</p>
-                    <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.6}}>{a.body}</p>
+                    <p style={{margin:0,fontSize:12,color:DS.textSec,lineHeight:1.6}}>{a.body}</p>
                   </div>
                   {isManager&&<button onClick={()=>onEdit(a)} style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec,flexShrink:0}}>Edit</button>}
                 </div>
@@ -5236,15 +5236,15 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
   return (
     <Modal title={item?"Edit Reminder":"Add Reminder"} sub="REMINDER" onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Description</label><textarea value={f.body} onChange={e=>set("body",e.target.value)} rows={3} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6,fontFamily:"inherit"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Description</label><textarea value={f.body} onChange={e=>set("body",e.target.value)} rows={3} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6,fontFamily:"inherit"}}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Category</label>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Category</label>
             <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
               {cats.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
-          <div><label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Type</label>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Type</label>
             <select value={f.alert_type} onChange={e=>set("alert_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
               <option value="error">🚨 Error (red)</option>
               <option value="warning">⚠️ Warning (amber)</option>
@@ -5329,7 +5329,7 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
             </div>
             <span style={{fontSize:11,fontWeight:600,color:s.status==="pending"?"#b85c00":s.status==="approved"?"#1a5c35":"#c0392b",background:s.status==="pending"?"#fff8ee":s.status==="approved"?"#eafaf1":"#fdf0ee",padding:"2px 8px",borderRadius:4}}>{s.status}</span>
           </div>
-          <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12,color:"#444"}}>
+          <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12,color:DS.textSec}}>
             <p style={{margin:"0 0 4px",fontWeight:600}}>{s.payload.title||s.payload.location_name||s.payload.name||"Update"}</p>
             {s.payload.rules&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.rules}</p>}
             {s.payload.reason&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.reason}</p>}
@@ -5391,22 +5391,22 @@ function MgrUsers({ reload, fire }) {
         <p style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:DS.textSec,textTransform:"uppercase",letterSpacing:.5}}>Add User</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Display Name</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Display Name</label>
             <input value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})} placeholder="e.g. Andrea Johnson"
               style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
           </div>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Username</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Username</label>
             <input value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})} placeholder="e.g. emler"
               style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
           </div>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>PIN</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>PIN</label>
             <input type="password" value={form.pin} onChange={e=>setForm({...form,pin:e.target.value})} placeholder="Set a PIN"
               style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
           </div>
           <div>
-            <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Role</label>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Role</label>
             <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
               <option value="client">🏊 Client (Hub content only)</option>
               <option value="management">🎛️ Management (Full access)</option>
@@ -5525,7 +5525,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
   };
 
   const S={fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd"};
-  const lbl=(t)=><label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase"}}>{t}</label>;
+  const lbl=(t)=><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase"}}>{t}</label>;
   const g2=(a,b)=><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{a}{b}</div>;
 
   const clientTabs=[{k:"home",l:"📤 Submit"},{k:"history",l:"📋 My Submissions"}];
