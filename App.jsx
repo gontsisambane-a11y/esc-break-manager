@@ -31,13 +31,71 @@ const gStyle = `
   @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
   body { background: ${DS.bg}; color: ${DS.textPri}; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; }
-  input, select, textarea { background: ${DS.bgSurf} !important; color: ${DS.textPri} !important; border: 1px solid ${DS.border} !important; border-radius: ${DS.radiusSm} !important; padding: 9px 12px !important; outline: none !important; transition: border-color .15s; }
+
+  /* Force all white/light backgrounds to dark theme */
+  input, select, textarea {
+    background: ${DS.bgSurf} !important;
+    color: ${DS.textPri} !important;
+    border: 1px solid ${DS.border} !important;
+    border-radius: ${DS.radiusSm} !important;
+    padding: 9px 12px !important;
+    outline: none !important;
+    transition: border-color .15s;
+  }
   input:focus, select:focus, textarea:focus { border-color: ${DS.accent} !important; }
   select option { background: ${DS.bgCard}; color: ${DS.textPri}; }
+
+  /* Fix all white card backgrounds */
+  [style*="background:#fff"], [style*='background: #fff'],
+  [style*="background:#ffffff"], [style*='background: #ffffff'],
+  [style*="background:#fffdf8"], [style*="background:#f4f6f2"],
+  [style*="background:#f8f8f8"], [style*="background:#fafafa"],
+  [style*="background:#f9f9f9"] {
+    background: ${DS.bgCard} !important;
+  }
+
+  /* Fix white borders */
+  [style*="border:1.5px solid #efefef"], [style*="border: 1.5px solid #efefef"],
+  [style*="border:1.5px solid #ddd"], [style*="border: 1.5px solid #ddd"],
+  [style*="border:1.5px solid #eee"], [style*="border: 1.5px solid #eee"],
+  [style*="border:1px solid #eee"], [style*="border: 1px solid #eee"] {
+    border-color: ${DS.border} !important;
+  }
+
+  /* Fix dark text on now-dark backgrounds */
+  [style*="color:#1a1a1a"], [style*="color: #1a1a1a"],
+  [style*="color:#111"], [style*="color:#333"],
+  [style*="color:#555"], [style*="color:#444"] {
+    color: ${DS.textPri} !important;
+  }
+  [style*="color:#888"], [style*="color:#999"],
+  [style*="color:#aaa"], [style*="color:#bbb"],
+  [style*="color:#666"] {
+    color: ${DS.textSec} !important;
+  }
+
+  /* Table headers and cells */
+  table { border-collapse: collapse; }
+  th { background: ${DS.bgSurf} !important; color: ${DS.textSec} !important; border-bottom: 1px solid ${DS.border} !important; }
+  td { border-bottom: 1px solid ${DS.border} !important; color: ${DS.textPri} !important; background: transparent !important; }
+  tr:nth-child(even) td { background: ${DS.bgSurf}22 !important; }
+
+  /* Fix label colours */
+  label { color: ${DS.textSec} !important; }
+
+  /* Scrollbars */
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: ${DS.border}; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: ${DS.borderHi}; }
+
+  /* Fix roster/report cards */
+  [style*="background:#fff8ee"] { background: ${DS.amberDim} !important; }
+  [style*="background:#e8f0fe"] { background: ${DS.accentDim} !important; }
+  [style*="background:#eafaf1"] { background: ${DS.greenDim} !important; }
+  [style*="background:#fdf0ee"] { background: ${DS.redDim} !important; }
+  [style*="background:#f5eefb"] { background: rgba(139,92,246,0.1) !important; }
+  [style*="background:#fde8e8"] { background: ${DS.redDim} !important; }
 `;
 // ── AI INSIGHTS ENGINE ────────────────────────────────────────────────
 async function callClaude(prompt, system="You are an operations analyst for a swim school enrollment call centre. Be concise, specific, and actionable. Never use bullet points — write in plain short sentences. Max 2 sentences unless instructed otherwise.") {
@@ -942,7 +1000,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
               <span style={{fontWeight:600,fontSize:13,color:isOff?"#bbb":"#1a1a1a"}}>{rep.name}</span>
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:cfg.bg,color:cfg.dot,border:`1px solid ${cfg.border}`,fontWeight:600}}>{cfg.label}</span>
-              {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:"#fff3cd",color:"#856404",padding:"2px 5px",borderRadius:4}}>Override</span>}
+              {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:"#fff3cd",color:DS.amber,padding:"2px 5px",borderRadius:4}}>Override</span>}
               {rep.rep_stage&&rep.rep_stage!=="active"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).text,border:`1px solid ${(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).border}`,fontWeight:700}}>{rep.rep_stage==="training"?"🎓 Training":rep.rep_stage==="not_started"?"⏳ Not Started":rep.rep_stage==="ramping"?"📈 Ramping":"Unknown"}</span>}
             </div>
             {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:"#aaa"}}>{rep.ooo_note}</p>}
@@ -954,7 +1012,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
             {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#555",fontWeight:600}}>Back 👋</button>}
             {isOOO&&<button onClick={()=>handleClear(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #c8a8e0",background:"#f5eefb",cursor:"pointer",fontSize:11,color:"#7a1a5c",fontWeight:600}}>Clear</button>}
             {!isBreak&&!isOOO&&!isOff&&<button onClick={()=>setOooModal(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ebebeb",background:"#fafafa",cursor:"pointer",fontSize:10,color:"#aaa"}}>Mark Out</button>}
-            {settings.peak_mode&&rep.status==="health"&&<button onClick={()=>handleOverridePeak(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f0ad4e",background:"#fff3cd",cursor:"pointer",fontSize:10,color:"#856404"}}>Override</button>}
+            {settings.peak_mode&&rep.status==="health"&&<button onClick={()=>handleOverridePeak(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f0ad4e",background:"#fff3cd",cursor:"pointer",fontSize:10,color:DS.amber}}>Override</button>}
             {!isOff&&<button onClick={()=>resetBalance(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>Reset Breaks</button>}
           </div>
         </div>
@@ -1121,7 +1179,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
             const capLeft = (settings.custom_limit??Math.floor(reps.filter(x=>!["off","pto","sick"].includes(x.status)).length*0.3)) - reps.filter(x=>["health","lunch","admin"].includes(x.status)).length;
 
             return (
-              <div key={r.id} style={{background:"#fff8ee",border:`1.5px solid ${peak?"#e74c3c":"#f0c080"}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+              <div key={r.id} style={{background:DS.amberDim,border:`1px solid ${peak?DS.red:DS.amber}40`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
                   <div>
                     <p style={{margin:0,fontWeight:700,fontSize:14}}>{r.rep_name}</p>
@@ -1142,9 +1200,9 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                   <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#555"}}>📊 Impact Analysis</p>
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
                     {peak&&<p style={{margin:0,fontSize:11,color:"#c0392b",fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
-                    {!peak&&ctTime&&<p style={{margin:0,fontSize:11,color:"#1a5c35"}}>✅ Off-peak window — lower call volume</p>}
+                    {!peak&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ Off-peak window — lower call volume</p>}
                     {conflicts.length>0&&<p style={{margin:0,fontSize:11,color:"#b85c00"}}>⚠️ Already on lunch at that time: {conflicts.join(", ")}</p>}
-                    {conflicts.length===0&&ctTime&&<p style={{margin:0,fontSize:11,color:"#1a5c35"}}>✅ No schedule conflicts at preferred time</p>}
+                    {conflicts.length===0&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ No schedule conflicts at preferred time</p>}
                     <p style={{margin:0,fontSize:11,color:capLeft<=0?"#c0392b":"#555"}}>Team cap: {reps.filter(x=>["health","lunch","admin"].includes(x.status)).length} out now · {capLeft} slot{capLeft!==1?"s":""} remaining</p>
                     {onLunchNow>0&&<p style={{margin:0,fontSize:11,color:"#888"}}>{onLunchNow} rep{onLunchNow!==1?"s":""} currently on lunch</p>}
                   </div>
@@ -1231,9 +1289,9 @@ function MgrTeam({ reps, settings, reload, fire }) {
         const stage = rep.rep_stage||"active";
         const stageCfg = STAGE_CFG[stage]||STAGE_CFG.active;
         return (
-          <div key={rep.id} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 13px",marginBottom:7}}>
+          <div key={rep.id} style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"11px 13px",marginBottom:7}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
-              <div style={{width:34,height:34,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+              <div style={{width:34,height:34,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
                   <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
@@ -1333,7 +1391,7 @@ function AddRepModal({ onClose, onAdd }) {
             </div>
             {form.shift_days.map(d=>(
               <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
-                <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
+                <span style={{fontSize:12,fontWeight:700,color:DS.green}}>{d}</span>
                 <div style={{display:"flex",gap:2,alignItems:"center"}}>
                     <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
                       <option value="">HH</option>
@@ -1500,7 +1558,7 @@ function MgrSchedules({ reps, reload, fire }) {
                 </div>
                 {form.shift_days.map(d=>(
                   <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#1a5c35"}}>{d}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:DS.green}}>{d}</span>
                     <div style={{display:"flex",gap:2,alignItems:"center"}}>
                       <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
                         <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
@@ -1544,7 +1602,7 @@ function MgrSchedules({ reps, reload, fire }) {
       )}
 
       {/* ── TODAY'S ROSTER ── */}
-      <div style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+      <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>📅 Today's Roster — {todayKey}</p>
           <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:"#aaa"}}>{viewerTz}</strong></span>
@@ -1560,7 +1618,7 @@ function MgrSchedules({ reps, reload, fire }) {
           return (
             <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",color:"#1a5c35",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",color:DS.green,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
                     <span style={{fontSize:13,fontWeight:600}}>{rep.name}</span>
@@ -1601,7 +1659,7 @@ function MgrSchedules({ reps, reload, fire }) {
       {/* ── ALL REPS LIST ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 10px"}}>
         <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>All Reps — tap to edit</p>
-        <button onClick={exportSchedules} style={{padding:"6px 13px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:"#1a5c35",fontWeight:600}}>📥 Export CSV</button>
+        <button onClick={exportSchedules} style={{padding:"6px 13px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export CSV</button>
       </div>
       {reps.map(rep=>{
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
@@ -1612,14 +1670,14 @@ function MgrSchedules({ reps, reload, fire }) {
         const endConverted   = todaySched?.end   ? convertLunchTime(todaySched.end,   repTz, viewerTz) : null;
         const scheduledToday = (rep.shift_days||[]).includes(todayKey);
         return (
-          <div key={rep.id} onClick={()=>startEdit(rep)} style={{background:"#fff",border:"1.5px solid #efefef",borderRadius:12,padding:"11px 14px",marginBottom:7,cursor:"pointer"}}>
+          <div key={rep.id} onClick={()=>startEdit(rep)} style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"11px 14px",marginBottom:7,cursor:"pointer"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+              <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                   <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
                   <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
-                  {scheduledToday&&<span style={{fontSize:9,background:"#eafaf1",color:"#1a5c35",padding:"2px 6px",borderRadius:4,fontWeight:700}}>IN TODAY</span>}
+                  {scheduledToday&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>IN TODAY</span>}
                 </div>
                 <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{days}</p>
                 {scheduledToday&&startConverted&&<p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>Today: {fmt12h(startConverted)} – {endConverted?fmt12h(endConverted):"?"} <span style={{color:"#ccc"}}>({viewerTz})</span></p>}
@@ -1708,7 +1766,7 @@ function PipCallCount({pipAgent,pipFrom,pipTo,kpiRows}) {
   if(!pipAgent||!pipFrom||!pipTo) return null;
   const from=new Date(pipFrom+"T00:00:00Z"); const to=new Date(pipTo+"T23:59:59Z");
   const count=kpiRows.filter(r=>r.hs_agent_name===pipAgent&&new Date(r.hs_call_timestamp)>=from&&new Date(r.hs_call_timestamp)<=to).length;
-  return <p style={{margin:"0 0 14px",fontSize:12,color:"#1a5c35",fontWeight:600}}>✅ {count} calls found for {pipAgent} in this period</p>;
+  return <p style={{margin:"0 0 14px",fontSize:12,color:DS.green,fontWeight:600}}>✅ {count} calls found for {pipAgent} in this period</p>;
 }
 
 function LunchTodayBanner({myRep}) {
@@ -1722,7 +1780,7 @@ function LunchTodayBanner({myRep}) {
   const endMin=lh*60+lm+dur;
   const endStr=`${String(Math.floor(endMin/60)%24).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
   return (
-    <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+    <div style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:20}}>🥗</span>
       <div>
         <p style={{margin:0,fontSize:12,fontWeight:700,color:"#b85c00"}}>Your lunch today</p>
@@ -1865,13 +1923,13 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
     return <div style={{background:bg,color:fg,fontWeight:700,fontSize:small?10:12,padding:"4px 6px",borderRadius:6,textAlign:"center",minWidth:44}}>{val!==null?`${val}%`:"—"}</div>;
   };
 
-  const thStyle = {fontSize:10,fontWeight:700,color:"#999",padding:"6px 8px",background:"#f8f8f8",borderBottom:"1.5px solid #eee",textAlign:"center",whiteSpace:"nowrap"};
+  const thStyle = {fontSize:10,fontWeight:700,color:"#999",padding:"6px 8px",background:DS.bgSurf,borderBottom:`1px solid ${DS.border}`,textAlign:"center",whiteSpace:"nowrap"};
   const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"center"};
   const nameStyle = {fontSize:12,fontWeight:600,color:"#1a1a1a",padding:"7px 8px",borderBottom:"1px solid #f5f5f5",textAlign:"left",whiteSpace:"nowrap"};
 
   if(!kpiRows.length) return (
     <div style={{marginTop:16}}>
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"32px 20px",textAlign:"center"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"32px 20px",textAlign:"center"}}>
         <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
         <p style={{fontSize:15,fontWeight:700,color:"#1a1a1a",margin:"0 0 6px"}}>KPI Dashboard</p>
         <p style={{fontSize:12,color:"#888",margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data. Data is shared across all managers automatically.</p>
@@ -1893,7 +1951,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           <p style={{margin:0,fontSize:10,color:"#aaa"}}>{kpiFileName} · {kpiRows.length.toLocaleString()} calls</p>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:"#1a5c35",cursor:"pointer",fontSize:11,fontWeight:700}}>
+          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:DS.green,cursor:"pointer",fontSize:11,fontWeight:700}}>
             ➕ Add Weekly CSV
           </button>
           <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:"#c0392b",cursor:"pointer",fontSize:11,fontWeight:700}}>
@@ -1906,7 +1964,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {/* Baseline pills */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         {[{l:"Paid CVR baseline",v:"20%",c:"#1a5c35"},{l:"Total CVR baseline",v:"45%",c:"#1d4ed8"}].map(p=>(
-          <div key={p.l} style={{background:"#fff",border:`1.5px solid ${p.c}20`,borderRadius:8,padding:"5px 10px",display:"flex",gap:6,alignItems:"center"}}>
+          <div key={p.l} style={{background:DS.bgSurf,border:`1px solid ${p.c}20`,borderRadius:8,padding:"5px 10px",display:"flex",gap:6,alignItems:"center"}}>
             <span style={{fontSize:14,fontWeight:800,color:p.c}}>{p.v}</span>
             <span style={{fontSize:10,color:"#888"}}>{p.l}</span>
           </div>
@@ -2024,7 +2082,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {kpiTab==="ramp"&&(
         <div>
           {/* Target table */}
-          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:16}}>
+          <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8"}}>
               <p style={{margin:0,fontSize:12,fontWeight:700,color:"#1a1a1a"}}>Ramp Targets — All started 29 May 2026</p>
             </div>
@@ -2040,7 +2098,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
                   <tr key={row.k}>
                     <td style={{...nameStyle,fontSize:11}}>{row.l}</td>
                     {[1,2,3,4].map(w=>(
-                      <td key={w} style={{...tdStyle,fontWeight:700,color:"#1a5c35"}}>{RAMP_TARGETS[w][row.k]}%</td>
+                      <td key={w} style={{...tdStyle,fontWeight:700,color:DS.green}}>{RAMP_TARGETS[w][row.k]}%</td>
                     ))}
                   </tr>
                 ))}
@@ -2050,7 +2108,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
 
           {/* Per agent ramp */}
           {NEW_JOINERS.length===0&&(
-            <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"24px",textAlign:"center"}}>
+            <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"24px",textAlign:"center"}}>
               <p style={{fontSize:20,margin:"0 0 8px"}}>📈</p>
               <p style={{fontSize:13,fontWeight:600,color:"#1a1a1a",margin:"0 0 4px"}}>No agents currently ramping</p>
               <p style={{fontSize:11,color:"#aaa",margin:0}}>Tag an agent as Ramping in the Team tab to track their progress here</p>
@@ -2061,9 +2119,9 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
             const rampStart = RAMP_START_MAP[agent];
             const rampStartStr = rampStart ? rampStart.toISOString().split("T")[0] : "29 May 2026";
             return (
-              <div key={agent} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
+              <div key={agent} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
                 <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a5c35"}}>{agent}</p>
+                  <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.green}}>{agent}</p>
                   <p style={{margin:0,fontSize:10,color:"#aaa"}}>{agRows.length} total calls · started {rampStartStr}</p>
                 </div>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
@@ -2095,7 +2153,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
                           <td style={tdStyle}>{upcoming?"—":trial}</td>
                           <td style={{...tdStyle,padding:3}}>{upcoming?<span style={{color:"#ddd"}}>—</span>:<Cell val={pc} target={pt} small/>}</td>
                           <td style={{...tdStyle,padding:3}}>{upcoming?<span style={{color:"#ddd"}}>—</span>:<Cell val={tc} target={tt} small/>}</td>
-                          <td style={{...tdStyle,color:"#1a5c35",fontWeight:600}}>{pt}%</td>
+                          <td style={{...tdStyle,color:DS.green,fontWeight:600}}>{pt}%</td>
                           <td style={{...tdStyle,color:"#1d4ed8",fontWeight:600}}>{tt}%</td>
                           <td style={{...tdStyle,fontWeight:700,color:statusColor,fontSize:11}}>{status}</td>
                         </tr>
@@ -2112,7 +2170,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {/* PIP PDF */}
       {kpiTab==="pip"&&(
         <div>
-          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"20px",marginBottom:14}}>
+          <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"20px",marginBottom:14}}>
             <p style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:"#1a1a1a"}}>📄 Performance Report Generator</p>
             <p style={{margin:"0 0 16px",fontSize:12,color:"#888"}}>Generate a printable PDF report for any agent over a custom date range. Use for PIPs, reviews or coaching sessions.</p>
 
@@ -2144,8 +2202,8 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           </div>
 
           <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px"}}>
-            <p style={{margin:0,fontSize:12,color:"#856404",fontWeight:600}}>⚠️ PIP guidance</p>
-            <p style={{margin:"4px 0 0",fontSize:11,color:"#856404"}}>This report shows call data only. For a formal PIP you should also include call recordings, coaching session notes, and HR sign-off. This document is a performance data supplement, not a standalone PIP document.</p>
+            <p style={{margin:0,fontSize:12,color:DS.amber,fontWeight:600}}>⚠️ PIP guidance</p>
+            <p style={{margin:"4px 0 0",fontSize:11,color:DS.amber}}>This report shows call data only. For a formal PIP you should also include call recordings, coaching session notes, and HR sign-off. This document is a performance data supplement, not a standalone PIP document.</p>
           </div>
         </div>
       )}
@@ -2217,12 +2275,12 @@ function MgrReports({ reps }) {
             <button key={p} onClick={()=>setPeriod(p)} style={{padding:"7px 14px",borderRadius:8,border:period===p?"none":"1.5px solid #ddd",background:period===p?"#1a5c35":"#fff",color:period===p?"#fff":"#555",cursor:"pointer",fontSize:12,fontWeight:600,textTransform:"capitalize"}}>{p}</button>
           ))}
         </div>
-        <button onClick={exportCSV} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:"#1a5c35",fontWeight:600}}>📥 Export Excel</button>
+        <button onClick={exportCSV} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export Excel</button>
       </div>
       {loading&&<p style={{textAlign:"center",color:"#aaa",padding:"30px 0"}}>Loading…</p>}
       {!loading&&data&&(
         <div>
-          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",overflow:"hidden"}}>
+          <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden"}}>
             <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",gap:0,padding:"8px 12px",background:"#f8f8f8",borderBottom:"1px solid #efefef"}}>
               {["Rep","🌿 Health","Time","🥗 Lunch","🤒 Sick","📵 Off"].map((h,i)=>(
                 <span key={i} style={{fontSize:10,fontWeight:700,color:"#999",letterSpacing:0.5}}>{h}</span>
@@ -2245,7 +2303,7 @@ function MgrReports({ reps }) {
               {label:"Total Lunch Breaks",val:repStats.reduce((a,s)=>a+s.lb,0),icon:"🥗"},
               {label:"Absences",val:repStats.reduce((a,s)=>a+s.sick+s.calloff,0),icon:"📵"},
             ].map(s=>(
-              <div key={s.label} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",textAlign:"center"}}>
+              <div key={s.label} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",textAlign:"center"}}>
                 <p style={{margin:"0 0 4px",fontSize:22}}>{s.icon}</p>
                 <p style={{margin:0,fontSize:20,fontWeight:800,color:"#1a1a1a"}}>{s.val}</p>
                 <p style={{margin:0,fontSize:10,color:"#aaa"}}>{s.label}</p>
@@ -2337,7 +2395,7 @@ function MgrPTO({ reps, reload, fire }) {
       </div>
 
       {/* Weekly grid */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
         <div style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f0f0f0"}}>
           <div style={{padding:"8px 10px",background:"#f8f8f8"}}/>
           {weekDays.map((d,i)=>{
@@ -2355,7 +2413,7 @@ function MgrPTO({ reps, reload, fire }) {
           return (
             <div key={rep.id} style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f8f8f8"}}>
               <div style={{padding:"7px 10px",display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:22,height:22,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <div style={{width:22,height:22,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <span style={{fontSize:11,fontWeight:600,color:"#1a1a1a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rep.name}</span>
               </div>
               {weekDays.map((d,i)=>{
@@ -2445,7 +2503,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
   return (
     <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:14}}>
       {/* Peak Mode */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div>
             <p style={{margin:0,fontWeight:700,fontSize:14}}>⚡ Peak Mode</p>
@@ -2459,7 +2517,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
       </div>
 
       {/* Admin Time */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div>
             <p style={{margin:0,fontWeight:700,fontSize:14}}>🗂️ Admin Time</p>
@@ -2484,7 +2542,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
       </div>
 
       {/* Notification Preferences */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 GChat Notification Preferences</p>
         <p style={{margin:"0 0 14px",fontSize:12,color:"#888"}}>Choose which events ping GChat. All are on by default.</p>
         {["main","execo"].map(ch=>(
@@ -2515,7 +2573,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
           reload();
         }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>Reset all to ON</button>
       </div>
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 Execo Managers GChat</p>
         <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Separate space for ad hoc lunch requests and approvals — for when you are unavailable</p>
         <input value={settings.execo_webhook||""} onChange={async e=>{
@@ -2523,9 +2581,9 @@ function MgrSettings({ settings, reps, reload, fire }) {
           reload();
         }} placeholder="Paste GChat webhook URL…"
           style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none"}}/>
-        {settings.execo_webhook&&<p style={{margin:"6px 0 0",fontSize:11,color:"#1a5c35",fontWeight:600}}>✅ Execo webhook active</p>}
+        {settings.execo_webhook&&<p style={{margin:"6px 0 0",fontSize:11,color:DS.green,fontWeight:600}}>✅ Execo webhook active</p>}
       </div>
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>👥 Team Break Cap</p>
         <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Default: 30% of active team = {Math.floor(reps.length*0.3)} max out at once</p>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
@@ -2539,7 +2597,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
       </div>
 
       {/* Break Rules Summary */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 10px",fontWeight:700,fontSize:14}}>📋 Current Rules</p>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {[
@@ -2990,17 +3048,17 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
                   <div style={{background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:12,padding:"12px 13px",marginTop:10,display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:20}}>🕐</span>
                     <div style={{flex:1}}>
-                      <p style={{margin:0,fontWeight:700,fontSize:13,color:"#003087"}}>#{queuePosition} in the queue</p>
+                      <p style={{margin:0,fontWeight:700,fontSize:13,color:DS.accent}}>#{queuePosition} in the queue</p>
                       <p style={{margin:"2px 0 0",fontSize:11,color:"#555"}}>{queuePosition===1?"You're up next!":"Waiting for a slot to open"}</p>
                     </div>
-                    <button onClick={leaveQueue} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#fff",cursor:"pointer",fontSize:11,color:"#003087",fontWeight:600}}>Leave</button>
+                    <button onClick={leaveQueue} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#fff",cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>Leave</button>
                   </div>
                 )}
                 {isNotified&&(
                   <div style={{background:"#1a5c35",borderRadius:12,padding:"12px 13px",marginTop:10}}>
                     <p style={{margin:"0 0 4px",fontSize:13,fontWeight:700,color:"#fff"}}>🌿 Your break is ready!</p>
                     <p style={{margin:"0 0 10px",fontSize:11,color:"rgba(255,255,255,.7)"}}>Accept within {fmtTime(acceptSecsLeft)} or it passes to the next rep</p>
-                    <button onClick={acceptQueuedBreak} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"#fff",color:"#1a5c35",cursor:"pointer",fontSize:13,fontWeight:800}}>Accept Break ✅</button>
+                    <button onClick={acceptQueuedBreak} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"#fff",color:DS.green,cursor:"pointer",fontSize:13,fontWeight:800}}>Accept Break ✅</button>
                   </div>
                 )}
                 {breakQueue.filter(q=>q.status==="waiting").length>0&&!myQueueEntry&&(
@@ -3107,7 +3165,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
     <div>
       {reqModal&&(
         <Modal title="Request Lunch Swap" sub="SWAP REQUEST" onClose={()=>setReqModal(false)} wide>
-          <p style={{fontSize:12,color:"#666",margin:"0 0 12px"}}>Your lunch today: <strong style={{color:"#1a5c35"}}>{myTodayLunch()}</strong></p>
+          <p style={{fontSize:12,color:"#666",margin:"0 0 12px"}}>Your lunch today: <strong style={{color:DS.green}}>{myTodayLunch()}</strong></p>
           <p style={{fontSize:11,color:"#aaa",margin:"0 0 10px",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Team lunch schedule today</p>
           <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
             {reps.filter(r=>r.id!==repInfo.id&&!["off","pto","sick"].includes(r.status)).map(r=>{
@@ -3115,7 +3173,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
               const isSelected=targetId===String(r.id);
               return (
                 <div key={r.id} onClick={()=>setTargetId(String(r.id))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:isSelected?"2px solid #8e44ad":"1.5px solid #e8e8e8",background:isSelected?"#f5eefb":"#fff",cursor:"pointer"}}>
-                  <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
                   <div style={{flex:1}}>
                     <span style={{fontWeight:600,fontSize:13,color:"#1a1a1a"}}>{r.name}</span>
                     <span style={{fontSize:11,color:"#888",marginLeft:8}}>{lunch}</span>
@@ -3156,7 +3214,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
           {myIncoming.map(s=>{
             const requester=reps.find(r=>r.id===s.requester_id);
             return (
-              <div key={s.id} style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 13px",marginBottom:8}}>
+              <div key={s.id} style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:12,padding:"12px 13px",marginBottom:8}}>
                 <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{s.requester_name} wants to swap lunches</p>
                 <p style={{margin:"0 0 8px",fontSize:11,color:"#888"}}>They give: {s.requester_date} · You give: {s.target_date}</p>
                 {requester&&<p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Their lunch today: 🥗 {theirTodayLunch(requester)}</p>}
@@ -3473,7 +3531,7 @@ function HubView({ isManager }) {
               <div>
                 {matchLoc.length>0&&(
                   <div style={{marginBottom:14}}>
-                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>📍 Locations</p>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.accent,margin:"0 0 8px",fontWeight:700}}>📍 Locations</p>
                     {matchLoc.slice(0,3).map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
                   </div>
                 )}
@@ -3485,7 +3543,7 @@ function HubView({ isManager }) {
                 )}
                 {matchTeam.length>0&&(
                   <div style={{marginBottom:14}}>
-                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 8px",fontWeight:700}}>👤 Team</p>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.green,margin:"0 0 8px",fontWeight:700}}>👤 Team</p>
                     {matchTeam.map((t,i)=><HubTeamCard key={i} member={t}/>)}
                   </div>
                 )}
@@ -3507,7 +3565,7 @@ function HubView({ isManager }) {
                 {/* Active Promos */}
                 {promos.length>0&&(
                   <div style={{marginBottom:16}}>
-                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#856404",margin:"0 0 8px",fontWeight:700}}>🎯 Active Promotions</p>
+                    <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.amber,margin:"0 0 8px",fontWeight:700}}>🎯 Active Promotions</p>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
                       {promos.map((p,i)=><HubPromoCard key={i} promo={p} isManager={isManager} onEdit={()=>setEditModal({type:"promo",item:p})}/>)}
                     </div>
@@ -3516,15 +3574,15 @@ function HubView({ isManager }) {
                 )}
                 {promos.length===0&&(
                   <div style={{background:"#fffdf8",border:"1.5px solid #f0c080",borderRadius:12,padding:"14px",marginBottom:16,textAlign:"center"}}>
-                    <p style={{margin:0,fontSize:13,color:"#856404"}}>🎯 No active promotions right now</p>
+                    <p style={{margin:0,fontSize:13,color:DS.amber}}>🎯 No active promotions right now</p>
                     {isManager&&<button onClick={()=>setEditModal({type:"promo",item:null})} style={{marginTop:8,padding:"6px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Promo</button>}
                   </div>
                 )}
                 {/* Quick access */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
                   {[
-                    {icon:"📍",label:"Find Location & Price",sub:"Search any school",action:()=>setTab("locations"),color:"#003087",bg:"#e8f0fe"},
-                    {icon:"🏊",label:"Level Assessment",sub:"Find the right class",action:()=>setTab("levels"),color:"#1a5c35",bg:"#eafaf1"},
+                    {icon:"📍",label:"Find Location & Price",sub:"Search any school",action:()=>setTab("locations"),color:DS.accent,bg:"#e8f0fe"},
+                    {icon:"🏊",label:"Level Assessment",sub:"Find the right class",action:()=>setTab("levels"),color:DS.green,bg:"#eafaf1"},
                     {icon:"📄",label:"Documents",sub:"Scripts, SOPs, pricing",action:()=>setTab("docs"),color:"#8e44ad",bg:"#f5eefb"},
                     {icon:"👤",label:"Team Extensions",sub:"Copy any extension",action:()=>setTab("team"),color:"#e07b00",bg:"#fff8ee"},
                   ].map((c,i)=>(
@@ -3537,7 +3595,7 @@ function HubView({ isManager }) {
                 </div>
                 {/* Events if any */}
                 {events.length>0&&(
-                  <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:16}}>
+                  <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:16}}>
                     <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#e07b00",margin:"0 0 8px",fontWeight:700}}>📅 Upcoming</p>
                     {events.map((e,i)=>(
                       <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<events.length-1?6:0}}>
@@ -3570,7 +3628,7 @@ function HubView({ isManager }) {
             )}
             {matchLoc.length>0&&Object.entries(matchLoc.reduce((acc,l)=>{if(!acc[l.region])acc[l.region]=[];acc[l.region].push(l);return acc;},{})).map(([region,locs])=>(
               <div key={region} style={{marginBottom:16}}>
-                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#003087",margin:"0 0 8px",fontWeight:700}}>{region} ({locs.length})</p>
+                <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.accent,margin:"0 0 8px",fontWeight:700}}>{region} ({locs.length})</p>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
                   {locs.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>setEditModal({type:"loc",item:l})}/>)}
                 </div>
@@ -3605,7 +3663,7 @@ function HubView({ isManager }) {
         {tab==="promos"&&isManager&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:"#856404",fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
+              <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:DS.amber,fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
               <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
@@ -3638,7 +3696,7 @@ function HubView({ isManager }) {
         )}
         {tab==="team"&&(
           <div>
-            <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#1a5c35",margin:"0 0 10px",fontWeight:700}}>ESC Team Extensions</p>
+            <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.green,margin:"0 0 10px",fontWeight:700}}>ESC Team Extensions</p>
             {HUB_TEAM.map((t,i)=><HubTeamCard key={i} member={t}/>)}
           </div>
         )}
@@ -3659,7 +3717,7 @@ function HubView({ isManager }) {
               <button onClick={()=>setEditModal({type:"event",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#e07b00",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Event</button>
             </div>
             {events.map((e,i)=>(
-              <div key={i} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 14px",marginBottom:7,display:"flex",alignItems:"center",gap:10}}>
+              <div key={i} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"11px 14px",marginBottom:7,display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:20}}>🏊</span>
                 <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:13}}>{e.name}</p><p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{e.event_date}{e.note?` · ${e.note}`:""}</p></div>
                 <button onClick={()=>setEditModal({type:"event",item:e})} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#888"}}>Edit</button>
@@ -3790,7 +3848,7 @@ function LevelTool() {
   return (
     <div>
       {/* Tool card */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:12}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:12}}>
         {/* Header */}
         <div style={{background:"#1a5c35",padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
@@ -3809,7 +3867,7 @@ function LevelTool() {
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {AGE_BUCKETS.map((b,i)=>(
                   <button key={i} onClick={()=>goTo(b.node)}
-                    style={{padding:"13px 16px",borderRadius:10,border:"1.5px solid #d4eadc",background:"#f4fbf6",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a5c35",textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s"}}>
+                    style={{padding:"13px 16px",borderRadius:10,border:"1.5px solid #d4eadc",background:"#f4fbf6",cursor:"pointer",fontSize:14,fontWeight:600,color:DS.green,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s"}}>
                     {b.label}
                     <span style={{fontSize:16,opacity:.5}}>→</span>
                   </button>
@@ -3831,14 +3889,14 @@ function LevelTool() {
 
               {/* Question */}
               <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"14px 16px",marginBottom:16}}>
-                <p style={{margin:"0 0 4px",fontSize:10,color:"#1a5c35",fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>Ask the parent:</p>
+                <p style={{margin:"0 0 4px",fontSize:10,color:DS.green,fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>Ask the parent:</p>
                 <p style={{margin:0,fontSize:14,fontWeight:600,color:"#1a1a1a",lineHeight:1.6}}>{node.ask}</p>
               </div>
 
               {/* YES / NO */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
                 <button onClick={()=>goTo(node.yes)}
-                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #1a5c35",background:"#eafaf1",cursor:"pointer",fontSize:16,fontWeight:800,color:"#1a5c35",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #1a5c35",background:"#eafaf1",cursor:"pointer",fontSize:16,fontWeight:800,color:DS.green,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                   ✅ YES
                 </button>
                 <button onClick={()=>goTo(node.no)}
@@ -3866,7 +3924,7 @@ function LevelTool() {
 
               {/* Script */}
               <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"12px 14px",marginBottom:12}}>
-                <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:"#1a5c35",letterSpacing:.5,textTransform:"uppercase"}}>📢 Say this to the parent:</p>
+                <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:DS.green,letterSpacing:.5,textTransform:"uppercase"}}>📢 Say this to the parent:</p>
                 <p style={{margin:0,fontSize:13,color:"#2c3e50",lineHeight:1.7,fontStyle:"italic"}}>"{node.script}"</p>
               </div>
 
@@ -3883,14 +3941,14 @@ function LevelTool() {
       </div>
 
       {/* Quick reference table */}
-      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px"}}>
+      <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px"}}>
         <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#555",margin:"0 0 10px",fontWeight:700}}>Quick Reference</p>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead>
               <tr style={{background:"#f4fbf6"}}>
                 {["Level","Age","Key skills","Max"].map(h=>(
-                  <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#1a5c35",borderBottom:"1.5px solid #d4eadc"}}>{h}</th>
+                  <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:DS.green,borderBottom:"1.5px solid #d4eadc"}}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -3912,7 +3970,7 @@ function LevelTool() {
                 ["Adult","12+","Customized to goals","4"],
               ].map(([l,a,s,m],i)=>(
                 <tr key={i} style={{borderBottom:"1px solid #f5f5f5",background:i%2===0?"#fff":"#fafcff"}}>
-                  <td style={{padding:"6px 8px",fontWeight:600,color:"#1a5c35"}}>{l}</td>
+                  <td style={{padding:"6px 8px",fontWeight:600,color:DS.green}}>{l}</td>
                   <td style={{padding:"6px 8px",color:"#555"}}>{a}</td>
                   <td style={{padding:"6px 8px",color:"#555"}}>{s}</td>
                   <td style={{padding:"6px 8px",fontWeight:600,color:"#1a1a1a"}}>{m}</td>
@@ -3949,7 +4007,7 @@ function ZipFinder({ locations, closures, isManager, onEdit }) {
 
   return (
     <div style={{background:"#fff",borderRadius:10,border:"1.5px solid #e0e8f5",padding:"12px 14px",marginBottom:8}}>
-      <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",letterSpacing:.5}}>🔍 Find by Zip Code</p>
+      <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:.5}}>🔍 Find by Zip Code</p>
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <input
           value={zip}
@@ -3970,7 +4028,7 @@ function ZipFinder({ locations, closures, isManager, onEdit }) {
           )}
           {results.length>0&&(
             <div>
-              <p style={{margin:"0 0 8px",fontSize:11,color:"#1a5c35",fontWeight:600}}>{results.length} school{results.length>1?"s":""} found near {zip}</p>
+              <p style={{margin:"0 0 8px",fontSize:11,color:DS.green,fontWeight:600}}>{results.length} school{results.length>1?"s":""} found near {zip}</p>
               {results.map((l,i)=><HubLocCard key={i} loc={l} closures={getClosures(l.name)} isManager={isManager} onEdit={()=>onEdit(l)}/>)}
             </div>
           )}
@@ -4005,16 +4063,16 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
           <div style={{flex:1}}>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
               <span style={{fontWeight:700,fontSize:15,color:"#1a1a1a"}}>{loc.name}</span>
-              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:"#003087",fontWeight:700}}>{loc.region}</span>
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:DS.accent,fontWeight:700}}>{loc.region}</span>
               <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?"#fff3cd":"#e8f4fd",color:loc.pool==="Salt"?"#856404":"#0d6efd",fontWeight:700}}>{loc.pool}</span>
-              {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:"#1a5c35",fontWeight:700}}>20min Privates</span>}
+              {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:DS.green,fontWeight:700}}>20min Privates</span>}
             </div>
             <p style={{margin:"0 0 4px",fontSize:11,color:"#aaa"}}>📍 {loc.addr}</p>
             {loc.direct_phone&&<p style={{margin:"0 0 4px",fontSize:12,color:"#1a1a1a",fontWeight:500}}>📞 {loc.direct_phone}</p>}
             {loc.gm_name&&<p style={{margin:"0 0 6px",fontSize:11,color:"#888"}}>👤 GM: {loc.gm_name}</p>}
             {pricing&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
-                <span style={{fontSize:11,background:"#e8f0fe",color:"#003087",padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
+                <span style={{fontSize:11,background:"#e8f0fe",color:DS.accent,padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
                 <span style={{fontSize:11,background:"#f0f4f8",color:"#555",padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
                 <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
                 <span style={{fontSize:11,background:"#fff8ee",color:"#e07b00",padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
@@ -4022,7 +4080,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
             )}
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
-            <p style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:"#003087",letterSpacing:1}}>{loc.ext}</p>
+            <p style={{margin:"0 0 6px",fontSize:24,fontWeight:800,color:DS.accent,letterSpacing:1}}>{loc.ext}</p>
             <div style={{display:"flex",gap:5,justifyContent:"flex-end",marginBottom:5}}>
               <button onClick={()=>{navigator.clipboard?.writeText(loc.ext);setCopiedExt(true);setTimeout(()=>setCopiedExt(false),1500);}} style={{padding:"5px 11px",borderRadius:7,border:"1.5px solid #003087",background:copiedExt?"#003087":"#e8f0fe",cursor:"pointer",fontSize:11,color:copiedExt?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedExt?"✓ Copied":"Copy Ext"}</button>
               {isManager&&<button onClick={onEdit} style={{padding:"5px 8px",borderRadius:7,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#aaa"}}>Edit</button>}
@@ -4034,7 +4092,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
         </div>
         {/* Expand toggle */}
         {(Object.keys(hours).length>0||instructors.length>0)&&(
-          <button onClick={()=>setExpanded(!expanded)} style={{marginTop:8,padding:"5px 0",background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#003087",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+          <button onClick={()=>setExpanded(!expanded)} style={{marginTop:8,padding:"5px 0",background:"none",border:"none",cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
             {expanded?"▲ Less info":"▼ Hours, pool & instructors"}
           </button>
         )}
@@ -4046,7 +4104,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
           {/* Hours */}
           {Object.keys(hours).length>0&&(
             <div style={{marginBottom:12}}>
-              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>🕐 Location Hours</p>
+              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>🕐 Location Hours</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 10px"}}>
                 {days.map(d=>(
                   <div key={d} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0",borderBottom:"1px solid #f0f0f0"}}>
@@ -4068,21 +4126,21 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
           {/* Special needs & languages highlight */}
           {(snInstructors.length>0||langInstructors.length>0)&&(
             <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap"}}>
-              {snInstructors.length>0&&<span style={{fontSize:11,background:"#eafaf1",color:"#1a5c35",padding:"3px 9px",borderRadius:7,fontWeight:600}}>♿ {snInstructors.length} special needs instructor{snInstructors.length>1?"s":""}</span>}
+              {snInstructors.length>0&&<span style={{fontSize:11,background:"#eafaf1",color:DS.green,padding:"3px 9px",borderRadius:7,fontWeight:600}}>♿ {snInstructors.length} special needs instructor{snInstructors.length>1?"s":""}</span>}
               {langInstructors.length>0&&<span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"3px 9px",borderRadius:7,fontWeight:600}}>🌍 {[...new Set(langInstructors.flatMap(i=>i.lang.split(/[,&\/]/).map(l=>l.trim()).filter(l=>l&&l.toLowerCase()!=='english')))].join(", ")}</span>}
             </div>
           )}
           {/* Instructors */}
           {instructors.length>0&&(
             <div>
-              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>👩‍🏫 Instructors ({instructors.length})</p>
+              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>👩‍🏫 Instructors ({instructors.length})</p>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {instructors.map((ins,i)=>(
                   <div key={i} style={{background:"#fff",borderRadius:9,padding:"8px 10px",border:"1px solid #efefef"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:ins.desc?3:0}}>
                       <span style={{fontWeight:600,fontSize:12}}>{ins.name}</span>
                       {ins.level&&<span style={{fontSize:9,background:ins.level.toLowerCase().includes('manager')?"#e8f0fe":"#f0f4f8",color:ins.level.toLowerCase().includes('manager')?"#003087":"#888",padding:"1px 5px",borderRadius:3,fontWeight:600}}>{ins.level}</span>}
-                      {ins.sn==='Y'&&<span style={{fontSize:9,background:"#eafaf1",color:"#1a5c35",padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
+                      {ins.sn==='Y'&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
                       {ins.lang&&ins.lang.toLowerCase()!=='english'&&ins.lang.toLowerCase()!=='english '&&<span style={{fontSize:9,background:"#f5eefb",color:"#8e44ad",padding:"1px 5px",borderRadius:3}}>{ins.lang}</span>}
                     </div>
                     {ins.desc&&<p style={{margin:0,fontSize:11,color:"#666",lineHeight:1.4}}>{ins.desc}</p>}
@@ -4107,12 +4165,12 @@ function HubPromoCard({promo,isManager,onEdit}) {
         <div style={{flex:1}}>
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
             <span style={{fontWeight:700,fontSize:13}}>{promo.title}</span>
-            {promo.proactive&&<span style={{fontSize:9,background:"#eafaf1",color:"#1a5c35",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
+            {promo.proactive&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
             {!promo.proactive&&<span style={{fontSize:9,background:"#fdf0ee",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
             {promo.expires_on&&<span style={{fontSize:9,background:isExpiring?"#fde8e8":"#fff3cd",color:isExpiring?"#c0392b":"#856404",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Exp: {promo.expires_on}</span>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{fontSize:14,fontWeight:800,color:"#003087",background:"#e8f0fe",padding:"4px 12px",borderRadius:8,letterSpacing:.5}}>{promo.code}</span>
+            <span style={{fontSize:14,fontWeight:800,color:DS.accent,background:"#e8f0fe",padding:"4px 12px",borderRadius:8,letterSpacing:.5}}>{promo.code}</span>
             <button onClick={()=>{navigator.clipboard?.writeText(promo.code);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),1500);}} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:copiedCode?"#003087":"#fff",cursor:"pointer",fontSize:11,color:copiedCode?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedCode?"✓ Copied":"Copy Code"}</button>
           </div>
         </div>
@@ -4141,9 +4199,9 @@ function HubDocCard({doc,isManager,onEdit}) {
       if(!trimmed) return <div key={i} style={{height:6}}/>;
       if(trimmed.match(/^[═─]{3,}/)) return <hr key={i} style={{border:"none",borderTop:"1px solid #efefef",margin:"6px 0"}}/>;
       if(trimmed===trimmed.toUpperCase()&&trimmed.length>3&&!trimmed.includes('$')&&!trimmed.match(/^\d/))
-        return <p key={i} style={{margin:"10px 0 4px",fontSize:11,fontWeight:700,color:"#003087",letterSpacing:.5,textTransform:"uppercase"}}>{trimmed}</p>;
+        return <p key={i} style={{margin:"10px 0 4px",fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:.5,textTransform:"uppercase"}}>{trimmed}</p>;
       if(trimmed.startsWith('"')&&trimmed.endsWith('"'))
-        return <p key={i} style={{margin:"4px 0",fontSize:12,color:"#1a5c35",background:"#f0faf4",borderLeft:"3px solid #1a5c35",padding:"4px 8px",borderRadius:"0 6px 6px 0",lineHeight:1.6}}>{trimmed}</p>;
+        return <p key={i} style={{margin:"4px 0",fontSize:12,color:DS.green,background:"#f0faf4",borderLeft:"3px solid #1a5c35",padding:"4px 8px",borderRadius:"0 6px 6px 0",lineHeight:1.6}}>{trimmed}</p>;
       if(trimmed.startsWith('☐')||trimmed.startsWith('✓'))
         return <p key={i} style={{margin:"3px 0",fontSize:12,color:"#555",paddingLeft:8}}>{trimmed}</p>;
       if(trimmed.startsWith('→')||trimmed.includes(' → '))
@@ -4155,7 +4213,7 @@ function HubDocCard({doc,isManager,onEdit}) {
   };
 
   return (
-    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"11px 14px",marginBottom:7}}>
+    <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"11px 14px",marginBottom:7}}>
       <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={()=>setExpanded(!expanded)}>
         <span style={{fontSize:18,flexShrink:0}}>📄</span>
         <div style={{flex:1}}>
@@ -4179,12 +4237,12 @@ function HubDocCard({doc,isManager,onEdit}) {
 function PartnerLocRow({loc}) {
   const [cop,setCop]=useState(false);
   return (
-    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+    <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
       <div style={{flex:1}}>
         <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>{loc.name}</p>
         <p style={{margin:"0 0 3px",fontSize:11,color:"#aaa"}}>{loc.addr}</p>
         <div style={{display:"flex",gap:10}}>
-          <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:"#003087"}}>{loc.current}</strong></span>
+          <span style={{fontSize:11,color:"#888"}}>Current: <strong style={{color:DS.accent}}>{loc.current}</strong></span>
           <span style={{fontSize:11,color:"#888"}}>New: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
         </div>
       </div>
@@ -4196,10 +4254,10 @@ function PartnerLocRow({loc}) {
 function HubTeamCard({member}) {
   const [copied,setCopied]=useState(false);
   return (
-    <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
-      <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{avatar(member.name)}</div>
+    <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{avatar(member.name)}</div>
       <p style={{margin:0,flex:1,fontWeight:600,fontSize:13}}>{member.name}</p>
-      <span style={{fontSize:16,fontWeight:800,color:"#1a5c35",marginRight:8}}>{member.ext}</span>
+      <span style={{fontSize:16,fontWeight:800,color:DS.green,marginRight:8}}>{member.ext}</span>
       <button onClick={()=>{navigator.clipboard?.writeText(member.ext);setCopied(true);setTimeout(()=>setCopied(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #1a5c35",background:copied?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:11,color:copied?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s"}}>{copied?"✓":"Copy"}</button>
     </div>
   );
@@ -4243,8 +4301,8 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
         </div>
 
         {/* Discount settings */}
-        <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:10,padding:"12px 14px"}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase",letterSpacing:.5}}>💰 Discount Settings</p>
+        <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:10,padding:"12px 14px"}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase",letterSpacing:.5}}>💰 Discount Settings</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div>
               <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT TYPE</label>
@@ -4286,8 +4344,8 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
         </div>
 
         {/* Restrictions */}
-        <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:10,padding:"12px 14px"}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase",letterSpacing:.5}}>🔒 Restrictions</p>
+        <div style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:10,padding:"12px 14px"}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.amber,textTransform:"uppercase",letterSpacing:.5}}>🔒 Restrictions</p>
           <div style={{marginBottom:10}}>
             <label style={{fontSize:11,color:"#666",fontWeight:600,display:"block",marginBottom:6}}>VALID FOR</label>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -4477,7 +4535,7 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
           </div>
         </div>
         <div>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Content {f.content&&<span style={{color:"#1a5c35",fontWeight:600}}>✓ Extracted</span>}</label>
+          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:3}}>Content {f.content&&<span style={{color:DS.green,fontWeight:600}}>✓ Extracted</span>}</label>
           <textarea value={f.content} onChange={e=>set("content",e.target.value)} rows={10} placeholder="Upload a file above or paste content here…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1.5px solid ${f.content?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",resize:"vertical",lineHeight:1.7,fontFamily:"inherit"}}/>
           <p style={{margin:"4px 0 0",fontSize:11,color:"#aaa"}}>Review and edit extracted content before saving.</p>
         </div>
@@ -4741,17 +4799,17 @@ function QuoteCalculator({locations, activePromos=[]}) {
   const copyScript = ()=>{navigator.clipboard?.writeText(genScript());setCopied(true);setTimeout(()=>setCopied(false),2000);};
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",color:DS.textPri}}>
       {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#003087,#0057b8)",borderRadius:14,padding:"16px",marginBottom:14,color:"#fff"}}>
+      <div style={{background:`linear-gradient(135deg,${DS.accent},#0057b8)`,borderRadius:14,padding:"16px",marginBottom:14,color:"#fff"}}>
         <p style={{margin:"0 0 2px",fontSize:10,letterSpacing:1.5,textTransform:"uppercase",opacity:.7}}>Hub Tool</p>
         <p style={{margin:0,fontSize:18,fontWeight:800}}>🧮 Quote Calculator</p>
         <p style={{margin:"4px 0 0",fontSize:12,opacity:.7}}>Build an accurate quote — reads straight to the customer on the call</p>
       </div>
 
       {/* Step 1 */}
-      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
-        <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>① Location & Customer</p>
+      <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:10}}>
+        <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>① Location & Customer</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
             <label style={{fontSize:11,color:"#666",display:"block",marginBottom:4}}>Location</label>
@@ -4823,24 +4881,24 @@ function QuoteCalculator({locations, activePromos=[]}) {
             </select>
           </div>
         </div>
-        {loc&&!loc.price_mf&&<div style={{marginTop:10,background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:"#856404"}}>⚠️ No pricing loaded for this location — run SQL_4_pricing.sql</p></div>}
-        {loc&&isPartner&&<div style={{marginTop:10,background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:"#003087"}}>ℹ️ Partner brand — sibling discount auto-applies via ICP. DIVEIN40 not available.</p></div>}
+        {loc&&!loc.price_mf&&<div style={{marginTop:10,background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:DS.amber}}>⚠️ No pricing loaded for this location — run SQL_4_pricing.sql</p></div>}
+        {loc&&isPartner&&<div style={{marginTop:10,background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:DS.accent}}>ℹ️ Partner brand — sibling discount auto-applies via ICP. DIVEIN40 not available.</p></div>}
       </div>
 
       {/* Step 2: Students */}
-      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+      <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <p style={{margin:0,fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>② Students & Lessons</p>
-          <button onClick={addStudent} style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#003087",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add Child</button>
+          <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>② Students & Lessons</p>
+          <button onClick={addStudent} style={{padding:"5px 12px",borderRadius:8,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add Child</button>
         </div>
         {students.map((student,si)=>{
           const calc = loc ? calcs[si] : null;
           return (
-            <div key={student.id} style={{background:si>0?"#f8faf8":"#f8f9fa",borderRadius:10,padding:"12px",marginBottom:8,border:`1.5px solid ${si>0&&canSibDiscount?"#c8e6c9":"#efefef"}`}}>
+            <div key={student.id} style={{background:si>0?DS.bgSurf:DS.bgSurf,borderRadius:10,padding:"12px",marginBottom:8,border:`1px solid ${si>0&&canSibDiscount?DS.green+"40":DS.border}`}}>
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
                 <input value={student.name} onChange={e=>updStudent(student.id,"name",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none"}} placeholder="Child name"/>
-                {si>0&&canSibDiscount&&<span style={{fontSize:10,background:"#eafaf1",color:"#1a5c35",padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>10% off group (3 mo)</span>}
-                {si>0&&!canSibDiscount&&isPartner&&<span style={{fontSize:10,background:"#e8f0fe",color:"#003087",padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>ICP auto-sibling</span>}
+                {si>0&&canSibDiscount&&<span style={{fontSize:10,background:"#eafaf1",color:DS.green,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>10% off group (3 mo)</span>}
+                {si>0&&!canSibDiscount&&isPartner&&<span style={{fontSize:10,background:"#e8f0fe",color:DS.accent,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>ICP auto-sibling</span>}
                 {si>0&&<button onClick={()=>remStudent(student.id)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:"#c0392b"}}>Remove</button>}
               </div>
               {student.lessons.map((lesson,li)=>{
@@ -4857,14 +4915,14 @@ function QuoteCalculator({locations, activePromos=[]}) {
                         return <option key={t.key} value={t.key}>{t.label}{r?` — $${r}/class`:""}</option>;
                       })}
                     </select>
-                    {canMultiHere&&<span style={{fontSize:10,color:"#1a5c35",fontWeight:700,whiteSpace:"nowrap"}}>−10%</span>}
+                    {canMultiHere&&<span style={{fontSize:10,color:DS.green,fontWeight:700,whiteSpace:"nowrap"}}>−10%</span>}
                     {!canMultiHere&&li>0&&<span style={{fontSize:10,color:"#aaa",whiteSpace:"nowrap"}}>no disc</span>}
                     {li>0&&<button onClick={()=>remLesson(student.id,lesson.id)} style={{padding:"5px 7px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:"#c0392b"}}>✕</button>}
                     {li===0&&<div style={{width:54}}/>}
                   </div>
                 );
               })}
-              <button onClick={()=>addLesson(student.id)} style={{marginTop:2,padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#e8f0fe",cursor:"pointer",fontSize:11,color:"#003087",fontWeight:600}}>+ Lesson</button>
+              <button onClick={()=>addLesson(student.id)} style={{marginTop:2,padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#e8f0fe",cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>+ Lesson</button>
               {calc&&loc&&(
                 <p style={{margin:"8px 0 0",fontSize:11,color:"#888"}}>Monthly: {fmt(calc.ongoing1to3)}{calc.hasSibDisc?` (→ ${fmt(calc.ongoing4plus)} from month 4)`:""}</p>
               )}
@@ -4875,16 +4933,16 @@ function QuoteCalculator({locations, activePromos=[]}) {
 
       {/* Step 3: Promos */}
       {eligiblePromos.length>0&&(
-        <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #f0c080",padding:"14px",marginBottom:10}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase",letterSpacing:.5}}>③ Available Promotions</p>
+        <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.amber}40`,padding:"14px",marginBottom:10}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.amber,textTransform:"uppercase",letterSpacing:.5}}>③ Available Promotions</p>
           {eligiblePromos.map(p=>(
             <div key={p.code}>
-              <div onClick={()=>togglePromo(p.code)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 11px",borderRadius:9,border:`1.5px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#eafaf1":"#fff",cursor:"pointer",marginBottom:6}}>
-                <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+              <div onClick={()=>togglePromo(p.code)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 11px",borderRadius:9,border:`1px solid ${promoChecked.includes(p.code)?DS.green:DS.border}`,background:promoChecked.includes(p.code)?DS.greenDim:DS.bgSurf,cursor:"pointer",marginBottom:6}}>
+                <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${promoChecked.includes(p.code)?"#1a5c35":"#ddd"}`,background:promoChecked.includes(p.code)?DS.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
                   {promoChecked.includes(p.code)&&<span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span>}
                 </div>
                 <div style={{flex:1}}>
-                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.title} <span style={{fontSize:11,fontWeight:700,color:"#003087",background:"#e8f0fe",padding:"1px 6px",borderRadius:4}}>{p.code}</span></p>
+                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.title} <span style={{fontSize:11,fontWeight:700,color:DS.accent,background:"#e8f0fe",padding:"1px 6px",borderRadius:4}}>{p.code}</span></p>
                   <p style={{margin:"2px 0 0",fontSize:10,color:"#888"}}>
                     {p.discount_type==="fixed"?`$${p.discount_fixed} off per student`:p.discount_type==="one_class_pct"?`${p.discount_pct}% off 1 class/week`:`${p.discount_pct}% off`}
                     {" · "}{p.applies_to==="continuous"?"Continuous only":p.applies_to==="group"?"Group only":"All lessons"}
@@ -4896,12 +4954,12 @@ function QuoteCalculator({locations, activePromos=[]}) {
               </div>
               {/* Scenario selector for one_class_pct promos */}
               {p.discount_type==="one_class_pct"&&p.show_scenarios&&promoChecked.includes(p.code)&&(
-                <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:9,padding:"10px 12px",marginBottom:6,marginTop:-2}}>
-                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1a5c35"}}>📋 How many classes/week?</p>
+                <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:9,padding:"10px 12px",marginBottom:6,marginTop:-2}}>
+                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.green}}>📋 How many classes/week?</p>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {SCENARIO_OPTIONS.map(sc=>(
                       <div key={sc.key} onClick={()=>setScenario(p.code,sc.key)}
-                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${scenarioMap[p.code]===sc.key?"#1a5c35":"#ddd"}`,background:scenarioMap[p.code]===sc.key?"#fff":"#fafafa",cursor:"pointer"}}>
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:`1px solid ${scenarioMap[p.code]===sc.key?DS.green:DS.border}`,background:scenarioMap[p.code]===sc.key?DS.bgSurf:DS.bg,cursor:"pointer"}}>
                         <div>
                           <span style={{fontSize:13,fontWeight:600,color:scenarioMap[p.code]===sc.key?"#1a5c35":"#444"}}>{sc.label}</span>
                           <span style={{fontSize:11,color:"#888",marginLeft:8}}>{sc.sub}</span>
@@ -4913,7 +4971,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                     ))}
                   </div>
                   {!scenarioMap[p.code]&&<p style={{margin:"8px 0 0",fontSize:11,color:"#e07b00",fontWeight:600}}>⚠️ Select a scenario to calculate correctly</p>}
-                  {scenarioMap[p.code]==="full"&&<p style={{margin:"8px 0 0",fontSize:11,color:"#856404",background:"#fff3cd",padding:"6px 10px",borderRadius:7}}>⚠️ Full month discount — confirm with your manager before applying.</p>}
+                  {scenarioMap[p.code]==="full"&&<p style={{margin:"8px 0 0",fontSize:11,color:DS.amber,background:"#fff3cd",padding:"6px 10px",borderRadius:7}}>⚠️ Full month discount — confirm with your manager before applying.</p>}
                 </div>
               )}
             </div>
@@ -4921,21 +4979,21 @@ function QuoteCalculator({locations, activePromos=[]}) {
         </div>
       )}
       {eligiblePromos.length===0&&loc&&(
-        <div style={{background:"#f9f9f9",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
+        <div style={{background:DS.bgSurf,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
           <p style={{margin:0,fontSize:12,color:"#aaa"}}>No active promotions apply to this customer / month combination.</p>
           {activePromos.length>0&&<p style={{margin:"4px 0 0",fontSize:11,color:"#bbb"}}>{activePromos.length} promo{activePromos.length>1?"s":""} in DB — check discount_type and customer_types fields are filled in the Hub → Promos tab</p>}
         </div>
       )}
       {eligiblePromos.length===0&&!loc&&activePromos.length>0&&(
-        <div style={{background:"#f9f9f9",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
+        <div style={{background:DS.bgSurf,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
           <p style={{margin:0,fontSize:12,color:"#aaa"}}>Select a location to see available promotions ({activePromos.filter(p=>p.discount_type||p.discount_pct).length} configured)</p>
         </div>
       )}
 
       {/* Step 4: Breakdown */}
       {loc&&(
-        <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
-          <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:"#003087",textTransform:"uppercase",letterSpacing:.5}}>④ Quote Breakdown</p>
+        <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:10}}>
+          <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>④ Quote Breakdown</p>
           {calcs.map((c,i)=>(
             <div key={students[i].id} style={{marginBottom:12,paddingBottom:12,borderBottom:i<calcs.length-1?"1px solid #f5f5f5":"none"}}>
               <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13}}>{students[i].name||`Child ${i+1}`}</p>
@@ -4945,9 +5003,9 @@ function QuoteCalculator({locations, activePromos=[]}) {
                     <span>{l.lt?.label} ({l.isContinuous?`${weeks} × ${fmt(l.rate)}`:`${fmt(l.rate)}/class`}){li>0&&l.isContinuous?" — 10% multi-class":""}</span>
                     <span style={{fontWeight:500,flexShrink:0,marginLeft:8}}>{fmt(l.afterMulti)}</span>
                   </div>
-                  {l.sibLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>Sibling discount −10% (mo 1–3)</span><span>−{fmt(l.sibLineDisc)}</span></div>}
+                  {l.sibLineDisc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:DS.green,paddingLeft:8}}><span>Sibling discount −10% (mo 1–3)</span><span>−{fmt(l.sibLineDisc)}</span></div>}
                   {l.promoDiscs?.map((d,di)=>(
-                    <div key={di} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#1a5c35",paddingLeft:8}}><span>{d.label}</span><span>−{fmt(d.amount)}</span></div>
+                    <div key={di} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:DS.green,paddingLeft:8}}><span>{d.label}</span><span>−{fmt(d.amount)}</span></div>
                   ))}
                 </div>
               ))}
@@ -4957,14 +5015,14 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 </div>
               )}
               {c.regFee===0&&regUsed+i>=2&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#1a5c35",marginBottom:3,paddingLeft:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:DS.green,marginBottom:3,paddingLeft:8}}>
                   <span>Registration fee — waived (max 2/family reached)</span><span>$0.00</span>
                 </div>
               )}
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:"#003087",marginTop:5,paddingTop:5,borderTop:"1px solid #efefef"}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:DS.accent,marginTop:5,paddingTop:5,borderTop:"1px solid #efefef"}}>
                 <span>Due today — {students[i].name||`Child ${i+1}`}</span><span>{fmt(c.dueToday)}</span>
               </div>
-              {c.creditNote>0&&<div style={{fontSize:11,color:"#1a5c35",marginTop:3,fontStyle:"italic"}}>ℹ️ Discount exceeds tuition — {fmt(c.creditNote)} credit added to account balance</div>}
+              {c.creditNote>0&&<div style={{fontSize:11,color:DS.green,marginTop:3,fontStyle:"italic"}}>ℹ️ Discount exceeds tuition — {fmt(c.creditNote)} credit added to account balance</div>}
             </div>
           ))}
           {/* Grand totals */}
@@ -4996,35 +5054,35 @@ function QuoteCalculator({locations, activePromos=[]}) {
       {loc&&students.length>0&&(
         <div style={{background:"#f4fbf6",borderRadius:12,border:"1.5px solid #c8e6c9",padding:"14px",marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase",letterSpacing:.5}}>📢 Read to Customer</p>
+            <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase",letterSpacing:.5}}>📢 Read to Customer</p>
             <button onClick={copyScript} style={{padding:"5px 12px",borderRadius:8,border:"none",background:copied?"#1a5c35":"#003087",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,transition:"background .2s"}}>{copied?"✓ Copied":"Copy Script"}</button>
           </div>
           <div style={{fontSize:13,color:"#2c3e50",lineHeight:1.9}}>
-            <p style={{margin:"0 0 6px",fontStyle:"italic"}}>"Today's total is <strong style={{color:"#003087"}}>{fmt(grandToday)}</strong>, which includes:"</p>
+            <p style={{margin:"0 0 6px",fontStyle:"italic"}}>"Today's total is <strong style={{color:DS.accent}}>{fmt(grandToday)}</strong>, which includes:"</p>
             {calcs.map((c,i)=>{
               const name = students[i].name||`Child ${i+1}`;
               return (
                 <div key={i} style={{marginBottom:8,paddingLeft:8}}>
                   {c.regFee>0&&<p style={{margin:"0 0 3px"}}>• ${REG_FEE} annual registration for {name}</p>}
-                  {c.regFee===0&&regUsed+i>=2&&<p style={{margin:"0 0 3px",color:"#1a5c35"}}>• Registration waived for {name} — family max reached</p>}
+                  {c.regFee===0&&regUsed+i>=2&&<p style={{margin:"0 0 3px",color:DS.green}}>• Registration waived for {name} — family max reached</p>}
                   {c.linesWithPromo.map((l,li)=>(
                     <div key={li}>
                       <p style={{margin:"0 0 2px"}}>• {fmt(l.afterMulti)} {MONTHS[enrollMo]} tuition for {name} ({l.lt?.label}{li>0&&l.isContinuous?" — 10% multi-class":""})</p>
-                      {l.sibLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(l.sibLineDisc)} sibling discount — first 3 months</p>}
-                      {l.promoDiscs?.map((d,di)=><p key={di} style={{margin:"0 0 2px",paddingLeft:12,color:"#1a5c35"}}>  minus {fmt(d.amount)} {d.label}</p>)}
+                      {l.sibLineDisc>0&&<p style={{margin:"0 0 2px",paddingLeft:12,color:DS.green}}>  minus {fmt(l.sibLineDisc)} sibling discount — first 3 months</p>}
+                      {l.promoDiscs?.map((d,di)=><p key={di} style={{margin:"0 0 2px",paddingLeft:12,color:DS.green}}>  minus {fmt(d.amount)} {d.label}</p>)}
                     </div>
                   ))}
-                  {c.creditNote>0&&<p style={{margin:"0 0 3px",color:"#1a5c35",fontStyle:"italic"}}>  Note: {fmt(c.creditNote)} credit applied to account</p>}
+                  {c.creditNote>0&&<p style={{margin:"0 0 3px",color:DS.green,fontStyle:"italic"}}>  Note: {fmt(c.creditNote)} credit applied to account</p>}
                 </div>
               );
             })}
             {hasSibDisc ? (
               <>
-                <p style={{margin:"8px 0 3px",fontStyle:"italic"}}>"For the first 3 months you will be billed <strong style={{color:"#003087"}}>{fmt(grandOngoing13)}</strong> on the 20th of each month."</p>
-                <p style={{margin:0,fontStyle:"italic"}}>"From month 4 onwards your monthly billing will be <strong style={{color:"#003087"}}>{fmt(grandOngoing4)}</strong>. Months with 5 classes will be slightly higher."</p>
+                <p style={{margin:"8px 0 3px",fontStyle:"italic"}}>"For the first 3 months you will be billed <strong style={{color:DS.accent}}>{fmt(grandOngoing13)}</strong> on the 20th of each month."</p>
+                <p style={{margin:0,fontStyle:"italic"}}>"From month 4 onwards your monthly billing will be <strong style={{color:DS.accent}}>{fmt(grandOngoing4)}</strong>. Months with 5 classes will be slightly higher."</p>
               </>
             ) : (
-              <p style={{margin:"8px 0 0",fontStyle:"italic"}}>"Going forward you will be billed <strong style={{color:"#003087"}}>{fmt(grandOngoing13)}</strong> on the 20th of each month. Months with 5 classes will be slightly higher."</p>
+              <p style={{margin:"8px 0 0",fontStyle:"italic"}}>"Going forward you will be billed <strong style={{color:DS.accent}}>{fmt(grandOngoing13)}</strong> on the 20th of each month. Months with 5 classes will be slightly higher."</p>
             )}
           </div>
         </div>
@@ -5078,7 +5136,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
   return (
     <div>
       {/* ENROLLMENT CHECKLIST */}
-      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",overflow:"hidden",marginBottom:14}}>
+      <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
         <div style={{background:"#003087",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
             <p style={{margin:0,fontSize:10,color:"rgba(255,255,255,.6)",letterSpacing:1.5,textTransform:"uppercase"}}>Before you submit</p>
@@ -5244,13 +5302,13 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
         </div>
       </div>
 
-      {filtered.length===0&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No {filter} submissions</p></div>}
+      {filtered.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:"#aaa"}}>No {filter} submissions</p></div>}
 
       {filtered.map(s=>(
         <div key={s.id} style={{background:"#fff",borderRadius:12,border:`1.5px solid ${s.urgent?"#e74c3c":"#efefef"}`,padding:"14px",marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <span style={{fontSize:12,fontWeight:700,color:"#003087"}}>{TYPE_LABELS[s.type]||s.type}</span>
+              <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>{TYPE_LABELS[s.type]||s.type}</span>
               {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 8px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
               <span style={{fontSize:11,color:"#bbb"}}>{new Date(s.submitted_at).toLocaleString()}</span>
             </div>
@@ -5261,7 +5319,7 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
             {s.payload.rules&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.rules}</p>}
             {s.payload.reason&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.reason}</p>}
             {s.payload.body&&<p style={{margin:"0 0 2px",color:"#888"}}>{s.payload.body}</p>}
-            {s.payload.code&&<p style={{margin:"0 0 2px",color:"#003087",fontWeight:600}}>Code: {s.payload.code}</p>}
+            {s.payload.code&&<p style={{margin:"0 0 2px",color:DS.accent,fontWeight:600}}>Code: {s.payload.code}</p>}
             {s.payload.expires_on&&<p style={{margin:"0 0 2px",color:"#888"}}>Expires: {s.payload.expires_on}</p>}
           </div>
           <p style={{margin:"0 0 8px",fontSize:11,color:"#aaa"}}>Submitted by: {s.submitted_by}</p>
@@ -5314,7 +5372,7 @@ function MgrUsers({ reload, fire }) {
       <p style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#1a1a1a"}}>👥 Users & Roles</p>
 
       {/* Add user form */}
-      <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:16}}>
+      <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:16}}>
         <p style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Add User</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
@@ -5345,7 +5403,7 @@ function MgrUsers({ reload, fire }) {
 
       {/* User list */}
       {loading?<p style={{textAlign:"center",color:"#aaa",fontSize:13}}>Loading…</p>:users.map(u=>(
-        <div key={u.id} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div key={u.id} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",gap:10,alignItems:"center"}}>
             <div style={{width:36,height:36,borderRadius:"50%",background:(ROLE_COLORS[u.role]||{bg:"#eee"}).bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
               {u.role==="management"?"🎛️":"🏊"}
@@ -5480,7 +5538,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
 
         {tab==="home"&&<div>
           {/* Type selector */}
-          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:12}}>
+          <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:12}}>
             <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Submission type</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
               {[{k:"promo",l:"🎯 Promo"},{k:"closure",l:"🚫 Closure"},{k:"location",l:"📍 Location Update"},{k:"pricing",l:"💰 Pricing Update"},{k:"alert",l:"🔔 Reminder"}].map(t=>(
@@ -5490,12 +5548,12 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           </div>
 
           {/* PROMO — identical to HubPromoModal */}
-          {type==="promo"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+          {type==="promo"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
             {g2(<div>{lbl("Promo Title *")}<input value={promo.title} onChange={e=>setP("title",e.target.value)} placeholder="e.g. June Dive In" style={S}/></div>,
                <div>{lbl("Promo Code")}<input value={promo.code} onChange={e=>setP("code",e.target.value)} placeholder="e.g. DIVEIN40" style={S}/></div>)}
 
-            <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
-              <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase"}}>💰 Discount Settings</p>
+            <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase"}}>💰 Discount Settings</p>
               {g2(
                 <div>{lbl("Discount Type")}<select value={promo.discount_type} onChange={e=>setP("discount_type",e.target.value)} style={{...S,background:"#fff"}}>
                   <option value="pct">% off tuition</option>
@@ -5514,8 +5572,8 @@ function ClientView({ currentUser, data, reload, onLogout }) {
               </select></div>
             </div>
 
-            <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
-              <p style={{margin:0,fontSize:11,fontWeight:700,color:"#856404",textTransform:"uppercase"}}>🔒 Restrictions</p>
+            <div style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.amber,textTransform:"uppercase"}}>🔒 Restrictions</p>
               <div>{lbl("Valid For")}
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {[{k:"lead",l:"New leads"},{k:"lapsed",l:"Lapsed"},{k:"active",l:"Active"}].map(t=>(
@@ -5542,7 +5600,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           </div>}
 
           {/* CLOSURE */}
-          {type==="closure"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+          {type==="closure"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
             <div>{lbl("Location *")}<select value={closure.location_name} onChange={e=>setC("location_name",e.target.value)} style={{...S,background:"#fff"}}>
               <option value="">Select location…</option>
               {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
@@ -5553,7 +5611,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           </div>}
 
           {/* LOCATION — identical fields to HubLocModal */}
-          {type==="location"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+          {type==="location"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
             <div>{lbl("Location *")}<select value={loc.id!=null?String(loc.id):""} onChange={e=>{
               const val=e.target.value;
               if(!val){setLoc({id:null,name:"",ext:"",privates:false,pool:"Chlorine",addr:""});return;}
@@ -5576,7 +5634,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           </div>}
 
           {/* PRICING */}
-          {type==="pricing"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+          {type==="pricing"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
             <div>{lbl("Location *")}<select value={pricing.id!=null?String(pricing.id):""} onChange={e=>{
               const found=locations.find(l=>String(l.id)===e.target.value);
               if(found) setPricing({
@@ -5594,8 +5652,8 @@ function ClientView({ currentUser, data, reload, onLogout }) {
             </select></div>
 
             {pricing.id!=null&&pricing.name&&<>
-              <div style={{background:"#f0faf4",border:"1.5px solid #c8e6c9",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
-                <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1a5c35",textTransform:"uppercase"}}>📅 Group / Continuous (per month)</p>
+              <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+                <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase"}}>📅 Group / Continuous (per month)</p>
                 {g2(
                   <div>{lbl("Group Mon–Fri ($)")}<input type="number" value={pricing.price_mf} onChange={e=>setPR("price_mf",e.target.value)} placeholder="e.g. 189" style={S}/></div>,
                   <div>{lbl("Group Sat–Sun ($)")}<input type="number" value={pricing.price_ss} onChange={e=>setPR("price_ss",e.target.value)} placeholder="e.g. 189" style={S}/></div>
@@ -5618,7 +5676,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                 )}
               </div>
 
-              <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{background:DS.amberDim,border:`1px solid ${DS.amber}40`,borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
                 <p style={{margin:0,fontSize:11,fontWeight:700,color:"#b85c00",textTransform:"uppercase"}}>📋 ODL / Clinic / Fees</p>
                 {g2(
                   <div>{lbl("ODL Mon–Fri ($)")}<input type="number" value={pricing.price_odl} onChange={e=>setPR("price_odl",e.target.value)} placeholder="e.g. 89" style={S}/></div>,
@@ -5634,7 +5692,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           </div>}
 
           {/* ALERT */}
-          {type==="alert"&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
+          {type==="alert"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
             <div>{lbl("Title *")}<input value={alert.title} onChange={e=>setA("title",e.target.value)} placeholder="e.g. New pricing effective June 1" style={S}/></div>
             <div>{lbl("Details *")}<textarea value={alert.body} onChange={e=>setA("body",e.target.value)} rows={3} placeholder="Full details for the team…" style={{...S,resize:"vertical"}}/></div>
             {g2(<div>{lbl("Category")}<select value={alert.category} onChange={e=>setA("category",e.target.value)} style={{...S,background:"#fff"}}>
@@ -5663,12 +5721,12 @@ function ClientView({ currentUser, data, reload, onLogout }) {
         </div>}
 
         {tab==="history"&&<div>
-          {submissions.length===0&&<div style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:"#aaa"}}>No submissions yet</p></div>}
+          {submissions.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>📋</p><p style={{fontSize:13,color:"#aaa"}}>No submissions yet</p></div>}
           {submissions.map(s=>(
-            <div key={s.id} style={{background:"#fff",borderRadius:12,border:"1.5px solid #efefef",padding:"14px",marginBottom:10}}>
+            <div key={s.id} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"14px",marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:"#003087"}}>{TYPE_LABELS[s.type]||s.type}</span>
+                  <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>{TYPE_LABELS[s.type]||s.type}</span>
                   {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
                 </div>
                 <span style={{fontSize:11,fontWeight:600,color:(STATUS_CFG[s.status]||{}).fg,background:(STATUS_CFG[s.status]||{}).bg,padding:"2px 8px",borderRadius:4}}>{s.status}</span>
