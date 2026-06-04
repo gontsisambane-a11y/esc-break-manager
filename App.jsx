@@ -1,5 +1,44 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
+// ── EXECO DESIGN SYSTEM ───────────────────────────────────────────────
+const DS = {
+  bg:       "#0d1b2e",
+  bgCard:   "#0f2440",
+  bgSurf:   "#162d4a",
+  bgHover:  "#1a3555",
+  border:   "rgba(59,130,246,0.15)",
+  borderHi: "rgba(59,130,246,0.35)",
+  accent:   "#3b82f6",
+  accentHi: "#60a5fa",
+  accentDim:"rgba(59,130,246,0.12)",
+  green:    "#10b981",
+  greenDim: "rgba(16,185,129,0.12)",
+  amber:    "#f59e0b",
+  amberDim: "rgba(245,158,11,0.12)",
+  red:      "#ef4444",
+  redDim:   "rgba(239,68,68,0.12)",
+  textPri:  "#f0f6ff",
+  textSec:  "#7a9cbf",
+  textMut:  "#3d5a78",
+  radius:   "12px",
+  radiusSm: "8px",
+  radiusLg: "16px",
+};
+
+const gStyle = `
+  * { box-sizing: border-box; }
+  @keyframes popIn { from { transform: scale(0.95) translateY(4px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+  body { background: ${DS.bg}; color: ${DS.textPri}; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; }
+  input, select, textarea { background: ${DS.bgSurf} !important; color: ${DS.textPri} !important; border: 1px solid ${DS.border} !important; border-radius: ${DS.radiusSm} !important; padding: 9px 12px !important; outline: none !important; transition: border-color .15s; }
+  input:focus, select:focus, textarea:focus { border-color: ${DS.accent} !important; }
+  select option { background: ${DS.bgCard}; color: ${DS.textPri}; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: ${DS.border}; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: ${DS.borderHi}; }
+`;
 // ── CONFIG ────────────────────────────────────────────────────────────
 const SB_URL      = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
@@ -267,33 +306,59 @@ async function loadReportData(start, end) {
 // ── SHARED COMPONENTS ─────────────────────────────────────────────────
 function Toast({ msg, type, onDone }) {
   useEffect(()=>{ const t=setTimeout(onDone,3500); return()=>clearTimeout(t); },[]);
-  const bg={approved:"#1a5c35",declined:"#7a1a1a",info:"#1565a8",ooo:"#7a1a5c",warn:"#b7770d"};
-  const ic={approved:"✅",declined:"🚫",info:"ℹ️",ooo:"📅",warn:"⚠️"};
-  return <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:bg[type]||"#333",color:"#fff",padding:"11px 22px",borderRadius:12,fontSize:13,fontWeight:500,zIndex:9999,display:"flex",alignItems:"center",gap:10,whiteSpace:"nowrap",boxShadow:"0 4px 24px rgba(0,0,0,0.2)",animation:"popIn .25s ease"}}><span>{ic[type]||"ℹ️"}</span>{msg}</div>;
+  const cfg = {
+    approved: {bg:"rgba(16,185,129,0.15)",border:"rgba(16,185,129,0.3)",icon:"✓"},
+    declined:  {bg:"rgba(239,68,68,0.15)", border:"rgba(239,68,68,0.3)", icon:"✕"},
+    info:      {bg:"rgba(59,130,246,0.15)",border:"rgba(59,130,246,0.3)",icon:"·"},
+    ooo:       {bg:"rgba(245,158,11,0.15)",border:"rgba(245,158,11,0.3)",icon:"·"},
+    warn:      {bg:"rgba(245,158,11,0.15)",border:"rgba(245,158,11,0.3)",icon:"⚠"},
+  };
+  const c = cfg[type]||cfg.info;
+  return (
+    <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",
+      background:DS.bgCard,border:`1px solid ${c.border}`,color:DS.textPri,
+      padding:"11px 20px",borderRadius:DS.radius,fontSize:13,fontWeight:500,
+      zIndex:9999,display:"flex",alignItems:"center",gap:10,whiteSpace:"nowrap",
+      boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideUp .2s ease"}}>
+      <span style={{color:c.border,fontSize:16,fontWeight:700}}>{c.icon}</span>{msg}
+    </div>
+  );
 }
 
 function Modal({ title, sub, onClose, children, wide }) {
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:16}} onClick={onClose}>
-      <div style={{background:"#fffdf8",borderRadius:20,padding:"26px 22px",width:"100%",maxWidth:wide?560:340,maxHeight:"90vh",overflowY:"auto",animation:"popIn .22s ease"}} onClick={e=>e.stopPropagation()}>
-        {sub&&<p style={{margin:"0 0 2px",fontSize:11,color:"#aaa",letterSpacing:1}}>{sub}</p>}
-        <h2 style={{margin:"0 0 18px",fontSize:19,fontWeight:700,color:"#1a1a1a"}}>{title}</h2>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:16}} onClick={onClose}>
+      <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:DS.radiusLg,padding:"24px 22px",width:"100%",maxWidth:wide?580:360,maxHeight:"90vh",overflowY:"auto",animation:"popIn .2s ease"}} onClick={e=>e.stopPropagation()}>
+        {sub&&<p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut,letterSpacing:2,textTransform:"uppercase"}}>{sub}</p>}
+        <h2 style={{margin:"0 0 18px",fontSize:17,fontWeight:600,color:DS.textPri}}>{title}</h2>
         {children}
       </div>
     </div>
   );
 }
 
-function Btn({ label, onClick, color="#1a5c35", disabled, small, outline }) {
-  const bg = outline?"transparent":disabled?"#ccc":color;
-  const border = outline?`1.5px solid ${color}`:"none";
-  const textColor = outline?color:"#fff";
-  return <button onClick={onClick} disabled={disabled} style={{padding:small?"6px 12px":"11px 0",width:small?"auto":"100%",borderRadius:9,border,background:bg,color:textColor,cursor:disabled?"not-allowed":"pointer",fontSize:small?12:14,fontWeight:600,opacity:disabled?0.7:1}}>{label}</button>;
+function Btn({ label, onClick, color, disabled, small, outline }) {
+  const bg = disabled ? DS.bgSurf : outline ? "transparent" : (color||DS.accent);
+  const border = outline ? `1px solid ${color||DS.borderHi}` : "1px solid transparent";
+  const textColor = disabled ? DS.textMut : outline ? (color||DS.accent) : "#fff";
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      padding: small?"7px 14px":"11px 0",
+      width: small?"auto":"100%",
+      borderRadius: DS.radiusSm,
+      border, background:bg, color:textColor,
+      cursor: disabled?"not-allowed":"pointer",
+      fontSize: small?12:13,
+      fontWeight:600,
+      letterSpacing:".01em",
+      transition:"all .15s",
+    }}>{label}</button>
+  );
 }
 
 function StatusDot({ status }) {
   const cfg=ST[status]||ST.available;
-  return <span style={{width:7,height:7,borderRadius:"50%",background:cfg.dot,display:"inline-block",flexShrink:0}}/>;
+  return <span style={{width:6,height:6,borderRadius:"50%",background:cfg.dot,display:"inline-block",flexShrink:0}}/>;
 }
 
 // ── HEALTH BREAK TIMER ────────────────────────────────────────────────
@@ -382,75 +447,67 @@ function LoginScreen({ onSelect, reps, users=[] }) {
   };
 
   if(mode==="choose") return (
-    <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{marginBottom:28,textAlign:"center"}}><div style={{fontSize:48,marginBottom:8}}>🌿</div>
-        <h1 style={{margin:"0 0 6px",fontSize:26,fontWeight:800,color:"#1a1a1a"}}>ESC Break Manager</h1>
-        <p style={{margin:0,fontSize:14,color:"#888"}}>{todayLabel()}</p>
+    <div style={{minHeight:"100vh",background:DS.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{marginBottom:36,textAlign:"center"}}>
+        <div style={{fontSize:13,fontWeight:700,color:DS.accent,letterSpacing:3,textTransform:"uppercase",marginBottom:12}}>execo</div>
+        <h1 style={{margin:"0 0 8px",fontSize:28,fontWeight:700,color:DS.textPri,letterSpacing:"-.5px"}}>ESC Operations</h1>
+        <p style={{margin:0,fontSize:13,color:DS.textSec}}>{todayLabel()}</p>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%",maxWidth:320}}>
-        <button onClick={()=>setMode("pin")} style={{padding:"18px 24px",borderRadius:16,border:"2px solid #1a5c35",background:"#1a5c35",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontSize:28}}>🎛️</span><div style={{textAlign:"left"}}><p style={{margin:0,fontSize:15,fontWeight:700}}>Manager View</p><p style={{margin:0,fontSize:12,opacity:.75}}>Full oversight & controls</p></div>
-        </button>
-        <button onClick={()=>setMode("rep")} style={{padding:"18px 24px",borderRadius:16,border:"2px solid #e8e8e8",background:"#fff",color:"#1a1a1a",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontSize:28}}>👤</span><div style={{textAlign:"left"}}><p style={{margin:0,fontSize:15,fontWeight:700}}>Rep View</p><p style={{margin:0,fontSize:12,color:"#999"}}>Request your break</p></div>
-        </button>
-        <button onClick={()=>setMode("client")} style={{padding:"18px 24px",borderRadius:16,border:"2px solid #003087",background:"#fff",color:"#003087",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontSize:28}}>🏊</span><div style={{textAlign:"left"}}><p style={{margin:0,fontSize:15,fontWeight:700}}>Client Portal</p><p style={{margin:0,fontSize:12,color:"#888"}}>Hub content management</p></div>
-        </button>
-      </div>
-    </div>
-  );
-
-  if(mode==="pin") return (
-    <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{background:"#fff",borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:320,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
-        <button onClick={()=>{setMode("choose");setPin("");setUsername("");setPinErr(false);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#888",marginBottom:20,padding:0}}>← Back</button>
-        <div style={{fontSize:36,marginBottom:12,textAlign:"center"}}>🔐</div>
-        <h2 style={{margin:"0 0 20px",fontSize:18,fontWeight:700,textAlign:"center"}}>Manager Sign In</h2>
-        <input value={username} onChange={e=>{setUsername(e.target.value);setPinErr(false);}} placeholder="Username (optional)"
-          style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:"1.5px solid #ddd",fontSize:14,outline:"none",marginBottom:10,background:"#fafafa"}}/>
-        <input type="password" maxLength={8} value={pin} autoFocus
-          onChange={e=>{setPin(e.target.value);setPinErr(false);}}
-          onKeyDown={e=>{if(e.key==="Enter") tryMgrLogin();}}
-          placeholder="PIN"
-          style={{width:"100%",boxSizing:"border-box",padding:14,borderRadius:12,border:`1.5px solid ${pinErr?"#e74c3c":"#ddd"}`,fontSize:22,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:8,background:"#fafafa"}}/>
-        {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e74c3c",textAlign:"center"}}>Incorrect username or PIN</p>}
-        <Btn label="Sign In" onClick={tryMgrLogin}/>
+      <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%",maxWidth:300}}>
+        {[
+          {mode:"pin",  label:"Manager",     sub:"Full oversight & controls",   icon:"⬡"},
+          {mode:"rep",  label:"Rep",         sub:"Your breaks & performance",   icon:"◎"},
+          {mode:"client",label:"Client portal",sub:"Hub content management",    icon:"◈"},
+        ].map(b=>(
+          <button key={b.mode} onClick={()=>setMode(b.mode)} style={{padding:"16px 20px",borderRadius:DS.radius,border:`1px solid ${DS.border}`,background:DS.bgCard,color:DS.textPri,cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left",transition:"all .15s"}}>
+            <div style={{width:36,height:36,borderRadius:DS.radiusSm,background:DS.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:DS.accent,flexShrink:0}}>{b.icon}</div>
+            <div><p style={{margin:0,fontSize:14,fontWeight:600,color:DS.textPri}}>{b.label}</p><p style={{margin:"1px 0 0",fontSize:11,color:DS.textSec}}>{b.sub}</p></div>
+          </button>
+        ))}
       </div>
     </div>
   );
 
-  if(mode==="client") return (
-    <div style={{minHeight:"100vh",background:"#f0f4f8",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{background:"#fff",borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:320,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
-        <button onClick={()=>{setMode("choose");setPin("");setUsername("");setPinErr(false);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#888",marginBottom:20,padding:0}}>← Back</button>
-        <div style={{fontSize:36,marginBottom:12,textAlign:"center"}}>🏊</div>
-        <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:700,textAlign:"center"}}>Client Portal</h2>
-        <p style={{margin:"0 0 20px",fontSize:12,color:"#888",textAlign:"center"}}>Emler Knowledge Hub Management</p>
-        <input value={username} onChange={e=>{setUsername(e.target.value);setPinErr(false);}} placeholder="Username"
-          style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:"1.5px solid #ddd",fontSize:14,outline:"none",marginBottom:10,background:"#fafafa"}}/>
-        <input type="password" maxLength={8} value={pin} 
-          onChange={e=>{setPin(e.target.value);setPinErr(false);}}
-          onKeyDown={e=>{if(e.key==="Enter") tryClientLogin();}}
-          placeholder="PIN"
-          style={{width:"100%",boxSizing:"border-box",padding:14,borderRadius:12,border:`1.5px solid ${pinErr?"#e74c3c":"#003087"}`,fontSize:22,textAlign:"center",letterSpacing:8,outline:"none",marginBottom:8,background:"#fafafa"}}/>
-        {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e74c3c",textAlign:"center"}}>Incorrect username or PIN</p>}
-        <Btn label="Sign In" onClick={tryClientLogin} color="#003087"/>
+  const authCard = (title, sub, onSubmit, accentColor=DS.accent) => (
+    <div style={{minHeight:"100vh",background:DS.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:DS.radiusLg,padding:"32px 28px",width:"100%",maxWidth:320,animation:"popIn .2s ease"}}>
+        <button onClick={()=>{setMode("choose");setPin("");setUsername("");setPinErr(false);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:DS.textSec,marginBottom:24,padding:0,display:"flex",alignItems:"center",gap:6}}>← Back</button>
+        <div style={{marginBottom:24}}>
+          <p style={{margin:"0 0 4px",fontSize:11,color:accentColor,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>{sub}</p>
+          <h2 style={{margin:0,fontSize:20,fontWeight:700,color:DS.textPri}}>{title}</h2>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:4}}>
+          <input value={username} onChange={e=>{setUsername(e.target.value);setPinErr(false);}} placeholder="Username" style={{width:"100%",fontSize:13}}/>
+          <input type="password" maxLength={8} value={pin} autoFocus
+            onChange={e=>{setPin(e.target.value);setPinErr(false);}}
+            onKeyDown={e=>{if(e.key==="Enter") onSubmit();}}
+            placeholder="PIN" style={{width:"100%",fontSize:20,textAlign:"center",letterSpacing:10,background:`${DS.bgSurf} !important`}}/>
+        </div>
+        {pinErr&&<p style={{margin:"0 0 12px",fontSize:12,color:DS.red,textAlign:"center"}}>Incorrect credentials</p>}
+        <Btn label="Sign in" onClick={onSubmit} color={accentColor}/>
       </div>
     </div>
   );
+
+  if(mode==="pin") return authCard("Manager sign in", "Management access", tryMgrLogin);
+  if(mode==="client") return authCard("Client portal", "Emler — Hub management", tryClientLogin, DS.accentHi);
 
   return (
-    <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",flexDirection:"column",alignItems:"center",padding:24,paddingTop:40}}>
-      <div style={{width:"100%",maxWidth:400}}>
-        <button onClick={()=>setMode("choose")} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#888",marginBottom:20,padding:0}}>← Back</button>
-        <div style={{textAlign:"center",marginBottom:20}}><div style={{fontSize:32,marginBottom:8}}>👤</div><h2 style={{margin:"0 0 4px",fontSize:20,fontWeight:700}}>Who are you?</h2></div>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search your name…" style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:12,border:"1.5px solid #ddd",fontSize:14,marginBottom:10,background:"#fff",outline:"none"}}/>
-        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+    <div style={{minHeight:"100vh",background:DS.bg,display:"flex",flexDirection:"column",alignItems:"center",padding:24,paddingTop:48}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <button onClick={()=>setMode("choose")} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:DS.textSec,marginBottom:24,padding:0}}>← Back</button>
+        <h2 style={{margin:"0 0 4px",fontSize:20,fontWeight:700,color:DS.textPri}}>Who are you?</h2>
+        <p style={{margin:"0 0 16px",fontSize:13,color:DS.textSec}}>Select your name to continue</p>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" style={{width:"100%",marginBottom:12,fontSize:13}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {filtered.map(r=>(
-            <button key={r.id} onClick={()=>onSelect("rep",r)} style={{padding:"12px 16px",borderRadius:12,border:"1.5px solid #e8e8e8",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-              <div style={{width:36,height:36,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#1a5c35",flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
-              <div><p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{r.name}</p><p style={{margin:0,fontSize:11,color:"#aaa"}}>{r.timezone} · Banked: {fmtDur(r.health_time_banked||0)}/10m</p></div>
+            <button key={r.id} onClick={()=>onSelect("rep",r)} style={{padding:"12px 16px",borderRadius:DS.radius,border:`1px solid ${DS.border}`,background:DS.bgCard,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",transition:"all .15s"}}>
+              <div style={{width:38,height:38,borderRadius:"50%",background:DS.accentDim,border:`1px solid ${DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:DS.accent,flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
+              <div>
+                <p style={{margin:0,fontWeight:600,fontSize:14,color:DS.textPri}}>{r.name}</p>
+                <p style={{margin:0,fontSize:11,color:DS.textSec}}>{r.timezone}</p>
+              </div>
+              <div style={{marginLeft:"auto",fontSize:11,color:DS.textMut}}>{fmtDur(r.health_time_banked||0)}</div>
             </button>
           ))}
         </div>
@@ -528,68 +585,77 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
   ];
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
-      <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box} button:active{opacity:.8}`}</style>
+    <div style={{fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",minHeight:"100vh",background:DS.bg,paddingBottom:60}}>
+      <style>{gStyle}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
       {/* Header */}
-      <div style={{background:"#1a2e1a",padding:"18px 18px 14px",color:"#fff"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-          <div>
-            <span style={{fontSize:10,background:"rgba(255,255,255,.15)",padding:"3px 8px",borderRadius:5,letterSpacing:1.5,fontWeight:700}}>MANAGER</span>
-            <h1 style={{margin:"4px 0 2px",fontSize:19,fontWeight:800}}>Team Overview 🎛️</h1>
-            <p style={{margin:0,fontSize:11,opacity:.55}}>{todayLabel()}</p>
+      <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`,padding:"14px 18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:2,textTransform:"uppercase"}}>execo</div>
+            <div style={{width:1,height:16,background:DS.border}}/>
+            <div>
+              <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>ESC Operations</p>
+              <p style={{margin:0,fontSize:11,color:DS.textSec}}>{todayLabel()}</p>
+            </div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-            <button onClick={onLogout} style={{padding:"5px 11px",borderRadius:8,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.7)",cursor:"pointer",fontSize:11}}>Sign Out</button>
-            {settings.peak_mode&&<span style={{fontSize:10,background:"#e74c3c",padding:"3px 8px",borderRadius:5,fontWeight:700}}>⚡ PEAK MODE</span>}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {settings.peak_mode&&<span style={{fontSize:10,background:DS.redDim,color:DS.red,padding:"3px 10px",borderRadius:DS.radiusSm,fontWeight:700,border:`1px solid ${DS.red}40`,letterSpacing:.5}}>⚡ PEAK</span>}
+            <span style={{fontSize:11,color:DS.textSec}}>{currentUser?.display_name||"Manager"}</span>
+            <button onClick={onLogout} style={{padding:"5px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Sign out</button>
           </div>
         </div>
-        {!centreOpen&&<div style={{background:"rgba(255,200,0,.15)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#ffd700",fontWeight:600,textAlign:"center"}}>🌙 Centre closed — opens 2:00pm SAST · Showing next shift data</div>}
-        {settings.admin_mode&&<div style={{background:"rgba(29,78,216,.2)",borderRadius:8,padding:"6px 12px",marginBottom:10,fontSize:11,color:"#93c5fd",fontWeight:600,textAlign:"center"}}>🗂️ Admin Mode ON — reps can take 30-min admin slots</div>}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
+
+        {!centreOpen&&<div style={{background:DS.amberDim,border:`1px solid ${DS.amber}30`,borderRadius:DS.radiusSm,padding:"6px 12px",marginBottom:10,fontSize:11,color:DS.amber,fontWeight:600}}>Centre closed — opens 2:00pm SAST</div>}
+
+        {/* Stats row */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
           {[
-            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)&&(r.rep_stage||"active")==="active").length,l:"Available",c:"#27ae60"},
-            {n:centreOpen?onHealth:0,l:`Health (/${hLimit})`,c:onHealth>=hLimit?"#e74c3c":"#2980b9"},
-            {n:centreOpen?onLunch:0,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?"#e74c3c":"#e07b00"},
-            {n:reps.filter(r=>["pto","sick","off"].includes(r.status)).length,l:"Out",c:"#8e44ad"},
+            {n:reps.filter(r=>r.status==="available"&&centreOpen&&isRepOnShift(r)&&(r.rep_stage||"active")==="active").length,l:"Available",c:DS.green},
+            {n:centreOpen?onHealth:0,l:`Health (/${hLimit})`,c:onHealth>=hLimit?DS.red:DS.accent},
+            {n:centreOpen?onLunch:0,l:`Lunch (/${LUNCH_LIMIT})`,c:onLunch>=LUNCH_LIMIT?DS.red:DS.amber},
+            {n:reps.filter(r=>["pto","sick","off"].includes(r.status)).length,l:"Out",c:DS.textSec},
           ].map(s=>(
-            <div key={s.l} style={{background:"rgba(255,255,255,.1)",borderRadius:10,padding:"7px 6px",textAlign:"center"}}>
-              <p style={{margin:0,fontSize:19,fontWeight:800,color:s.c}}>{s.n}</p>
-              <p style={{margin:0,fontSize:9,opacity:.65,lineHeight:1.2}}>{s.l}</p>
+            <div key={s.l} style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"8px 10px",border:`1px solid ${DS.border}`}}>
+              <p style={{margin:0,fontSize:20,fontWeight:700,color:s.c,lineHeight:1}}>{s.n}</p>
+              <p style={{margin:"3px 0 0",fontSize:10,color:DS.textMut}}>{s.l}</p>
             </div>
           ))}
         </div>
+
+        {/* Capacity row */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
           {[
-            {icon:"👥",label:"Team Cap",val:`${totalOut}/${maxOut} out`,full:totalOut>=maxOut,color:"#8e44ad"},
-            {icon:"🌿",label:"Health",val:`${onHealth}/${hLimit}`,full:onHealth>=hLimit,color:"#2980b9"},
-            {icon:"🥗",label:"Lunch",val:`${onLunch}/${LUNCH_LIMIT}`,full:onLunch>=LUNCH_LIMIT,color:"#e07b00"},
-            {icon:"🗂️",label:"Admin",val:`${onAdmin}/${adminLimit}`,full:onAdmin>=adminLimit,color:"#1d4ed8"},
+            {label:"Team Cap",val:`${totalOut}/${maxOut}`,full:totalOut>=maxOut},
+            {label:"Health",val:`${onHealth}/${hLimit}`,full:onHealth>=hLimit},
+            {label:"Lunch",val:`${onLunch}/${LUNCH_LIMIT}`,full:onLunch>=LUNCH_LIMIT},
+            {label:"Admin",val:`${onAdmin}/${adminLimit}`,full:onAdmin>=adminLimit},
           ].map(m=>(
-            <div key={m.label} style={{background:"rgba(255,255,255,.08)",borderRadius:9,padding:"8px 10px",border:`1px solid ${m.full?"rgba(231,76,60,.5)":"rgba(255,255,255,.1)"}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                <span style={{fontSize:10,opacity:.8}}>{m.icon} {m.label}</span>
-                <span style={{fontSize:12,fontWeight:700,color:m.full?"#e74c3c":"#fff"}}>{m.val}</span>
-              </div>
-              <div style={{height:3,background:"rgba(255,255,255,.15)",borderRadius:2}}>
-                <div style={{width:`${Math.min((m.full?1:0),1)*100||0}%`,height:"100%",background:m.full?"#e74c3c":m.color,borderRadius:2}}/>
-              </div>
+            <div key={m.label} style={{background:m.full?DS.redDim:DS.bgSurf,borderRadius:DS.radiusSm,padding:"6px 10px",border:`1px solid ${m.full?DS.red+"40":DS.border}`}}>
+              <p style={{margin:0,fontSize:10,color:DS.textMut}}>{m.label}</p>
+              <p style={{margin:"2px 0 0",fontSize:13,fontWeight:700,color:m.full?DS.red:DS.textPri}}>{m.val}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb",overflowX:"auto"}}>
+      <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`,overflowX:"auto"}}>
         <div style={{display:"flex",padding:"0 16px",minWidth:"max-content"}}>
           {tabs.map(t=>(
-            <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:tab===t.k?700:500,color:tab===t.k?"#1a5c35":t.notif?"#e07b00":"#999",borderBottom:tab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,transition:"all .15s",whiteSpace:"nowrap"}}>{t.l}</button>
+            <button key={t.k} onClick={()=>setTab(t.k)} style={{
+              padding:"11px 14px",border:"none",background:"none",cursor:"pointer",
+              fontSize:12,fontWeight:tab===t.k?600:400,
+              color:tab===t.k?DS.accent:t.notif?DS.amber:DS.textSec,
+              borderBottom:tab===t.k?`2px solid ${DS.accent}`:"2px solid transparent",
+              marginBottom:-1,transition:"all .15s",whiteSpace:"nowrap",
+            }}>{t.l}</button>
           ))}
         </div>
       </div>
 
-      <div style={{padding:"0 14px",maxWidth:640,margin:"0 auto"}}>
+      <div style={{padding:"0 14px",maxWidth:720,margin:"0 auto"}}>
         {tab==="overview"  &&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={hLimit} maxOut={maxOut} reload={reload} fire={fire} settings={settings} centreOpen={centreOpen} onAdmin={onAdmin} adminLimit={adminLimit}/>}
         {tab==="requests"  &&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire} settings={settings}/>}
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
@@ -2431,51 +2497,57 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   };
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",background:"#f4f6f2",paddingBottom:60}}>
-      <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
+    <div style={{fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",minHeight:"100vh",background:DS.bg,paddingBottom:60}}>
+      <style>{gStyle}</style>
       {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
-      <div style={{background:"#1a5c35",padding:"20px 18px 16px",color:"#fff"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+      {/* Header */}
+      <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`,padding:"16px 18px 14px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <div>
-            <p style={{margin:"0 0 1px",fontSize:10,opacity:.55,letterSpacing:2,textTransform:"uppercase"}}>My Break</p>
-            <h1 style={{margin:"0 0 2px",fontSize:21,fontWeight:800}}>Hey, {repInfo.name}! 👋</h1>
-            <p style={{margin:0,fontSize:11,opacity:.6}}>{todayLabel()}</p>
+            <p style={{margin:0,fontSize:10,color:DS.accent,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>execo · esc</p>
+            <h1 style={{margin:"2px 0 1px",fontSize:20,fontWeight:700,color:DS.textPri}}>Hey, {repInfo.name}</h1>
+            <p style={{margin:0,fontSize:11,color:DS.textSec}}>{todayLabel()}</p>
           </div>
-          <button onClick={onLogout} style={{padding:"6px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.7)",cursor:"pointer",fontSize:11}}>Switch</button>
+          <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Switch</button>
         </div>
-        
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+
+        {/* Capacity tiles */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
           {[
-            {icon:"🌿",label:"Health",avail:healthLeft,total:hLimit,color:"#2980b9",extra:cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:"Available"},
-            {icon:"🥗",label:"Lunch",avail:lunchLeft,total:LUNCH_LIMIT,color:"#e07b00",extra:"slots"},
-            {icon:"👥",label:"Team Cap",avail:capLeft,total:maxOut,color:"#8e44ad",extra:"slots"},
-            {icon:"🗂️",label:"Admin",avail:adminLimit-onAdmin,total:adminLimit,color:"#1d4ed8",extra:"slots"},
+            {label:"Health",avail:healthLeft,total:hLimit,sub:cooldownActive?fmtTime(cooldownLeft):"available"},
+            {label:"Lunch",avail:lunchLeft,total:LUNCH_LIMIT,sub:"slots"},
+            {label:"Team",avail:capLeft,total:maxOut,sub:"slots"},
+            {label:"Admin",avail:adminLimit-onAdmin,total:adminLimit,sub:"slots"},
           ].map(m=>(
-            <div key={m.label} style={{background:"rgba(255,255,255,.12)",borderRadius:11,padding:"10px 11px",border:`1px solid ${m.avail===0?"rgba(231,76,60,.5)":"rgba(255,255,255,.15)"}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <span style={{fontSize:18}}>{m.icon}</span>
-                <span style={{fontSize:10,background:m.avail===0?"rgba(231,76,60,.25)":"rgba(255,255,255,.15)",padding:"2px 6px",borderRadius:5,fontWeight:700,color:m.avail===0?"#ffaaaa":"rgba(255,255,255,.9)"}}>{m.avail===0?"FULL":`${m.avail} open`}</span>
-              </div>
-              <p style={{margin:"6px 0 1px",fontSize:11,fontWeight:600,opacity:.9}}>{m.label}</p>
-              <p style={{margin:0,fontSize:9,opacity:.55}}>{m.extra}</p>
+            <div key={m.label} style={{background:m.avail===0?DS.redDim:DS.bgSurf,borderRadius:DS.radiusSm,padding:"8px 10px",border:`1px solid ${m.avail===0?DS.red+"40":DS.border}`}}>
+              <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>{m.label}</p>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:m.avail===0?DS.red:DS.textPri}}>{m.avail===0?"Full":`${m.avail}/${m.total}`}</p>
+              <p style={{margin:0,fontSize:9,color:DS.textMut}}>{m.sub}</p>
             </div>
           ))}
         </div>
-        {settings.peak_mode&&<div style={{marginTop:10,background:"rgba(231,76,60,.2)",borderRadius:8,padding:"6px 12px",fontSize:11,color:"#ffaaaa",fontWeight:600}}>⚡ Peak mode active — health breaks limited to 1 at a time</div>}
-        {kpiRows.length>0&&<div style={{marginTop:12}}><RepKPI repName={repInfo.name} kpiRows={kpiRows}/></div>}
+
+        {settings.peak_mode&&<div style={{marginTop:10,background:DS.redDim,border:`1px solid ${DS.red}30`,borderRadius:DS.radiusSm,padding:"6px 12px",fontSize:11,color:DS.red,fontWeight:600}}>⚡ Peak mode — health breaks limited to 1 at a time</div>}
+        {kpiRows.length>0&&<div style={{marginTop:10}}><RepKPI repName={repInfo.name} kpiRows={kpiRows}/></div>}
       </div>
 
       {/* Rep Tabs */}
-      <div style={{background:"#fff",borderBottom:"1.5px solid #ebebeb"}}>
+      <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`}}>
         <div style={{display:"flex",padding:"0 16px"}}>
-          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"🏊 Hub"}]:[])].map(t=>(
-            <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.k?700:500,color:tab===t.k?"#1a5c35":mySwaps.length>0&&t.k==="swaps"?"#e07b00":"#999",borderBottom:tab===t.k?"2.5px solid #1a5c35":"2.5px solid transparent",marginBottom:-1.5,transition:"all .15s"}}>{t.l}</button>
+          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"Hub"}]:[])].map(t=>(
+            <button key={t.k} onClick={()=>setTab(t.k)} style={{
+              padding:"11px 14px",border:"none",background:"none",cursor:"pointer",
+              fontSize:12,fontWeight:tab===t.k?600:400,
+              color:tab===t.k?DS.accent:mySwaps.length>0&&t.k==="swaps"?DS.amber:DS.textSec,
+              borderBottom:tab===t.k?`2px solid ${DS.accent}`:"2px solid transparent",
+              marginBottom:-1,transition:"all .15s",
+            }}>{t.l}</button>
           ))}
         </div>
       </div>
 
-      <div style={{padding:"16px 16px",maxWidth:480,margin:"0 auto"}}>
+      <div style={{padding:"16px",maxWidth:480,margin:"0 auto"}}>
         {tab==="my"&&(
           <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
         )}
@@ -2560,51 +2632,40 @@ function RepKPI({ repName, kpiRows=[] }) {
   const maxCvr = Math.max(...last4.map(w=>w.totalCvr), TOTAL_TARGET+10);
 
   return (
-    <div style={{background:"rgba(255,255,255,.1)",borderRadius:14,padding:"14px 16px",marginBottom:14,border:"1px solid rgba(255,255,255,.15)"}}>
-      <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:1}}>My Performance — This Week</p>
-
-      {/* Two KPI tiles */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+    <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"12px 14px",marginTop:0,border:`1px solid ${DS.border}`}}>
+      <p style={{margin:"0 0 8px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1.5,fontWeight:600}}>My performance — this week</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:metPaid&&metTotal?0:8}}>
         {[
           {label:"Paid CVR",val:current.paidCvr,target:PAID_TARGET,diff:paidDiff,met:metPaid},
           {label:"Total CVR",val:current.totalCvr,target:TOTAL_TARGET,diff:totalDiff,met:metTotal},
         ].map(m=>(
-          <div key={m.label} style={{background:m.met?"rgba(26,92,53,.35)":"rgba(192,57,43,.25)",borderRadius:10,padding:"10px 12px",border:`1px solid ${m.met?"rgba(26,92,53,.5)":"rgba(192,57,43,.4)"}`}}>
-            <p style={{margin:"0 0 2px",fontSize:10,color:"rgba(255,255,255,.6)"}}>{m.label}</p>
+          <div key={m.label} style={{background:m.met?DS.greenDim:DS.redDim,borderRadius:DS.radiusSm,padding:"8px 10px",border:`1px solid ${m.met?DS.green+"30":DS.red+"30"}`}}>
+            <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>{m.label}</p>
             <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:22,fontWeight:800,color:"#fff"}}>{m.val}%</span>
-              {m.diff!==null&&<span style={{fontSize:11,fontWeight:700,color:trendColor(m.diff,m.met)}}>{trendIcon(m.diff)}{Math.abs(parseFloat(m.diff))}%</span>}
+              <span style={{fontSize:18,fontWeight:700,color:m.met?DS.green:DS.red}}>{m.val}%</span>
+              {m.diff!==null&&<span style={{fontSize:11,color:parseFloat(m.diff)>0?DS.green:parseFloat(m.diff)<0?DS.red:DS.textSec}}>{parseFloat(m.diff)>0?"↑":parseFloat(m.diff)<0?"↓":"→"}{Math.abs(parseFloat(m.diff))}%</span>}
             </div>
-            <p style={{margin:"3px 0 0",fontSize:10,color:"rgba(255,255,255,.5)"}}>
-              {m.met?"✅ Above":"⚠️ Below"} {m.target}% target · {current.calls} calls
-            </p>
+            <p style={{margin:"2px 0 0",fontSize:9,color:DS.textMut}}>{m.met?"Above":"Below"} {m.target}% target · {current.calls} calls</p>
           </div>
         ))}
       </div>
 
-      {/* Mini sparkline — last 4 weeks */}
       {last4.length>1&&(
-        <div>
-          <p style={{margin:"0 0 6px",fontSize:10,color:"rgba(255,255,255,.5)"}}>Last {last4.length} weeks — Total CVR</p>
-          <div style={{display:"flex",alignItems:"flex-end",gap:4,height:32}}>
+        <div style={{marginTop:10}}>
+          <p style={{margin:"0 0 6px",fontSize:9,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>Last {last4.length} weeks</p>
+          <div style={{display:"flex",alignItems:"flex-end",gap:4,height:28}}>
             {last4.map((w,i)=>{
-              const h = Math.max(4, Math.round((w.totalCvr/maxCvr)*32));
+              const h = Math.max(4, Math.round((w.totalCvr/maxCvr)*28));
               const isLast = i===last4.length-1;
-              const col = w.totalCvr>=TOTAL_TARGET?"#4ade80":w.totalCvr>=TOTAL_TARGET-5?"#fbbf24":"#f87171";
+              const col = w.totalCvr>=TOTAL_TARGET?DS.green:w.totalCvr>=TOTAL_TARGET-5?DS.amber:DS.red;
               return (
                 <div key={w.wk} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <span style={{fontSize:8,color:"rgba(255,255,255,.4)"}}>{w.totalCvr}%</span>
-                  <div style={{width:"100%",height:h,borderRadius:3,background:col,opacity:isLast?1:.65}}/>
-                  <span style={{fontSize:8,color:"rgba(255,255,255,.35)"}}>{w.wk.slice(5)}</span>
+                  <span style={{fontSize:8,color:DS.textMut}}>{w.totalCvr}%</span>
+                  <div style={{width:"100%",height:h,borderRadius:2,background:col,opacity:isLast?1:.55}}/>
+                  <span style={{fontSize:8,color:DS.textMut}}>{w.wk.slice(5)}</span>
                 </div>
               );
             })}
-            {/* Target line visual */}
-          </div>
-          <div style={{marginTop:6,display:"flex",gap:8}}>
-            <span style={{fontSize:9,color:"#4ade80"}}>● Above target</span>
-            <span style={{fontSize:9,color:"#fbbf24"}}>● Near target</span>
-            <span style={{fontSize:9,color:"#f87171"}}>● Below target</span>
           </div>
         </div>
       )}
@@ -5486,9 +5547,9 @@ export default function App() {
   },[view]);
 
   if(loading) return (
-    <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:40}}>🌿</div>
-      <p style={{color:"#888",fontSize:14}}>Loading team data…</p>
+    <div style={{minHeight:"100vh",background:DS.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:3,textTransform:"uppercase"}}>execo</div>
+      <p style={{color:DS.textSec,fontSize:13}}>Loading…</p>
     </div>
   );
 
@@ -5496,7 +5557,7 @@ export default function App() {
 
   return (
     <>
-      <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}} *{box-sizing:border-box}`}</style>
+      <style>{gStyle}</style>
       {view==="login"   && <LoginScreen onSelect={(role,rep,user)=>{
         if(role==="manager"){setCurrentUser(user);setView("manager");}
         else if(role==="client"){setCurrentUser(user);setView("client");}
