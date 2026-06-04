@@ -5485,14 +5485,7 @@ export default function App() {
     }
   },[centreOpen]);
 
-  if(loading) return (
-    <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:40}}>🌿</div>
-      <p style={{color:"#888",fontSize:14}}>Loading team data…</p>
-    </div>
-  );
-
-  // Session timeout — auto logout after 8 hours (SOC 2 CC6.1)
+  // Session timeout — auto logout after 8 hours — must be before any early return
   const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000;
   const lastActivityRef = React.useRef(Date.now());
 
@@ -5507,6 +5500,13 @@ export default function App() {
     }, 60000);
     return ()=>{ clearInterval(check); window.removeEventListener("click",updateActivity); window.removeEventListener("keydown",updateActivity); };
   },[view]);
+
+  if(loading) return (
+    <div style={{minHeight:"100vh",background:"#f4f6f2",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:40}}>🌿</div>
+      <p style={{color:"#888",fontSize:14}}>Loading team data…</p>
+    </div>
+  );
 
   return (
     <>
