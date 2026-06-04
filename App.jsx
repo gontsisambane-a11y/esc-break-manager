@@ -828,7 +828,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
             {label:"Team Cap",val:`${totalOut}/${maxOut}`,full:totalOut>=maxOut},
             {label:"Health",val:`${onHealth}/${hLimit}`,full:onHealth>=hLimit},
             {label:"Lunch",val:`${onLunch}/${LUNCH_LIMIT}`,full:onLunch>=LUNCH_LIMIT},
-            {label:"Admin",val:`${onAdmin}/${adminLimit}`,full:onAdmin>=adminLimit},
+            {label:"Admin",val:settings.admin_mode?`${onAdmin}/${adminLimit}`:"Off",full:settings.admin_mode&&onAdmin>=adminLimit},
           ].map(m=>(
             <div key={m.label} style={{background:m.full?DS.redDim:DS.bgSurf,borderRadius:DS.radiusSm,padding:"6px 10px",border:`1px solid ${m.full?DS.red+"40":DS.border}`}}>
               <p style={{margin:0,fontSize:10,color:DS.textMut}}>{m.label}</p>
@@ -2460,17 +2460,27 @@ function MgrSettings({ settings, reps, reload, fire }) {
 
       {/* Admin Time */}
       <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
-        <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🗂️ Admin Time</p>
-        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Always available — reps can take a 30-min admin slot for emails and tickets. Set how many can go at once.</p>
-        <p style={{margin:"0 0 8px",fontSize:12,color:"#555"}}>Default: 2 reps at a time · Active team: {activeReps.length}</p>
-        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-          <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
-          <span style={{fontSize:13,color:"#888"}}>max people on admin at once</span>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div>
+            <p style={{margin:0,fontWeight:700,fontSize:14}}>🗂️ Admin Time</p>
+            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Allow reps to take 30-min admin slots for emails and tickets</p>
+          </div>
+          <div onClick={toggleAdmin} style={{width:46,height:26,borderRadius:13,background:settings.admin_mode?"#1d4ed8":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+            <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
+          </div>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <Btn label="Reset to 2" onClick={resetAdminLimit} outline color="#888" small/>
-          <Btn label="Save Limit" onClick={saveAdminLimit} color="#1d4ed8" small/>
-        </div>
+        {settings.admin_mode&&<>
+          <p style={{margin:"0 0 8px",fontSize:12,color:"#555"}}>Active team: {activeReps.length}</p>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+            <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
+            <span style={{fontSize:13,color:"#888"}}>max people on admin at once</span>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn label="Reset to 2" onClick={resetAdminLimit} outline color="#888" small/>
+            <Btn label="Save Limit" onClick={saveAdminLimit} color="#1d4ed8" small/>
+          </div>
+          <p style={{margin:"10px 0 0",fontSize:11,color:"#1d4ed8",fontWeight:600}}>🗂️ Active — best windows: 7–9am CT and after 6pm CT</p>
+        </>}
       </div>
 
       {/* Notification Preferences */}
@@ -2579,7 +2589,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   const canTakeLunch  = lunchLeft>0 && capLeft>0 && myRep.status==="available";
   const adminLimit    = settings.admin_limit ?? 2;
   const onAdmin       = reps.filter(r=>r.status==="admin").length;
-  const canTakeAdmin  = onAdmin<adminLimit && myRep.status==="available";
+  const canTakeAdmin  = !!settings.admin_mode && onAdmin<adminLimit && myRep.status==="available";
 
   // Queue helpers
   const myQueueEntry = breakQueue.find(q=>q.rep_id===repInfo.id);
