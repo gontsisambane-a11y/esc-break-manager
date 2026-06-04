@@ -2919,6 +2919,9 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
     <div>
       {showBreakModal&&(
         <Modal title="Request Break" sub="BREAK REQUEST" onClose={()=>setShowBreakModal(false)}>
+          <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"8px 10px",marginBottom:12,fontSize:10,color:DS.textSec,fontFamily:"monospace"}}>
+            healthLeft={healthLeft} capLeft={capLeft} breaksLeft={breaksLeft} cooldown={cooldownActive?"Y":"N"} status={myRep.status} maxOut={maxOut} totalOut={totalOut} hLimit={hLimit} onHealth={onHealth}
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
