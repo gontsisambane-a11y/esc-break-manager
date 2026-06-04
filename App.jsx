@@ -637,7 +637,7 @@ function HealthTimer({ startedAt, bankedSec }) {
         <span style={{fontSize:11,color:DS.textSec}}>Health break</span>
         <span style={{fontSize:13,fontWeight:700,color}}>{over?`+${fmtTime(Math.abs(remaining))} over`:fmtTime(remaining)+" left"}</span>
       </div>
-      <div style={{height:6,background:"#f0f0f0",borderRadius:3,overflow:"hidden"}}>
+      <div style={{height:6,background:DS.bgSurf,borderRadius:3,overflow:"hidden"}}>
         <div style={{width:`${pct*100}%`,height:"100%",background:color,borderRadius:3,transition:"width 1s linear"}}/>
       </div>
       {over&&<p style={{margin:"4px 0 0",fontSize:11,color:"#e74c3c",fontWeight:600}}>⚠️ Time exceeded — please return to desk</p>}
@@ -1013,7 +1013,7 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
               <span style={{fontWeight:600,fontSize:13,color:isOff?"#bbb":"#1a1a1a"}}>{rep.name}</span>
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
               <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:cfg.bg,color:cfg.dot,border:`1px solid ${cfg.border}`,fontWeight:600}}>{cfg.label}</span>
-              {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:"#fff3cd",color:DS.amber,padding:"2px 5px",borderRadius:4}}>Override</span>}
+              {settings.peak_mode&&rep.status==="health"&&peakOverride[rep.id]&&<span style={{fontSize:9,background:DS.amberDim,color:DS.amber,padding:"2px 5px",borderRadius:4}}>Override</span>}
               {rep.rep_stage&&rep.rep_stage!=="active"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).bg,color:(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).text,border:`1px solid ${(STAGE_CFG[rep.rep_stage]||STAGE_CFG.active).border}`,fontWeight:700}}>{rep.rep_stage==="training"?"🎓 Training":rep.rep_stage==="not_started"?"⏳ Not Started":rep.rep_stage==="ramping"?"📈 Ramping":"Unknown"}</span>}
             </div>
             {rep.ooo_note&&<p style={{margin:"2px 0 0",fontSize:10,color:DS.textMut}}>{rep.ooo_note}</p>}
@@ -1022,11 +1022,11 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
             {rep.status==="admin"&&ab&&<p style={{margin:"2px 0 0",fontSize:10,color:"#1d4ed8"}}>🗂️ Admin — {fmtDur(elapsedSec(ab.started_at))} / 30m</p>}
           </div>
           <div style={{display:"flex",gap:5,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
-            {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Back 👋</button>}
-            {isOOO&&<button onClick={()=>handleClear(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #c8a8e0",background:"#f5eefb",cursor:"pointer",fontSize:11,color:"#7a1a5c",fontWeight:600}}>Clear</button>}
-            {!isBreak&&!isOOO&&!isOff&&<button onClick={()=>setOooModal(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ebebeb",background:"#fafafa",cursor:"pointer",fontSize:10,color:DS.textMut}}>Mark Out</button>}
-            {settings.peak_mode&&rep.status==="health"&&<button onClick={()=>handleOverridePeak(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f0ad4e",background:"#fff3cd",cursor:"pointer",fontSize:10,color:DS.amber}}>Override</button>}
-            {!isOff&&<button onClick={()=>resetBalance(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red}}>Reset Breaks</button>}
+            {isBreak&&<button onClick={()=>handleReturn(rep)} style={{padding:"5px 9px",borderRadius:7,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Back 👋</button>}
+            {isOOO&&<button onClick={()=>handleClear(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #c8a8e0",background:DS.accentDim,cursor:"pointer",fontSize:11,color:"#7a1a5c",fontWeight:600}}>Clear</button>}
+            {!isBreak&&!isOOO&&!isOff&&<button onClick={()=>setOooModal(rep)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #ebebeb",background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textMut}}>Mark Out</button>}
+            {settings.peak_mode&&rep.status==="health"&&<button onClick={()=>handleOverridePeak(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f0ad4e",background:DS.amberDim,cursor:"pointer",fontSize:10,color:DS.amber}}>Override</button>}
+            {!isOff&&<button onClick={()=>resetBalance(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:10,color:DS.red}}>Reset Breaks</button>}
           </div>
         </div>
       </div>
@@ -1067,7 +1067,7 @@ function OOOModal({ rep, onClose, onMark }) {
           <div key={o.k} onClick={()=>setType(o.k)} style={{flex:1,padding:"10px 0",textAlign:"center",border:type===o.k?"2px solid #8e44ad":"1.5px solid #ddd",borderRadius:12,cursor:"pointer",background:type===o.k?"#f5eefb":"#fff",fontWeight:600,fontSize:13,color:type===o.k?"#7a1a5c":"#555"}}>{o.l}</div>
         ))}
       </div>
-      <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (e.g. back Monday)" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,marginBottom:14,background:"#fafafa",outline:"none"}}/>
+      <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (e.g. back Monday)" style={{width:"100%",padding:"10px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,marginBottom:14,background:DS.bgSurf,outline:"none"}}/>
       <div style={{display:"flex",gap:8}}>
         <Btn label="Cancel" onClick={onClose} color="#888" outline small/>
         <Btn label="Mark Absence" onClick={()=>onMark(type,note)} color="#8e44ad"/>
@@ -1176,7 +1176,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
   return (
     <div style={{marginTop:16}}>
       {adHoc.length===0&&swaps.length===0&&(
-        <div style={{textAlign:"center",padding:"44px 0",color:"#bbb"}}>
+        <div style={{textAlign:"center",padding:"44px 0",color:DS.textMut}}>
           <p style={{fontSize:32,margin:"0 0 8px"}}>✅</p>
           <p style={{fontWeight:600,fontSize:15,color:DS.textSec}}>No pending requests</p>
         </div>
@@ -1203,13 +1203,13 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
 
                 {/* Preferred time */}
                 {ctTime&&(
-                  <div style={{background:"#fff",borderRadius:8,padding:"8px 10px",marginBottom:8,border:"1px solid #f0c080"}}>
+                  <div style={{background:DS.bgCard,borderRadius:8,padding:"8px 10px",marginBottom:8,border:"1px solid #f0c080"}}>
                     <p style={{margin:0,fontSize:12,fontWeight:600,color:DS.textPri}}>⏰ Preferred time: <span style={{color:"#e07b00"}}>{r.preferred_time} {r.rep_timezone} → {ctTime}</span></p>
                   </div>
                 )}
 
                 {/* Conflict analysis */}
-                <div style={{background:"#f9f9f9",borderRadius:8,padding:"8px 10px",marginBottom:10}}>
+                <div style={{background:DS.bgSurf,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
                   <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:DS.textSec}}>📊 Impact Analysis</p>
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
                     {peak&&<p style={{margin:0,fontSize:11,color:DS.red,fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
@@ -1236,14 +1236,14 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
         <div>
           <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#8e44ad",margin:"0 0 8px",fontWeight:700}}>🔄 Lunch Swap Requests ({swaps.length})</p>
           {swaps.map(s=>(
-            <div key={s.id} style={{background:"#f5eefb",border:"1.5px solid #d7aef0",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+            <div key={s.id} style={{background:DS.accentDim,border:"1.5px solid #d7aef0",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
                 <div>
                   <p style={{margin:0,fontWeight:600,fontSize:14}}>{s.requester_name} ↔ {s.target_name}</p>
                   <p style={{margin:"3px 0 0",fontSize:12,color:DS.textSec}}>{s.requester_name}: {s.requester_date} · {s.target_name}: {s.target_date}</p>
                 </div>
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>handleSwap(s,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
+                  <button onClick={()=>handleSwap(s,false)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
                   <button onClick={()=>handleSwap(s,true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#8e44ad",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Approve</button>
                 </div>
               </div>
@@ -1283,7 +1283,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
       {deleteModal&&(
         <Modal title={`Delete ${deleteModal.name}?`} sub="PERMANENT" onClose={()=>{setDeleteModal(null);setDeleteConfirm("");}}>
           <p style={{fontSize:13,color:DS.textSec,marginBottom:14}}>This will permanently remove {deleteModal.name} and all their break history. Type their name to confirm.</p>
-          <input value={deleteConfirm} onChange={e=>setDeleteConfirm(e.target.value)} placeholder={deleteModal.name} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,marginBottom:14,outline:"none"}}/>
+          <input value={deleteConfirm} onChange={e=>setDeleteConfirm(e.target.value)} placeholder={deleteModal.name} style={{width:"100%",padding:"10px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,marginBottom:14,outline:"none"}}/>
           <div style={{display:"flex",gap:8}}>
             <Btn label="Cancel" onClick={()=>{setDeleteModal(null);setDeleteConfirm("");}} outline color="#888" small/>
             <Btn label="Delete Permanently" onClick={handleDelete} color="#e74c3c"/>
@@ -1291,7 +1291,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
         </Modal>
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>Team ({reps.length})</p>
+        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:0,fontWeight:700}}>Team ({reps.length})</p>
         <button onClick={()=>setAddModal(true)} style={{padding:"6px 14px",borderRadius:8,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Rep</button>
       </div>
       {reps.map(rep=>{
@@ -1304,7 +1304,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
         return (
           <div key={rep.id} style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"11px 13px",marginBottom:7}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
-              <div style={{width:34,height:34,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+              <div style={{width:34,height:34,borderRadius:"50%",background:DS.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
                   <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
@@ -1336,7 +1336,7 @@ function MgrTeam({ reps, settings, reload, fire }) {
                 </div>
               </div>
               <div style={{display:"flex",gap:5,flexShrink:0}}>
-                <button onClick={()=>handleLogCalloff(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red,fontWeight:600}}>Call-off</button>
+                <button onClick={()=>handleLogCalloff(rep)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:10,color:DS.red,fontWeight:600}}>Call-off</button>
                 <button onClick={()=>setDeleteModal(rep)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textMut}}>Delete</button>
               </div>
             </div>
@@ -1358,7 +1358,7 @@ function AddRepModal({ onClose, onAdd }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
             <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Full Name</label>
-            <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Jordan Smith" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+            <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Jordan Smith" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
           </div>
           <div>
             <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Stage</label>
@@ -1380,7 +1380,7 @@ function AddRepModal({ onClose, onAdd }) {
         )}
         <div>
           <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Timezone</label>
-          <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+          <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
             {TZLIST.map(t=><option key={t}>{t}</option>)}
           </select>
         </div>
@@ -1406,39 +1406,39 @@ function AddRepModal({ onClose, onAdd }) {
               <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
                 <span style={{fontSize:12,fontWeight:700,color:DS.green}}>{d}</span>
                 <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                    <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                    <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:46}}>
                       <option value="">HH</option>
                       {Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
                     </select>
-                    <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                    <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                    <span style={{fontSize:11,color:DS.textMut}}>:</span>
+                    <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:42}}>
                       <option value="">MM</option>
                       {["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                 <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                    <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                    <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:46}}>
                       <option value="">HH</option>
                       {Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
                     </select>
-                    <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                    <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                    <span style={{fontSize:11,color:DS.textMut}}>:</span>
+                    <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:42}}>
                       <option value="">MM</option>
                       {["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                 <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                    <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                    <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:46}}>
                       <option value="">HH</option>
                       {Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
                     </select>
-                    <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                    <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                    <span style={{fontSize:11,color:DS.textMut}}>:</span>
+                    <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:42}}>
                       <option value="">MM</option>
                       {["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
-                <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
+                <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:`1px solid ${DS.border}`,fontSize:11,outline:"none",background:DS.bgCard}}>
                   <option value={30}>30m</option><option value={60}>1hr</option>
                 </select>
               </div>
@@ -1542,11 +1542,11 @@ function MgrSchedules({ reps, reload, fire }) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div>
                 <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Name</label>
-                <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+                <input value={form.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
               </div>
               <div>
                 <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Timezone</label>
-                <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                <select value={form.timezone} onChange={e=>set("timezone",e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
                   {TZLIST.map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
@@ -1561,7 +1561,7 @@ function MgrSchedules({ reps, reload, fire }) {
             </div>
             {form.shift_days.length>0&&(
               <div>
-                <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:6}}>Schedule Per Day <span style={{fontWeight:400,color:"#bbb"}}>(times in rep's timezone: {form.timezone})</span></label>
+                <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:6}}>Schedule Per Day <span style={{fontWeight:400,color:DS.textMut}}>(times in rep's timezone: {form.timezone})</span></label>
                 <div style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,marginBottom:4}}>
                   <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Day</span>
                   <span style={{fontSize:10,color:DS.textMut,fontWeight:600}}>Start</span>
@@ -1573,33 +1573,33 @@ function MgrSchedules({ reps, reload, fire }) {
                   <div key={d} style={{display:"grid",gridTemplateColumns:"44px 1fr 1fr 1fr 70px",gap:6,alignItems:"center",marginBottom:7}}>
                     <span style={{fontSize:12,fontWeight:700,color:DS.green}}>{d}</span>
                     <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                      <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                      <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[0]||""} onChange={e=>setDay(d,"start",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).start||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:46}}>
                         <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
                       </select>
-                      <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                      <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                      <span style={{fontSize:11,color:DS.textMut}}>:</span>
+                      <select value={((form.lunch_schedule[d]||{}).start||"").split(":")[1]||""} onChange={e=>setDay(d,"start",`${((form.lunch_schedule[d]||{}).start||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:42}}>
                         <option value="">MM</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                      <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                      <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[0]||""} onChange={e=>setDay(d,"end",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).end||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:46}}>
                         <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
                       </select>
-                      <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                      <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                      <span style={{fontSize:11,color:DS.textMut}}>:</span>
+                      <select value={((form.lunch_schedule[d]||{}).end||"").split(":")[1]||""} onChange={e=>setDay(d,"end",`${((form.lunch_schedule[d]||{}).end||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:42}}>
                         <option value="">MM</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                      <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:46}}>
+                      <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[0]||""} onChange={e=>setDay(d,"time",`${e.target.value.padStart(2,"0")}:${((form.lunch_schedule[d]||{}).time||"").split(":")[1]||"00"}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:46}}>
                         <option value="">HH</option>{Array.from({length:24},(_,i)=><option key={i} value={String(i).padStart(2,"0")}>{String(i).padStart(2,"0")}</option>)}
                       </select>
-                      <span style={{fontSize:11,color:"#bbb"}}>:</span>
-                      <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:"1.5px solid #ddd",fontSize:10,outline:"none",background:"#fff",width:42}}>
+                      <span style={{fontSize:11,color:DS.textMut}}>:</span>
+                      <select value={((form.lunch_schedule[d]||{}).time||"").split(":")[1]||""} onChange={e=>setDay(d,"time",`${((form.lunch_schedule[d]||{}).time||"").split(":")[0]||"00"}:${e.target.value}`)} style={{padding:"4px 3px",borderRadius:6,border:`1px solid ${DS.border}`,fontSize:10,outline:"none",background:DS.bgCard,width:42}}>
                         <option value="">MM</option>{["00","15","30","45"].map(m=><option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
-                    <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:"1.5px solid #ddd",fontSize:11,outline:"none",background:"#fff"}}>
+                    <select value={(form.lunch_schedule[d]||{}).duration||60} onChange={e=>setDay(d,"duration",parseInt(e.target.value))} style={{padding:"6px 7px",borderRadius:7,border:`1px solid ${DS.border}`,fontSize:11,outline:"none",background:DS.bgCard}}>
                       <option value={30}>30m</option><option value={60}>1hr</option>
                     </select>
                   </div>
@@ -1617,12 +1617,12 @@ function MgrSchedules({ reps, reload, fire }) {
       {/* ── TODAY'S ROSTER ── */}
       <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"12px 14px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:"#bbb"}}>📅 Today's Roster — {todayKey}</p>
-          <span style={{fontSize:10,color:"#ccc"}}>Your tz: <strong style={{color:DS.textMut}}>{viewerTz}</strong></span>
+          <p style={{margin:0,fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:DS.textMut}}>📅 Today's Roster — {todayKey}</p>
+          <span style={{fontSize:10,color:DS.textMut}}>Your tz: <strong style={{color:DS.textMut}}>{viewerTz}</strong></span>
         </div>
 
         {inToday.length===0&&(
-          <p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"8px 0"}}>Nobody scheduled for {todayKey}. ({reps.filter(r=>(r.shift_days||[]).includes(todayKey)).length} matched)</p>
+          <p style={{fontSize:12,color:DS.textMut,textAlign:"center",padding:"8px 0"}}>Nobody scheduled for {todayKey}. ({reps.filter(r=>(r.shift_days||[]).includes(todayKey)).length} matched)</p>
         )}
 
         {inToday.map(({rep,start,end,lunch,repTz,lunchDur})=>{
@@ -1631,7 +1631,7 @@ function MgrSchedules({ reps, reload, fire }) {
           return (
             <div key={rep.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${DS.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",color:DS.green,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <div style={{width:30,height:30,borderRadius:"50%",background:DS.greenDim,color:DS.green,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
                     <span style={{fontSize:13,fontWeight:600}}>{rep.name}</span>
@@ -1644,7 +1644,7 @@ function MgrSchedules({ reps, reload, fire }) {
               <div style={{textAlign:"right"}}>
                 {(start||end)
                   ? <span style={{fontSize:12,fontWeight:700,color:DS.textPri}}>{start?fmt12h(start):"?"} – {end?fmt12h(end):"?"}</span>
-                  : <span style={{fontSize:11,color:"#ccc"}}>No times set</span>
+                  : <span style={{fontSize:11,color:DS.textMut}}>No times set</span>
                 }
               </div>
             </div>
@@ -1653,9 +1653,9 @@ function MgrSchedules({ reps, reload, fire }) {
 
         {notInToday.length>0&&(
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
-            <p style={{margin:"0 0 6px",fontSize:10,color:"#ccc",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Not scheduled today ({notInToday.length})</p>
+            <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Not scheduled today ({notInToday.length})</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {notInToday.map(r=><span key={r.id} style={{fontSize:11,background:"#f5f5f5",color:DS.textMut,padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
+              {notInToday.map(r=><span key={r.id} style={{fontSize:11,background:DS.bgSurf,color:DS.textMut,padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
             </div>
           </div>
         )}
@@ -1663,7 +1663,7 @@ function MgrSchedules({ reps, reload, fire }) {
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f0f0f0"}}>
             <p style={{margin:"0 0 6px",fontSize:10,color:DS.red,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Out today ({oooToday.length})</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {oooToday.map(r=><span key={r.id} style={{fontSize:11,background:"#fdf0ee",color:DS.red,padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
+              {oooToday.map(r=><span key={r.id} style={{fontSize:11,background:DS.redDim,color:DS.red,padding:"3px 9px",borderRadius:20}}>{r.name}</span>)}
             </div>
           </div>
         )}
@@ -1671,8 +1671,8 @@ function MgrSchedules({ reps, reload, fire }) {
 
       {/* ── ALL REPS LIST ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 10px"}}>
-        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>All Reps — tap to edit</p>
-        <button onClick={exportSchedules} style={{padding:"6px 13px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export CSV</button>
+        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:0,fontWeight:700}}>All Reps — tap to edit</p>
+        <button onClick={exportSchedules} style={{padding:"6px 13px",borderRadius:8,border:"1.5px solid #1a5c35",background:DS.greenDim,cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export CSV</button>
       </div>
       {reps.map(rep=>{
         const tz=TZ_C[rep.timezone]||TZ_C.Central;
@@ -1685,17 +1685,17 @@ function MgrSchedules({ reps, reload, fire }) {
         return (
           <div key={rep.id} onClick={()=>startEdit(rep)} style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:12,padding:"11px 14px",marginBottom:7,cursor:"pointer"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+              <div style={{width:32,height:32,borderRadius:"50%",background:DS.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                   <span style={{fontWeight:600,fontSize:13}}>{rep.name}</span>
                   <span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:tz.bg,color:tz.text,fontWeight:700}}>{rep.timezone}</span>
-                  {scheduledToday&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>IN TODAY</span>}
+                  {scheduledToday&&<span style={{fontSize:9,background:DS.greenDim,color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>IN TODAY</span>}
                 </div>
                 <p style={{margin:"2px 0 0",fontSize:11,color:DS.textMut}}>{days}</p>
-                {scheduledToday&&startConverted&&<p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Today: {fmt12h(startConverted)} – {endConverted?fmt12h(endConverted):"?"} <span style={{color:"#ccc"}}>({viewerTz})</span></p>}
+                {scheduledToday&&startConverted&&<p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Today: {fmt12h(startConverted)} – {endConverted?fmt12h(endConverted):"?"} <span style={{color:DS.textMut}}>({viewerTz})</span></p>}
               </div>
-              <span style={{fontSize:12,color:"#bbb"}}>✏️</span>
+              <span style={{fontSize:12,color:DS.textMut}}>✏️</span>
             </div>
           </div>
         );
@@ -1938,7 +1938,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
     return <div style={{background:bg,color:fg,fontWeight:700,fontSize:small?10:12,padding:"4px 6px",borderRadius:6,textAlign:"center",minWidth:44}}>{val!==null?`${val}%`:"—"}</div>;
   };
 
-  const thStyle = {fontSize:10,fontWeight:700,color:"#999",padding:"6px 8px",background:DS.bgSurf,borderBottom:`1px solid ${DS.border}`,textAlign:"center",whiteSpace:"nowrap"};
+  const thStyle = {fontSize:10,fontWeight:700,color:DS.textMut,padding:"6px 8px",background:DS.bgSurf,borderBottom:`1px solid ${DS.border}`,textAlign:"center",whiteSpace:"nowrap"};
   const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:`1px solid ${DS.border}`,textAlign:"center"};
   const nameStyle = {fontSize:12,fontWeight:600,color:DS.textPri,padding:"7px 8px",borderBottom:`1px solid ${DS.border}`,textAlign:"left",whiteSpace:"nowrap"};
 
@@ -1952,7 +1952,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           {uploading?"Processing…":"📂 Upload bookings CSV"}
         </button>
         <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
-        <p style={{fontSize:10,color:"#bbb",marginTop:12}}>Supabase → Table Editor → bookings → Export CSV</p>
+        <p style={{fontSize:10,color:DS.textMut,marginTop:12}}>Supabase → Table Editor → bookings → Export CSV</p>
       </div>
     </div>
   );
@@ -1966,10 +1966,10 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
           <p style={{margin:0,fontSize:10,color:DS.textMut}}>{kpiFileName} · {kpiRows.length.toLocaleString()} calls</p>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:"#f0faf4",border:"1.5px solid #1a5c35",color:DS.green,cursor:"pointer",fontSize:11,fontWeight:700}}>
+          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:DS.greenDim,border:"1.5px solid #1a5c35",color:DS.green,cursor:"pointer",fontSize:11,fontWeight:700}}>
             ➕ Add Weekly CSV
           </button>
-          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:"#fdf0ee",border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:700}}>
+          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:DS.redDim,border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:700}}>
             🗑 Clear
           </button>
         </div>
@@ -1999,7 +1999,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {/* SUMMARY */}
       {kpiTab==="summary"&&(
         <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",background:DS.bgCard,borderRadius:12,overflow:"hidden",border:`1px solid ${DS.border}`}}>
             <thead>
               <tr>
                 {["Agent","Calls","Paid","Trial","Paid CVR","Trial CVR","Total CVR"].map(h=>(
@@ -2021,7 +2021,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
               ))}
             </tbody>
           </table>
-          <p style={{fontSize:10,color:"#bbb",marginTop:8,textAlign:"center"}}>Green = at/above baseline · Amber = within 5pts · Red = 5pts+ below</p>
+          <p style={{fontSize:10,color:DS.textMut,marginTop:8,textAlign:"center"}}>Green = at/above baseline · Amber = within 5pts · Red = 5pts+ below</p>
         </div>
       )}
 
@@ -2029,7 +2029,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {kpiTab==="monthly"&&(
         <div style={{overflowX:"auto"}}>
           <p style={{fontSize:10,color:DS.textSec,marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 6 months</p>
-          <table style={{borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef",minWidth:"100%"}}>
+          <table style={{borderCollapse:"collapse",background:DS.bgCard,borderRadius:12,overflow:"hidden",border:`1px solid ${DS.border}`,minWidth:"100%"}}>
             <thead>
               <tr>
                 <th style={{...thStyle,textAlign:"left"}}>Agent</th>
@@ -2063,7 +2063,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       {kpiTab==="weekly"&&(
         <div style={{overflowX:"auto"}}>
           <p style={{fontSize:10,color:DS.textSec,marginBottom:8}}>Top = Paid CVR · Bottom = Total CVR · Last 8 weeks (week starting Mon)</p>
-          <table style={{borderCollapse:"collapse",background:"#fff",borderRadius:12,overflow:"hidden",border:"1.5px solid #efefef",minWidth:"100%"}}>
+          <table style={{borderCollapse:"collapse",background:DS.bgCard,borderRadius:12,overflow:"hidden",border:`1px solid ${DS.border}`,minWidth:"100%"}}>
             <thead>
               <tr>
                 <th style={{...thStyle,textAlign:"left"}}>Agent</th>
@@ -2098,7 +2098,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
         <div>
           {/* Target table */}
           <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:16}}>
-            <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8"}}>
+            <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:DS.bgSurf}}>
               <p style={{margin:0,fontSize:12,fontWeight:700,color:DS.textPri}}>Ramp Targets — All started 29 May 2026</p>
             </div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
@@ -2135,7 +2135,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
             const rampStartStr = rampStart ? rampStart.toISOString().split("T")[0] : "29 May 2026";
             return (
               <div key={agent} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
-                <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:"#f8f8f8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{padding:"10px 14px",borderBottom:"1.5px solid #efefef",background:DS.bgSurf,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.green}}>{agent}</p>
                   <p style={{margin:0,fontSize:10,color:DS.textMut}}>{agRows.length} total calls · started {rampStartStr}</p>
                 </div>
@@ -2192,18 +2192,18 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
               <div>
                 <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4,fontWeight:600}}>Agent</label>
-                <select value={pipAgent} onChange={e=>setPipAgent(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+                <select value={pipAgent} onChange={e=>setPipAgent(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
                   <option value="">Select agent…</option>
                   {[...ACTIVE_AGENTS].sort().map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               <div>
                 <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4,fontWeight:600}}>From</label>
-                <input type="date" value={pipFrom} onChange={e=>setPipFrom(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+                <input type="date" value={pipFrom} onChange={e=>setPipFrom(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
               </div>
               <div>
                 <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4,fontWeight:600}}>To</label>
-                <input type="date" value={pipTo} onChange={e=>setPipTo(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+                <input type="date" value={pipTo} onChange={e=>setPipTo(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
               </div>
             </div>
 
@@ -2216,7 +2216,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
             <p style={{margin:"8px 0 0",fontSize:10,color:DS.textMut}}>Opens in a new tab — use browser Print (Cmd+P / Ctrl+P) and select "Save as PDF"</p>
           </div>
 
-          <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{background:DS.amberDim,border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 14px"}}>
             <p style={{margin:0,fontSize:12,color:DS.amber,fontWeight:600}}>⚠️ PIP guidance</p>
             <p style={{margin:"4px 0 0",fontSize:11,color:DS.amber}}>This report shows call data only. For a formal PIP you should also include call recordings, coaching session notes, and HR sign-off. This document is a performance data supplement, not a standalone PIP document.</p>
           </div>
@@ -2290,15 +2290,15 @@ function MgrReports({ reps }) {
             <button key={p} onClick={()=>setPeriod(p)} style={{padding:"7px 14px",borderRadius:8,border:period===p?"none":"1.5px solid #ddd",background:period===p?"#1a5c35":"#fff",color:period===p?"#fff":"#555",cursor:"pointer",fontSize:12,fontWeight:600,textTransform:"capitalize"}}>{p}</button>
           ))}
         </div>
-        <button onClick={exportCSV} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #1a5c35",background:"#f0faf4",cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export Excel</button>
+        <button onClick={exportCSV} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #1a5c35",background:DS.greenDim,cursor:"pointer",fontSize:12,color:DS.green,fontWeight:600}}>📥 Export Excel</button>
       </div>
       {loading&&<p style={{textAlign:"center",color:DS.textMut,padding:"30px 0"}}>Loading…</p>}
       {!loading&&data&&(
         <div>
           <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,overflow:"hidden"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",gap:0,padding:"8px 12px",background:"#f8f8f8",borderBottom:"1px solid #efefef"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",gap:0,padding:"8px 12px",background:DS.bgSurf,borderBottom:"1px solid #efefef"}}>
               {["Rep","🌿 Health","Time","🥗 Lunch","🤒 Sick","📵 Off"].map((h,i)=>(
-                <span key={i} style={{fontSize:10,fontWeight:700,color:"#999",letterSpacing:0.5}}>{h}</span>
+                <span key={i} style={{fontSize:10,fontWeight:700,color:DS.textMut,letterSpacing:0.5}}>{h}</span>
               ))}
             </div>
             {repStats.map(({rep,hb,hMins,lb,sick,calloff})=>(
@@ -2379,18 +2379,18 @@ function MgrPTO({ reps, reload, fire }) {
           <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
             <div>
               <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Rep</label>
-              <select value={addForm.rep_id} onChange={e=>setAddForm(p=>({...p,rep_id:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+              <select value={addForm.rep_id} onChange={e=>setAddForm(p=>({...p,rep_id:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
                 <option value="">Select rep…</option>
                 {reps.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </div>
             <div>
               <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Date</label>
-              <input type="date" value={addForm.pto_date} onChange={e=>setAddForm(p=>({...p,pto_date:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              <input type="date" value={addForm.pto_date} onChange={e=>setAddForm(p=>({...p,pto_date:e.target.value}))} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
             </div>
             <div>
               <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:4}}>Note (optional)</label>
-              <input value={addForm.note} onChange={e=>setAddForm(p=>({...p,note:e.target.value}))} placeholder="e.g. Annual leave" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              <input value={addForm.note} onChange={e=>setAddForm(p=>({...p,note:e.target.value}))} placeholder="e.g. Annual leave" style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
             </div>
           </div>
           <div style={{display:"flex",gap:8}}>
@@ -2402,17 +2402,17 @@ function MgrPTO({ reps, reload, fire }) {
 
       {/* Week nav */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <button onClick={()=>setWeekOffset(p=>p-1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:13}}>← Prev</button>
+        <button onClick={()=>setWeekOffset(p=>p-1)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:13}}>← Prev</button>
         <span style={{fontSize:13,fontWeight:600,color:DS.textPri}}>
           {weekOffset===0?"This Week":weekOffset===1?"Next Week":weekOffset===-1?"Last Week":`${weekDays[0].toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${weekDays[6].toLocaleDateString("en-US",{month:"short",day:"numeric"})}`}
         </span>
-        <button onClick={()=>setWeekOffset(p=>p+1)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:13}}>Next →</button>
+        <button onClick={()=>setWeekOffset(p=>p+1)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:13}}>Next →</button>
       </div>
 
       {/* Weekly grid */}
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,overflow:"hidden",marginBottom:14}}>
         <div style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f0f0f0"}}>
-          <div style={{padding:"8px 10px",background:"#f8f8f8"}}/>
+          <div style={{padding:"8px 10px",background:DS.bgSurf}}/>
           {weekDays.map((d,i)=>{
             const isToday=d.toISOString().split('T')[0]===todayStr();
             return (
@@ -2428,7 +2428,7 @@ function MgrPTO({ reps, reload, fire }) {
           return (
             <div key={rep.id} style={{display:"grid",gridTemplateColumns:`120px repeat(7,1fr)`,borderBottom:"1px solid #f8f8f8"}}>
               <div style={{padding:"7px 10px",display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:22,height:22,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+                <div style={{width:22,height:22,borderRadius:"50%",background:DS.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:DS.green,flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
                 <span style={{fontSize:11,fontWeight:600,color:DS.textPri,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rep.name}</span>
               </div>
               {weekDays.map((d,i)=>{
@@ -2443,7 +2443,7 @@ function MgrPTO({ reps, reload, fire }) {
                         <button onClick={()=>removePTO(pto.id,rep.name)} style={{fontSize:9,color:"#e74c3c",background:"none",border:"none",cursor:"pointer",padding:0,lineHeight:1}}>✕</button>
                       </div>
                     ):(
-                      <button onClick={()=>{setAddForm({rep_id:String(rep.id),pto_date:ds,note:""});setAdding(true);}} style={{fontSize:10,color:"#ccc",background:"none",border:"none",cursor:"pointer",padding:2,borderRadius:4}}>+</button>
+                      <button onClick={()=>{setAddForm({rep_id:String(rep.id),pto_date:ds,note:""});setAdding(true);}} style={{fontSize:10,color:DS.textMut,background:"none",border:"none",cursor:"pointer",padding:2,borderRadius:4}}>+</button>
                     )}
                   </div>
                 );
@@ -2456,9 +2456,9 @@ function MgrPTO({ reps, reload, fire }) {
       <button onClick={()=>setAdding(true)} style={{width:"100%",padding:"11px",borderRadius:12,border:"none",background:"#8e44ad",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>+ Add PTO Entry</button>
 
       {/* Legend */}
-      <div style={{marginTop:12,padding:"10px 14px",background:"#fff",borderRadius:10,border:"1.5px solid #efefef",display:"flex",gap:16,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#8e44ad",fontWeight:700,background:"#f5eefb",padding:"2px 6px",borderRadius:4}}>PTO</span><span style={{fontSize:11,color:DS.textSec}}>Pre-loaded from calendar</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:11,color:"#ccc"}}>+</span><span style={{fontSize:11,color:DS.textSec}}>Click to add PTO for that day</span></div>
+      <div style={{marginTop:12,padding:"10px 14px",background:DS.bgCard,borderRadius:10,border:`1px solid ${DS.border}`,display:"flex",gap:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#8e44ad",fontWeight:700,background:DS.accentDim,padding:"2px 6px",borderRadius:4}}>PTO</span><span style={{fontSize:11,color:DS.textSec}}>Pre-loaded from calendar</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:11,color:DS.textMut}}>+</span><span style={{fontSize:11,color:DS.textSec}}>Click to add PTO for that day</span></div>
         <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:9,color:"#e74c3c"}}>✕</span><span style={{fontSize:11,color:DS.textSec}}>Click to remove</span></div>
       </div>
     </div>
@@ -2525,7 +2525,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
             <p style={{margin:"3px 0 0",fontSize:12,color:DS.textSec}}>Limits health breaks to 1 at a time</p>
           </div>
           <div onClick={togglePeak} style={{width:46,height:26,borderRadius:13,background:settings.peak_mode?"#1a5c35":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
-            <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.peak_mode?23:3,transition:"left .2s"}}/>
+            <div style={{width:20,height:20,borderRadius:"50%",background:DS.bgCard,position:"absolute",top:3,left:settings.peak_mode?23:3,transition:"left .2s"}}/>
           </div>
         </div>
         {settings.peak_mode&&<p style={{margin:0,fontSize:11,color:"#e74c3c",fontWeight:600}}>⚡ Active — health breaks limited to 1 at a time</p>}
@@ -2539,13 +2539,13 @@ function MgrSettings({ settings, reps, reload, fire }) {
             <p style={{margin:"3px 0 0",fontSize:12,color:DS.textSec}}>Allow reps to take 30-min admin slots for emails and tickets</p>
           </div>
           <div onClick={toggleAdmin} style={{width:46,height:26,borderRadius:13,background:settings.admin_mode?"#1d4ed8":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
-            <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
+            <div style={{width:20,height:20,borderRadius:"50%",background:DS.bgCard,position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
           </div>
         </div>
         {settings.admin_mode&&<>
           <p style={{margin:"0 0 8px",fontSize:12,color:DS.textSec}}>Active team: {activeReps.length}</p>
           <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-            <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
+            <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:14,outline:"none",textAlign:"center"}}/>
             <span style={{fontSize:13,color:DS.textSec}}>max people on admin at once</span>
           </div>
           <div style={{display:"flex",gap:8}}>
@@ -2575,7 +2575,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
                 }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:isOn?"#f8f8f8":"#fdf0ee",marginBottom:5,cursor:"pointer",border:`1px solid ${isOn?"#eee":"#f5b7b1"}`}}>
                   <span style={{fontSize:12,color:isOn?"#1a1a1a":"#888"}}>{e.l}</span>
                   <div style={{width:36,height:20,borderRadius:10,background:isOn?"#1a5c35":"#ccc",position:"relative",transition:"background .2s",flexShrink:0}}>
-                    <div style={{width:16,height:16,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:isOn?18:2,transition:"left .2s"}}/>
+                    <div style={{width:16,height:16,borderRadius:"50%",background:DS.bgCard,position:"absolute",top:2,left:isOn?18:2,transition:"left .2s"}}/>
                   </div>
                 </div>
               );
@@ -2586,7 +2586,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
           await sbPatch("app_settings",1,{notif_prefs:{},updated_at:new Date().toISOString()});
           fire("info","All notifications reset to on");
           reload();
-        }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Reset all to ON</button>
+        }} style={{padding:"7px 14px",borderRadius:8,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:11,color:DS.textSec,fontWeight:600}}>Reset all to ON</button>
       </div>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 Execo Managers GChat</p>
@@ -2595,14 +2595,14 @@ function MgrSettings({ settings, reps, reload, fire }) {
           await sbPatch("app_settings",1,{execo_webhook:e.target.value||null,updated_at:new Date().toISOString()});
           reload();
         }} placeholder="Paste GChat webhook URL…"
-          style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none"}}/>
+          style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none"}}/>
         {settings.execo_webhook&&<p style={{margin:"6px 0 0",fontSize:11,color:DS.green,fontWeight:600}}>✅ Execo webhook active</p>}
       </div>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>👥 Team Break Cap</p>
         <p style={{margin:"0 0 12px",fontSize:12,color:DS.textSec}}>Default: 30% of active team = {Math.floor(reps.length*0.3)} max out at once</p>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-          <input type="number" min={1} max={reps.length} value={customCap} onChange={e=>setCustomCap(parseInt(e.target.value))} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
+          <input type="number" min={1} max={reps.length} value={customCap} onChange={e=>setCustomCap(parseInt(e.target.value))} style={{width:70,padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:14,outline:"none",textAlign:"center"}}/>
           <span style={{fontSize:13,color:DS.textSec}}>max people out at once</span>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -3031,7 +3031,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
       )}
       {showAdHocModal&&<AdHocLunchModal onSubmit={(time,note)=>{requestAdHocLunch(time,note);setShowAdHocModal(false);}} onClose={()=>setShowAdHocModal(false)}/>}
 
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>My Status</p>
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:"0 0 10px",fontWeight:700}}>My Status</p>
       {/* Today's lunch time banner */}
       <LunchTodayBanner myRep={myRep}/>
       <div style={{background:cfg.bg,border:`2px solid ${cfg.border}`,borderRadius:18,padding:"20px 18px",marginBottom:14}}>
@@ -3060,7 +3060,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
               <>
                 <button onClick={()=>setShowBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
                 {myQueueEntry?.status==="waiting"&&(
-                  <div style={{background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:12,padding:"12px 13px",marginTop:10,display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{background:DS.accentDim,border:"1.5px solid #aed6f1",borderRadius:12,padding:"12px 13px",marginTop:10,display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:20}}>🕐</span>
                     <div style={{flex:1}}>
                       <p style={{margin:0,fontWeight:700,fontSize:13,color:DS.accent}}>#{queuePosition} in the queue</p>
@@ -3073,7 +3073,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
                   <div style={{background:"#1a5c35",borderRadius:12,padding:"12px 13px",marginTop:10}}>
                     <p style={{margin:"0 0 4px",fontSize:13,fontWeight:700,color:"#fff"}}>🌿 Your break is ready!</p>
                     <p style={{margin:"0 0 10px",fontSize:11,color:"rgba(255,255,255,.7)"}}>Accept within {fmtTime(acceptSecsLeft)} or it passes to the next rep</p>
-                    <button onClick={acceptQueuedBreak} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"#fff",color:DS.green,cursor:"pointer",fontSize:13,fontWeight:800}}>Accept Break ✅</button>
+                    <button onClick={acceptQueuedBreak} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:DS.bgCard,color:DS.green,cursor:"pointer",fontSize:13,fontWeight:800}}>Accept Break ✅</button>
                   </div>
                 )}
                 {breakQueue.filter(q=>q.status==="waiting").length>0&&!myQueueEntry&&(
@@ -3084,7 +3084,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
           </div>
         )}
         {isOOO&&<p style={{margin:"12px 0 0",fontSize:13,color:DS.textSec,textAlign:"center"}}>You're marked as out today. See your manager to update.</p>}
-        {isOff&&<p style={{margin:"12px 0 0",fontSize:13,color:"#bbb",textAlign:"center"}}>Today is your scheduled day off. Enjoy! 🎉</p>}
+        {isOff&&<p style={{margin:"12px 0 0",fontSize:13,color:DS.textMut,textAlign:"center"}}>Today is your scheduled day off. Enjoy! 🎉</p>}
       </div>
     </div>
   );
@@ -3093,7 +3093,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
 function RepTeam({ reps, myId, activeBreaks }) {
   return (
     <div>
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>Team Balances</p>
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:"0 0 10px",fontWeight:700}}>Team Balances</p>
       <div style={{display:"flex",flexDirection:"column",gap:7}}>
         {reps.map(rep=>{
           const cfg=ST[rep.status]||ST.available;
@@ -3188,7 +3188,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
               const isSelected=targetId===String(r.id);
               return (
                 <div key={r.id} onClick={()=>setTargetId(String(r.id))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,border:isSelected?"2px solid #8e44ad":"1.5px solid #e8e8e8",background:isSelected?"#f5eefb":"#fff",cursor:"pointer"}}>
-                  <div style={{width:30,height:30,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:DS.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{r.avatar||avatar(r.name)}</div>
                   <div style={{flex:1}}>
                     <span style={{fontWeight:600,fontSize:13,color:DS.textPri}}>{r.name}</span>
                     <span style={{fontSize:11,color:DS.textSec,marginLeft:8}}>{lunch}</span>
@@ -3200,7 +3200,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
             })}
           </div>
           {targetId&&reps.find(r=>r.id===parseInt(targetId))&&(
-            <p style={{fontSize:12,color:"#8e44ad",margin:"0 0 12px",padding:"8px 12px",background:"#f5eefb",borderRadius:8}}>
+            <p style={{fontSize:12,color:"#8e44ad",margin:"0 0 12px",padding:"8px 12px",background:DS.accentDim,borderRadius:8}}>
               You give: <strong>{myTodayLunch()}</strong> · You get: <strong>{theirTodayLunch(reps.find(r=>r.id===parseInt(targetId)))}</strong>
             </p>
           )}
@@ -3212,12 +3212,12 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:0,fontWeight:700}}>Lunch Swaps</p>
+        <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:0,fontWeight:700}}>Lunch Swaps</p>
         <button onClick={()=>setReqModal(true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#8e44ad",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Request Swap</button>
       </div>
 
       {myIncoming.length===0&&myOutgoing.length===0&&(
-        <div style={{textAlign:"center",padding:"32px 0",color:"#bbb"}}>
+        <div style={{textAlign:"center",padding:"32px 0",color:DS.textMut}}>
           <p style={{fontSize:24,margin:"0 0 6px"}}>🔄</p>
           <p style={{fontSize:13,color:DS.textMut}}>No pending swaps</p>
         </div>
@@ -3234,7 +3234,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
                 <p style={{margin:"0 0 8px",fontSize:11,color:DS.textSec}}>They give: {s.requester_date} · You give: {s.target_date}</p>
                 {requester&&<p style={{margin:"0 0 8px",fontSize:11,color:DS.textMut}}>Their lunch today: 🥗 {theirTodayLunch(requester)}</p>}
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>declineSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
+                  <button onClick={()=>declineSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
                   <button onClick={()=>acceptSwap(s)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"none",background:"#8e44ad",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600}}>Accept ✓</button>
                 </div>
               </div>
@@ -3247,7 +3247,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
         <div>
           <p style={{fontSize:11,color:DS.textMut,fontWeight:600,margin:"0 0 8px"}}>Sent requests</p>
           {myOutgoing.map(s=>(
-            <div key={s.id} style={{background:"#f7f7f7",border:"1.5px solid #e8e8e8",borderRadius:12,padding:"11px 13px",marginBottom:8}}>
+            <div key={s.id} style={{background:DS.bgSurf,border:`1px solid ${DS.border}`,borderRadius:12,padding:"11px 13px",marginBottom:8}}>
               <p style={{margin:"0 0 2px",fontWeight:600,fontSize:13}}>→ {s.target_name}</p>
               <p style={{margin:0,fontSize:11,color:DS.textMut}}>Your slot: {s.requester_date} · Their slot: {s.target_date} · Pending</p>
             </div>
@@ -3632,7 +3632,7 @@ function HubView({ isManager }) {
   <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <div style={{position:"relative",flex:1}}>
                   <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, region, or extension…"
-                    style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}/>
+                    style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}/>
                   {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:DS.textMut}}>✕</button>}
                 </div>
               </div>
@@ -3678,7 +3678,7 @@ function HubView({ isManager }) {
         {tab==="promos"&&isManager&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:DS.amber,fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
+              <div style={{background:DS.amberDim,border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:DS.amber,fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
               <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
@@ -3692,9 +3692,9 @@ function HubView({ isManager }) {
               <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.red,margin:0,fontWeight:700}}>Active Closures ({closures.length})</p>
               <button onClick={()=>setEditModal({type:"closure",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Log Closure</button>
             </div>
-            {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#bbb"}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No active closures</p></div>}
+            {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:DS.textMut}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No active closures</p></div>}
             {closures.map((c,i)=>(
-              <div key={i} style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:7,display:"flex",alignItems:"flex-start",gap:10}}>
+              <div key={i} style={{background:DS.redDim,border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:7,display:"flex",alignItems:"flex-start",gap:10}}>
                 <span style={{fontSize:18}}>🚫</span>
                 <div style={{flex:1}}>
                   <p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p>
@@ -3703,7 +3703,7 @@ function HubView({ isManager }) {
                 </div>
                 <div style={{display:"flex",gap:5}}>
                   <button onClick={()=>setEditModal({type:"closure",item:c})} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>
-                  <button onClick={()=>deleteClosure(c.id)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red}}>Remove</button>
+                  <button onClick={()=>deleteClosure(c.id)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:10,color:DS.red}}>Remove</button>
                 </div>
               </div>
             ))}
@@ -3882,7 +3882,7 @@ function LevelTool() {
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {AGE_BUCKETS.map((b,i)=>(
                   <button key={i} onClick={()=>goTo(b.node)}
-                    style={{padding:"13px 16px",borderRadius:10,border:"1.5px solid #d4eadc",background:"#f4fbf6",cursor:"pointer",fontSize:14,fontWeight:600,color:DS.green,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s"}}>
+                    style={{padding:"13px 16px",borderRadius:10,border:`1px solid ${DS.green}40`,background:DS.greenDim,cursor:"pointer",fontSize:14,fontWeight:600,color:DS.green,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all .15s"}}>
                     {b.label}
                     <span style={{fontSize:16,opacity:.5}}>→</span>
                   </button>
@@ -3896,14 +3896,14 @@ function LevelTool() {
             <div>
               {/* Progress */}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-                <div style={{flex:1,height:4,background:"#f0f0f0",borderRadius:4,overflow:"hidden"}}>
+                <div style={{flex:1,height:4,background:DS.bgSurf,borderRadius:4,overflow:"hidden"}}>
                   <div style={{width:`${(node.qNum/node.qTotal)*100}%`,height:"100%",background:"#1a5c35",transition:"width .3s"}}/>
                 </div>
                 <span style={{fontSize:11,color:DS.textMut,whiteSpace:"nowrap"}}>Q{node.qNum} of {node.qTotal}</span>
               </div>
 
               {/* Question */}
-              <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"14px 16px",marginBottom:16}}>
+              <div style={{background:DS.greenDim,borderRadius:10,border:`1px solid ${DS.green}40`,padding:"14px 16px",marginBottom:16}}>
                 <p style={{margin:"0 0 4px",fontSize:10,color:DS.green,fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>Ask the parent:</p>
                 <p style={{margin:0,fontSize:14,fontWeight:600,color:DS.textPri,lineHeight:1.6}}>{node.ask}</p>
               </div>
@@ -3911,11 +3911,11 @@ function LevelTool() {
               {/* YES / NO */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
                 <button onClick={()=>goTo(node.yes)}
-                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #1a5c35",background:"#eafaf1",cursor:"pointer",fontSize:16,fontWeight:800,color:DS.green,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #1a5c35",background:DS.greenDim,cursor:"pointer",fontSize:16,fontWeight:800,color:DS.green,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                   ✅ YES
                 </button>
                 <button onClick={()=>goTo(node.no)}
-                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #c0392b",background:"#fdf0ee",cursor:"pointer",fontSize:16,fontWeight:800,color:DS.red,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  style={{padding:"18px 12px",borderRadius:12,border:"2px solid #c0392b",background:DS.redDim,cursor:"pointer",fontSize:16,fontWeight:800,color:DS.red,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                   ❌ NO
                 </button>
               </div>
@@ -3938,7 +3938,7 @@ function LevelTool() {
               </div>
 
               {/* Script */}
-              <div style={{background:"#f4fbf6",borderRadius:10,border:"1.5px solid #d4eadc",padding:"12px 14px",marginBottom:12}}>
+              <div style={{background:DS.greenDim,borderRadius:10,border:`1px solid ${DS.green}40`,padding:"12px 14px",marginBottom:12}}>
                 <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:DS.green,letterSpacing:.5,textTransform:"uppercase"}}>📢 Say this to the parent:</p>
                 <p style={{margin:0,fontSize:13,color:"#2c3e50",lineHeight:1.7,fontStyle:"italic"}}>"{node.script}"</p>
               </div>
@@ -3948,7 +3948,7 @@ function LevelTool() {
                   style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:copied?DS.green:DS.accent,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,transition:"background .2s"}}>
                   {copied?"✓ Script Copied to Clipboard!":"📋 Copy Script"}
                 </button>
-                {history.length>0&&<button onClick={goBack} style={{padding:"12px 14px",borderRadius:10,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec}}>← Back</button>}
+                {history.length>0&&<button onClick={goBack} style={{padding:"12px 14px",borderRadius:10,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec}}>← Back</button>}
               </div>
             </div>
           )}
@@ -3961,7 +3961,7 @@ function LevelTool() {
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead>
-              <tr style={{background:"#f4fbf6"}}>
+              <tr style={{background:DS.greenDim}}>
                 {["Level","Age","Key skills","Max"].map(h=>(
                   <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:DS.green,borderBottom:"1.5px solid #d4eadc"}}>{h}</th>
                 ))}
@@ -4029,9 +4029,9 @@ function ZipFinder({ locations, closures, isManager, onEdit }) {
           onChange={e=>search(e.target.value.replace(/[^0-9]/g,"").slice(0,5))}
           placeholder="Enter zip code…"
           maxLength={5}
-          style={{flex:1,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",letterSpacing:2,fontWeight:600}}
+          style={{flex:1,padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:14,outline:"none",letterSpacing:2,fontWeight:600}}
         />
-        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec}}>Clear</button>}
+        {zip&&<button onClick={()=>{setZip("");setResults(null);}} style={{padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec}}>Clear</button>}
       </div>
       {zip.length>=3&&results!==null&&(
         <div style={{marginTop:10}}>
@@ -4069,7 +4069,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
     <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${hasClosure?DS.red+"40":DS.border}`,marginBottom:8,overflow:"hidden"}}>
       <div style={{padding:"12px 14px"}}>
         {hasClosure&&closures.map((c,i)=>(
-          <div key={i} style={{background:"#fde8e8",borderRadius:7,padding:"5px 9px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+          <div key={i} style={{background:DS.redDim,borderRadius:7,padding:"5px 9px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontSize:12}}>🚫</span>
             <p style={{margin:0,fontSize:11,color:DS.red,fontWeight:600}}>{c.start_date} to {c.end_date} · {c.reason}</p>
           </div>
@@ -4078,18 +4078,18 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
           <div style={{flex:1}}>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
               <span style={{fontWeight:700,fontSize:15,color:DS.textPri}}>{loc.name}</span>
-              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#e8f0fe",color:DS.accent,fontWeight:700}}>{loc.region}</span>
+              <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:DS.accentDim,color:DS.accent,fontWeight:700}}>{loc.region}</span>
               <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:loc.pool==="Salt"?DS.amberDim:DS.accentDim,color:loc.pool==="Salt"?DS.amber:DS.accent,fontWeight:700}}>{loc.pool}</span>
-              {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"#eafaf1",color:DS.green,fontWeight:700}}>20min Privates</span>}
+              {loc.privates&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:DS.greenDim,color:DS.green,fontWeight:700}}>20min Privates</span>}
             </div>
             <p style={{margin:"0 0 4px",fontSize:11,color:DS.textMut}}>📍 {loc.addr}</p>
             {loc.direct_phone&&<p style={{margin:"0 0 4px",fontSize:12,color:DS.textPri,fontWeight:500}}>📞 {loc.direct_phone}</p>}
             {loc.gm_name&&<p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>👤 GM: {loc.gm_name}</p>}
             {pricing&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
-                <span style={{fontSize:11,background:"#e8f0fe",color:DS.accent,padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
+                <span style={{fontSize:11,background:DS.accentDim,color:DS.accent,padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
                 <span style={{fontSize:11,background:DS.bg,color:DS.textSec,padding:"2px 8px",borderRadius:6}}>Sa–Su ${pricing.ss}</span>
-                <span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
+                <span style={{fontSize:11,background:DS.accentDim,color:"#8e44ad",padding:"2px 8px",borderRadius:6}}>Private ${pricing.priv}</span>
                 <span style={{fontSize:11,background:DS.amberDim,color:DS.amber,padding:"2px 8px",borderRadius:6}}>ODL ${pricing.odl}</span>
               </div>
             )}
@@ -4115,7 +4115,7 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
 
       {/* Expanded details */}
       {expanded&&(
-        <div style={{borderTop:"1px solid #f0f4f8",padding:"12px 14px",background:"#fafcff"}}>
+        <div style={{borderTop:`1px solid ${DS.border}`,padding:"12px 14px",background:DS.bgSurf}}>
           {/* Hours */}
           {Object.keys(hours).length>0&&(
             <div style={{marginBottom:12}}>
@@ -4141,8 +4141,8 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
           {/* Special needs & languages highlight */}
           {(snInstructors.length>0||langInstructors.length>0)&&(
             <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap"}}>
-              {snInstructors.length>0&&<span style={{fontSize:11,background:"#eafaf1",color:DS.green,padding:"3px 9px",borderRadius:7,fontWeight:600}}>♿ {snInstructors.length} special needs instructor{snInstructors.length>1?"s":""}</span>}
-              {langInstructors.length>0&&<span style={{fontSize:11,background:"#f5eefb",color:"#8e44ad",padding:"3px 9px",borderRadius:7,fontWeight:600}}>🌍 {[...new Set(langInstructors.flatMap(i=>i.lang.split(/[,&\/]/).map(l=>l.trim()).filter(l=>l&&l.toLowerCase()!=='english')))].join(", ")}</span>}
+              {snInstructors.length>0&&<span style={{fontSize:11,background:DS.greenDim,color:DS.green,padding:"3px 9px",borderRadius:7,fontWeight:600}}>♿ {snInstructors.length} special needs instructor{snInstructors.length>1?"s":""}</span>}
+              {langInstructors.length>0&&<span style={{fontSize:11,background:DS.accentDim,color:"#8e44ad",padding:"3px 9px",borderRadius:7,fontWeight:600}}>🌍 {[...new Set(langInstructors.flatMap(i=>i.lang.split(/[,&\/]/).map(l=>l.trim()).filter(l=>l&&l.toLowerCase()!=='english')))].join(", ")}</span>}
             </div>
           )}
           {/* Instructors */}
@@ -4155,8 +4155,8 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:ins.desc?3:0}}>
                       <span style={{fontWeight:600,fontSize:12}}>{ins.name}</span>
                       {ins.level&&<span style={{fontSize:9,background:ins.level.toLowerCase().includes("manager")?DS.accentDim:DS.bgSurf,color:ins.level.toLowerCase().includes("manager")?DS.accent:DS.textSec,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{ins.level}</span>}
-                      {ins.sn==='Y'&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
-                      {ins.lang&&ins.lang.toLowerCase()!=='english'&&ins.lang.toLowerCase()!=='english '&&<span style={{fontSize:9,background:"#f5eefb",color:"#8e44ad",padding:"1px 5px",borderRadius:3}}>{ins.lang}</span>}
+                      {ins.sn==='Y'&&<span style={{fontSize:9,background:DS.greenDim,color:DS.green,padding:"1px 5px",borderRadius:3,fontWeight:600}}>SEN</span>}
+                      {ins.lang&&ins.lang.toLowerCase()!=='english'&&ins.lang.toLowerCase()!=='english '&&<span style={{fontSize:9,background:DS.accentDim,color:"#8e44ad",padding:"1px 5px",borderRadius:3}}>{ins.lang}</span>}
                     </div>
                     {ins.desc&&<p style={{margin:0,fontSize:11,color:DS.textSec,lineHeight:1.4}}>{ins.desc}</p>}
                   </div>
@@ -4175,23 +4175,23 @@ function HubPromoCard({promo,isManager,onEdit}) {
   const [copiedCode,setCopiedCode]=useState(false);
   const isExpiring = promo.expires_on && (new Date(promo.expires_on)-new Date())/(1000*60*60*24) < 7;
   return (
-    <div style={{background:"#fff",borderRadius:12,border:`1.5px solid ${isExpiring?"#f5b7b1":"#f0c080"}`,padding:"12px 14px",marginBottom:8}}>
+    <div style={{background:DS.bgCard,borderRadius:12,border:`1.5px solid ${isExpiring?"#f5b7b1":"#f0c080"}`,padding:"12px 14px",marginBottom:8}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1}}>
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
             <span style={{fontWeight:700,fontSize:13}}>{promo.title}</span>
-            {promo.proactive&&<span style={{fontSize:9,background:"#eafaf1",color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
-            {!promo.proactive&&<span style={{fontSize:9,background:"#fdf0ee",color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
+            {promo.proactive&&<span style={{fontSize:9,background:DS.greenDim,color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
+            {!promo.proactive&&<span style={{fontSize:9,background:DS.redDim,color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
             {promo.expires_on&&<span style={{fontSize:9,background:isExpiring?"#fde8e8":"#fff3cd",color:isExpiring?"#c0392b":"#856404",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Exp: {promo.expires_on}</span>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{fontSize:14,fontWeight:800,color:DS.accent,background:"#e8f0fe",padding:"4px 12px",borderRadius:8,letterSpacing:.5}}>{promo.code}</span>
+            <span style={{fontSize:14,fontWeight:800,color:DS.accent,background:DS.accentDim,padding:"4px 12px",borderRadius:8,letterSpacing:.5}}>{promo.code}</span>
             <button onClick={()=>{navigator.clipboard?.writeText(promo.code);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),1500);}} style={{padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:copiedCode?"#003087":"#fff",cursor:"pointer",fontSize:11,color:copiedCode?"#fff":"#003087",fontWeight:600,transition:"all .2s"}}>{copiedCode?"✓ Copied":"Copy Code"}</button>
           </div>
         </div>
         <div style={{display:"flex",gap:5,flexShrink:0}}>
           {isManager&&<button onClick={e=>{e.stopPropagation();onEdit();}} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:10,color:DS.textSec}}>Edit</button>}
-          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textMut}}>{expanded?"▲":"▼"}</button>
+          <button onClick={()=>setExpanded(!expanded)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textMut}}>{expanded?"▲":"▼"}</button>
         </div>
       </div>
       {expanded&&(
@@ -4216,7 +4216,7 @@ function HubDocCard({doc,isManager,onEdit}) {
       if(trimmed===trimmed.toUpperCase()&&trimmed.length>3&&!trimmed.includes('$')&&!trimmed.match(/^\d/))
         return <p key={i} style={{margin:"10px 0 4px",fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:.5,textTransform:"uppercase"}}>{trimmed}</p>;
       if(trimmed.startsWith('"')&&trimmed.endsWith('"'))
-        return <p key={i} style={{margin:"4px 0",fontSize:12,color:DS.green,background:"#f0faf4",borderLeft:"3px solid #1a5c35",padding:"4px 8px",borderRadius:"0 6px 6px 0",lineHeight:1.6}}>{trimmed}</p>;
+        return <p key={i} style={{margin:"4px 0",fontSize:12,color:DS.green,background:DS.greenDim,borderLeft:"3px solid #1a5c35",padding:"4px 8px",borderRadius:"0 6px 6px 0",lineHeight:1.6}}>{trimmed}</p>;
       if(trimmed.startsWith('☐')||trimmed.startsWith('✓'))
         return <p key={i} style={{margin:"3px 0",fontSize:12,color:DS.textSec,paddingLeft:8}}>{trimmed}</p>;
       if(trimmed.startsWith('→')||trimmed.includes(' → '))
@@ -4261,7 +4261,7 @@ function PartnerLocRow({loc}) {
           <span style={{fontSize:11,color:DS.textSec}}>New: <strong style={{color:"#8e44ad"}}>{loc.queue}</strong></span>
         </div>
       </div>
-      <button onClick={()=>{navigator.clipboard?.writeText(loc.current);setCop(true);setTimeout(()=>setCop(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #ddd",background:cop?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:cop?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{cop?"✓":"Copy"}</button>
+      <button onClick={()=>{navigator.clipboard?.writeText(loc.current);setCop(true);setTimeout(()=>setCop(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${DS.border}`,background:cop?"#1a5c35":"#fafafa",cursor:"pointer",fontSize:11,color:cop?"#fff":"#888",fontWeight:600,transition:"all .2s",flexShrink:0}}>{cop?"✓":"Copy"}</button>
     </div>
   );
 }
@@ -4270,7 +4270,7 @@ function HubTeamCard({member}) {
   const [copied,setCopied]=useState(false);
   return (
     <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
-      <div style={{width:32,height:32,borderRadius:"50%",background:"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{avatar(member.name)}</div>
+      <div style={{width:32,height:32,borderRadius:"50%",background:DS.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:DS.green,flexShrink:0}}>{avatar(member.name)}</div>
       <p style={{margin:0,flex:1,fontWeight:600,fontSize:13}}>{member.name}</p>
       <span style={{fontSize:16,fontWeight:800,color:DS.green,marginRight:8}}>{member.ext}</span>
       <button onClick={()=>{navigator.clipboard?.writeText(member.ext);setCopied(true);setTimeout(()=>setCopied(false),1500);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #1a5c35",background:copied?"#1a5c35":"#f0faf4",cursor:"pointer",fontSize:11,color:copied?"#fff":"#1a5c35",fontWeight:600,transition:"all .2s"}}>{copied?"✓":"Copy"}</button>
@@ -4311,8 +4311,8 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
 
         {/* Basic info */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>PROMO TITLE</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. June Dive In" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-          <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>PROMO CODE</label><input value={f.code} onChange={e=>set("code",e.target.value)} placeholder="e.g. DIVEIN40" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>PROMO TITLE</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. June Dive In" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>PROMO CODE</label><input value={f.code} onChange={e=>set("code",e.target.value)} placeholder="e.g. DIVEIN40" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
         </div>
 
         {/* Discount settings */}
@@ -4321,7 +4321,7 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div>
               <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT TYPE</label>
-              <select value={f.discount_type} onChange={e=>set("discount_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <select value={f.discount_type} onChange={e=>set("discount_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
                 <option value="pct">% off tuition</option>
                 <option value="one_class_pct">% off — 1 class/week only</option>
                 <option value="fixed">Fixed $ off per student</option>
@@ -4329,15 +4329,15 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
             </div>
             <div>
               {(f.discount_type==="pct"||f.discount_type==="one_class_pct")
-                ? <><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT %</label><input type="number" min={1} max={100} value={f.discount_pct} onChange={e=>set("discount_pct",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
-                : <><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT AMOUNT ($)</label><input type="number" min={1} value={f.discount_fixed} onChange={e=>set("discount_fixed",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></>
+                ? <><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT %</label><input type="number" min={1} max={100} value={f.discount_pct} onChange={e=>set("discount_pct",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></>
+                : <><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>DISCOUNT AMOUNT ($)</label><input type="number" min={1} value={f.discount_fixed} onChange={e=>set("discount_fixed",+e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></>
               }
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
               <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>APPLIES TO</label>
-              <select value={f.applies_to} onChange={e=>set("applies_to",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <select value={f.applies_to} onChange={e=>set("applies_to",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
                 <option value="continuous">Continuous classes only (no ODL/clinic)</option>
                 <option value="group">Group classes only</option>
                 <option value="all">All lesson types</option>
@@ -4374,14 +4374,14 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
               <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>MONTH RESTRICTION</label>
-              <select value={f.month_restriction} onChange={e=>set("month_restriction",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+              <select value={f.month_restriction} onChange={e=>set("month_restriction",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
                 <option value="">Any month</option>
                 {MONTHS_LIST.map((m,i)=><option key={i} value={String(i)}>{m}</option>)}
               </select>
             </div>
             <div>
               <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>EXPIRY DATE</label>
-              <input type="date" value={f.expires_on} onChange={e=>set("expires_on",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              <input type="date" value={f.expires_on} onChange={e=>set("expires_on",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
             </div>
           </div>
           <div style={{display:"flex",gap:16,marginTop:10,flexWrap:"wrap"}}>
@@ -4397,7 +4397,7 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
         </div>
 
         {/* Full rules text */}
-        <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>FULL RULES (shown when expanded)</label><textarea value={f.rules} onChange={e=>set("rules",e.target.value)} rows={4} placeholder="Full terms and conditions as stated in the promo brief…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6}}/></div>
+        <div><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>FULL RULES (shown when expanded)</label><textarea value={f.rules} onChange={e=>set("rules",e.target.value)} rows={4} placeholder="Full terms and conditions as stated in the promo brief…" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6}}/></div>
 
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Remove Promo" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
@@ -4418,14 +4418,14 @@ function HubClosureModal({item,locations,onClose,onSave,onDelete}) {
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
         <div>
           <label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Location</label>
-          <input value={f.location_name} onChange={e=>set("location_name",e.target.value)} placeholder="e.g. Fort Worth" list="loc-list" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+          <input value={f.location_name} onChange={e=>set("location_name",e.target.value)} placeholder="e.g. Fort Worth" list="loc-list" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
           <datalist id="loc-list">{locations.map((l,i)=><option key={i} value={l.name}/>)}</datalist>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Start Date</label><input type="date" value={f.start_date} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>End Date</label><input type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Start Date</label><input type="date" value={f.start_date} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>End Date</label><input type="date" value={f.end_date} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
         </div>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Reason</label><input value={f.reason} onChange={e=>set("reason",e.target.value)} placeholder="e.g. Maintenance, Public Holiday" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Reason</label><input value={f.reason} onChange={e=>set("reason",e.target.value)} placeholder="e.g. Maintenance, Public Holiday" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Remove" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
           <div style={{flex:1}}/>
@@ -4526,7 +4526,7 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
             onClick={()=>fileRef.current?.click()}
             onDragOver={e=>e.preventDefault()}
             onDrop={e=>{e.preventDefault();handleFile(e.dataTransfer.files[0]);}}
-            style={{border:"2px dashed #8e44ad",borderRadius:12,padding:"18px",textAlign:"center",cursor:"pointer",background:"#f5eefb",transition:"background .2s"}}
+            style={{border:"2px dashed #8e44ad",borderRadius:12,padding:"18px",textAlign:"center",cursor:"pointer",background:DS.accentDim,transition:"background .2s"}}
           >
             <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md,.csv" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
             {extracting?(
@@ -4540,11 +4540,11 @@ function HubDocModal({item,onClose,onSave,onDelete}) {
             )}
           </div>
         )}
-        {uploadErr&&<div style={{background:"#fdf0ee",border:"1.5px solid #f5b7b1",borderRadius:9,padding:"9px 12px"}}><p style={{margin:0,fontSize:12,color:DS.red}}>{uploadErr}</p></div>}
+        {uploadErr&&<div style={{background:DS.redDim,border:"1.5px solid #f5b7b1",borderRadius:9,padding:"9px 12px"}}><p style={{margin:0,fontSize:12,color:DS.red}}>{uploadErr}</p></div>}
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
-          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Auto-filled from filename" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+          <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Document Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Auto-filled from filename" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
           <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Category</label>
-            <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+            <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
               {cats.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
@@ -4571,11 +4571,11 @@ function HubLocModal({item,onClose,onSave}) {
   return (
     <Modal title={`Edit — ${item?.name}`} sub="LOCATION" onClose={onClose}>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Extension</label><input value={f.ext} onChange={e=>set("ext",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Address</label><input value={f.addr} onChange={e=>set("addr",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Extension</label><input value={f.ext} onChange={e=>set("ext",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Address</label><input value={f.addr} onChange={e=>set("addr",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,alignItems:"center"}}>
           <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Pool Type</label>
-            <select value={f.pool} onChange={e=>set("pool",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+            <select value={f.pool} onChange={e=>set("pool",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
               <option>Chlorine</option><option>Salt</option>
             </select>
           </div>
@@ -4599,9 +4599,9 @@ function HubEventModal({item,onClose,onSave,onDelete}) {
   return (
     <Modal title={item?"Edit Event":"Add Event"} sub="EVENT" onClose={onClose}>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Event Name</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Date</label><input value={f.event_date} onChange={e=>set("event_date",e.target.value)} placeholder="e.g. Jul 11, 2026" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Note (optional)</label><input value={f.note} onChange={e=>set("note",e.target.value)} placeholder="e.g. Tentative" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Event Name</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Date</label><input value={f.event_date} onChange={e=>set("event_date",e.target.value)} placeholder="e.g. Jul 11, 2026" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Note (optional)</label><input value={f.note} onChange={e=>set("note",e.target.value)} placeholder="e.g. Tentative" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           {item&&<Btn label="Remove" onClick={()=>onDelete(item.id)} color="#e74c3c" small/>}
           <div style={{flex:1}}/>
@@ -4843,11 +4843,11 @@ function QuoteCalculator({locations, activePromos=[]}) {
                   }
                 }}
                 value={locSearch||""}
-                style={{width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}
+                style={{width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}
               />
               {locSearch&&<button onClick={()=>{setLocSearch("");}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:DS.textMut}}>✕</button>}
             </div>
-            <select value={locId} onChange={e=>setLocId(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+            <select value={locId} onChange={e=>setLocId(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
               <option value="">Select location…</option>
               {[...locations]
                 .filter(l=>{
@@ -4865,7 +4865,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
           </div>
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Customer Type</label>
-            <select value={custType} onChange={e=>setCustType(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+            <select value={custType} onChange={e=>setCustType(e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
               <option value="lead">New Lead (never enrolled)</option>
               <option value="lapsed">Lapsed (was enrolled before)</option>
               <option value="active">Active Customer</option>
@@ -4875,29 +4875,29 @@ function QuoteCalculator({locations, activePromos=[]}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Start Month</label>
-            <select value={enrollMo} onChange={e=>setEnrollMo(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+            <select value={enrollMo} onChange={e=>setEnrollMo(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
               {MONTHS.map((m,i)=><option key={i} value={i}>{m} 2026</option>)}
             </select>
           </div>
           <div>
             {/* FIX 8: global weeks */}
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Weeks this month</label>
-            <select value={weeks} onChange={e=>setWeeks(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+            <select value={weeks} onChange={e=>setWeeks(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
               <option value={4}>4 weeks (standard)</option>
               <option value={5}>5 weeks (higher month)</option>
             </select>
           </div>
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Reg fees used this year</label>
-            <select value={regUsed} onChange={e=>setRegUsed(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",background:"#fff"}}>
+            <select value={regUsed} onChange={e=>setRegUsed(+e.target.value)} style={{width:"100%",padding:"9px 10px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",background:DS.bgCard}}>
               <option value={0}>0 — new family</option>
               <option value={1}>1 — one child already enrolled</option>
               <option value={2}>2+ — max already reached</option>
             </select>
           </div>
         </div>
-        {loc&&!loc.price_mf&&<div style={{marginTop:10,background:"#fff3cd",border:"1.5px solid #f0c080",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:DS.amber}}>⚠️ No pricing loaded for this location — run SQL_4_pricing.sql</p></div>}
-        {loc&&isPartner&&<div style={{marginTop:10,background:"#e8f0fe",border:"1.5px solid #aed6f1",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:DS.accent}}>ℹ️ Partner brand — sibling discount auto-applies via ICP. DIVEIN40 not available.</p></div>}
+        {loc&&!loc.price_mf&&<div style={{marginTop:10,background:DS.amberDim,border:"1.5px solid #f0c080",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:DS.amber}}>⚠️ No pricing loaded for this location — run SQL_4_pricing.sql</p></div>}
+        {loc&&isPartner&&<div style={{marginTop:10,background:DS.accentDim,border:"1.5px solid #aed6f1",borderRadius:8,padding:"8px 12px"}}><p style={{margin:0,fontSize:11,color:DS.accent}}>ℹ️ Partner brand — sibling discount auto-applies via ICP. DIVEIN40 not available.</p></div>}
       </div>
 
       {/* Step 2: Students */}
@@ -4911,10 +4911,10 @@ function QuoteCalculator({locations, activePromos=[]}) {
           return (
             <div key={student.id} style={{background:si>0?DS.bgSurf:DS.bgSurf,borderRadius:10,padding:"12px",marginBottom:8,border:`1px solid ${si>0&&canSibDiscount?DS.green+"40":DS.border}`}}>
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-                <input value={student.name} onChange={e=>updStudent(student.id,"name",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1.5px solid #ddd",fontSize:13,outline:"none"}} placeholder="Child name"/>
-                {si>0&&canSibDiscount&&<span style={{fontSize:10,background:"#eafaf1",color:DS.green,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>10% off group (3 mo)</span>}
-                {si>0&&!canSibDiscount&&isPartner&&<span style={{fontSize:10,background:"#e8f0fe",color:DS.accent,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>ICP auto-sibling</span>}
-                {si>0&&<button onClick={()=>remStudent(student.id)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:11,color:DS.red}}>Remove</button>}
+                <input value={student.name} onChange={e=>updStudent(student.id,"name",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}} placeholder="Child name"/>
+                {si>0&&canSibDiscount&&<span style={{fontSize:10,background:DS.greenDim,color:DS.green,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>10% off group (3 mo)</span>}
+                {si>0&&!canSibDiscount&&isPartner&&<span style={{fontSize:10,background:DS.accentDim,color:DS.accent,padding:"3px 7px",borderRadius:5,fontWeight:700,whiteSpace:"nowrap"}}>ICP auto-sibling</span>}
+                {si>0&&<button onClick={()=>remStudent(student.id)} style={{padding:"5px 9px",borderRadius:7,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:11,color:DS.red}}>Remove</button>}
               </div>
               {student.lessons.map((lesson,li)=>{
                 const lt = LESSON_TYPES.find(t=>t.key===lesson.type);
@@ -4922,7 +4922,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 const canMultiHere = li>0 && lt?.continuous;
                 return (
                   <div key={lesson.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
-                    <select value={lesson.type} onChange={e=>updLesson(student.id,lesson.id,"type",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1.5px solid ${canMultiHere?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",background:"#fff"}}>
+                    <select value={lesson.type} onChange={e=>updLesson(student.id,lesson.id,"type",e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1.5px solid ${canMultiHere?"#c8e6c9":"#ddd"}`,fontSize:12,outline:"none",background:DS.bgCard}}>
                       {LESSON_TYPES.map(t=>{
                         const r = getRate(t.key);
                         // FIX 14: show ⚠️ for lesson types with no price data
@@ -4932,12 +4932,12 @@ function QuoteCalculator({locations, activePromos=[]}) {
                     </select>
                     {canMultiHere&&<span style={{fontSize:10,color:DS.green,fontWeight:700,whiteSpace:"nowrap"}}>−10%</span>}
                     {!canMultiHere&&li>0&&<span style={{fontSize:10,color:DS.textMut,whiteSpace:"nowrap"}}>no disc</span>}
-                    {li>0&&<button onClick={()=>remLesson(student.id,lesson.id)} style={{padding:"5px 7px",borderRadius:7,border:"1.5px solid #f5b7b1",background:"#fdf0ee",cursor:"pointer",fontSize:10,color:DS.red}}>✕</button>}
+                    {li>0&&<button onClick={()=>remLesson(student.id,lesson.id)} style={{padding:"5px 7px",borderRadius:7,border:"1.5px solid #f5b7b1",background:DS.redDim,cursor:"pointer",fontSize:10,color:DS.red}}>✕</button>}
                     {li===0&&<div style={{width:54}}/>}
                   </div>
                 );
               })}
-              <button onClick={()=>addLesson(student.id)} style={{marginTop:2,padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:"#e8f0fe",cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>+ Lesson</button>
+              <button onClick={()=>addLesson(student.id)} style={{marginTop:2,padding:"4px 10px",borderRadius:7,border:"1.5px solid #003087",background:DS.accentDim,cursor:"pointer",fontSize:11,color:DS.accent,fontWeight:600}}>+ Lesson</button>
               {calc&&loc&&(
                 <p style={{margin:"8px 0 0",fontSize:11,color:DS.textSec}}>Monthly: {fmt(calc.ongoing1to3)}{calc.hasSibDisc?` (→ ${fmt(calc.ongoing4plus)} from month 4)`:""}</p>
               )}
@@ -4957,7 +4957,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                   {promoChecked.includes(p.code)&&<span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span>}
                 </div>
                 <div style={{flex:1}}>
-                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.title} <span style={{fontSize:11,fontWeight:700,color:DS.accent,background:"#e8f0fe",padding:"1px 6px",borderRadius:4}}>{p.code}</span></p>
+                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{p.title} <span style={{fontSize:11,fontWeight:700,color:DS.accent,background:DS.accentDim,padding:"1px 6px",borderRadius:4}}>{p.code}</span></p>
                   <p style={{margin:"2px 0 0",fontSize:10,color:DS.textSec}}>
                     {p.discount_type==="fixed"?`$${p.discount_fixed} off per student`:p.discount_type==="one_class_pct"?`${p.discount_pct}% off 1 class/week`:`${p.discount_pct}% off`}
                     {" · "}{p.applies_to==="continuous"?"Continuous only":p.applies_to==="group"?"Group only":"All lessons"}
@@ -4980,13 +4980,13 @@ function QuoteCalculator({locations, activePromos=[]}) {
                           <span style={{fontSize:11,color:DS.textSec,marginLeft:8}}>{sc.sub}</span>
                         </div>
                         <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${scenarioMap[p.code]===sc.key?"#1a5c35":"#ccc"}`,background:scenarioMap[p.code]===sc.key?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          {scenarioMap[p.code]===sc.key&&<div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}
+                          {scenarioMap[p.code]===sc.key&&<div style={{width:8,height:8,borderRadius:"50%",background:DS.bgCard}}/>}
                         </div>
                       </div>
                     ))}
                   </div>
                   {!scenarioMap[p.code]&&<p style={{margin:"8px 0 0",fontSize:11,color:"#e07b00",fontWeight:600}}>⚠️ Select a scenario to calculate correctly</p>}
-                  {scenarioMap[p.code]==="full"&&<p style={{margin:"8px 0 0",fontSize:11,color:DS.amber,background:"#fff3cd",padding:"6px 10px",borderRadius:7}}>⚠️ Full month discount — confirm with your manager before applying.</p>}
+                  {scenarioMap[p.code]==="full"&&<p style={{margin:"8px 0 0",fontSize:11,color:DS.amber,background:DS.amberDim,padding:"6px 10px",borderRadius:7}}>⚠️ Full month discount — confirm with your manager before applying.</p>}
                 </div>
               )}
             </div>
@@ -4996,7 +4996,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
       {eligiblePromos.length===0&&loc&&(
         <div style={{background:DS.bgSurf,borderRadius:12,border:`1px solid ${DS.border}`,padding:"12px 14px",marginBottom:10,textAlign:"center"}}>
           <p style={{margin:0,fontSize:12,color:DS.textMut}}>No active promotions apply to this customer / month combination.</p>
-          {activePromos.length>0&&<p style={{margin:"4px 0 0",fontSize:11,color:"#bbb"}}>{activePromos.length} promo{activePromos.length>1?"s":""} in DB — check discount_type and customer_types fields are filled in the Hub → Promos tab</p>}
+          {activePromos.length>0&&<p style={{margin:"4px 0 0",fontSize:11,color:DS.textMut}}>{activePromos.length} promo{activePromos.length>1?"s":""} in DB — check discount_type and customer_types fields are filled in the Hub → Promos tab</p>}
         </div>
       )}
       {eligiblePromos.length===0&&!loc&&activePromos.length>0&&(
@@ -5067,7 +5067,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
 
       {/* Script */}
       {loc&&students.length>0&&(
-        <div style={{background:"#f4fbf6",borderRadius:12,border:"1.5px solid #c8e6c9",padding:"14px",marginBottom:14}}>
+        <div style={{background:DS.greenDim,borderRadius:12,border:`1px solid ${DS.green}40`,padding:"14px",marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase",letterSpacing:.5}}>📢 Read to Customer</p>
             <button onClick={copyScript} style={{padding:"5px 12px",borderRadius:8,border:"none",background:copied?DS.green:DS.accent,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,transition:"background .2s"}}>{copied?"✓ Copied":"Copy Script"}</button>
@@ -5163,7 +5163,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
           </div>
         </div>
         {/* Progress bar */}
-        <div style={{height:4,background:"#e0e8f5"}}>
+        <div style={{height:4,background:DS.bgSurf}}>
           <div style={{width:`${(doneCount/totalCount)*100}%`,height:"100%",background:doneCount===totalCount?"#2ecc71":"#003087",transition:"width .3s"}}/>
         </div>
         <div style={{padding:"12px 14px"}}>
@@ -5186,7 +5186,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
               ))}
             </div>
           ))}
-          <button onClick={resetChecklist} style={{width:"100%",padding:"9px",borderRadius:9,border:"1.5px solid #ddd",background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec,marginTop:4,fontWeight:500}}>
+          <button onClick={resetChecklist} style={{width:"100%",padding:"9px",borderRadius:9,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",fontSize:12,color:DS.textSec,marginTop:4,fontWeight:500}}>
             ↺ Reset for next customer
           </button>
         </div>
@@ -5201,7 +5201,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
         {Object.entries(alertsByCat).map(([cat,catAlerts])=>(
           <div key={cat} style={{marginBottom:12}}>
             <button onClick={()=>setOpenCat(openCat===cat?null:cat)}
-              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #efefef",background:DS.bgSurf,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:openCat===cat?8:0}}>
+              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${DS.border}`,background:DS.bgSurf,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:openCat===cat?8:0}}>
               <span style={{fontSize:13,fontWeight:600,color:DS.textPri}}>{cat}</span>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:10,background:DS.bg,color:DS.textSec,padding:"2px 7px",borderRadius:10}}>{catAlerts.length} rules</span>
@@ -5236,16 +5236,16 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
   return (
     <Modal title={item?"Edit Reminder":"Add Reminder"} sub="REMINDER" onClose={onClose} wide>
       <div style={{display:"flex",flexDirection:"column",gap:11}}>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/></div>
-        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Description</label><textarea value={f.body} onChange={e=>set("body",e.target.value)} rows={3} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6,fontFamily:"inherit"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Title</label><input value={f.title} onChange={e=>set("title",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/></div>
+        <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Description</label><textarea value={f.body} onChange={e=>set("body",e.target.value)} rows={3} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6,fontFamily:"inherit"}}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Category</label>
-            <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+            <select value={f.category} onChange={e=>set("category",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
               {cats.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
           <div><label style={{fontSize:12,color:DS.textSec,display:"block",marginBottom:3}}>Type</label>
-            <select value={f.alert_type} onChange={e=>set("alert_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+            <select value={f.alert_type} onChange={e=>set("alert_type",e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
               <option value="error">🚨 Error (red)</option>
               <option value="warning">⚠️ Warning (amber)</option>
               <option value="info">ℹ️ Info (blue)</option>
@@ -5320,16 +5320,16 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
       {filtered.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No {filter} submissions</p></div>}
 
       {filtered.map(s=>(
-        <div key={s.id} style={{background:"#fff",borderRadius:12,border:`1.5px solid ${s.urgent?"#e74c3c":"#efefef"}`,padding:"14px",marginBottom:10}}>
+        <div key={s.id} style={{background:DS.bgCard,borderRadius:12,border:`1.5px solid ${s.urgent?"#e74c3c":"#efefef"}`,padding:"14px",marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>{TYPE_LABELS[s.type]||s.type}</span>
-              {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:DS.red,padding:"2px 8px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
-              <span style={{fontSize:11,color:"#bbb"}}>{new Date(s.submitted_at).toLocaleString()}</span>
+              {s.urgent&&<span style={{fontSize:10,background:DS.redDim,color:DS.red,padding:"2px 8px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+              <span style={{fontSize:11,color:DS.textMut}}>{new Date(s.submitted_at).toLocaleString()}</span>
             </div>
             <span style={{fontSize:11,fontWeight:600,color:s.status==="pending"?"#b85c00":s.status==="approved"?"#1a5c35":"#c0392b",background:s.status==="pending"?"#fff8ee":s.status==="approved"?"#eafaf1":"#fdf0ee",padding:"2px 8px",borderRadius:4}}>{s.status}</span>
           </div>
-          <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12,color:DS.textSec}}>
+          <div style={{background:DS.bgSurf,borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12,color:DS.textSec}}>
             <p style={{margin:"0 0 4px",fontWeight:600}}>{s.payload.title||s.payload.location_name||s.payload.name||"Update"}</p>
             {s.payload.rules&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.rules}</p>}
             {s.payload.reason&&<p style={{margin:"0 0 2px",color:DS.textSec}}>{s.payload.reason}</p>}
@@ -5342,7 +5342,7 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
           {s.status==="pending"&&(
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>approve(s)} style={{flex:1,padding:"9px",borderRadius:9,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:700}}>✅ Approve & Publish</button>
-              <button onClick={()=>reject(s)} style={{padding:"9px 16px",borderRadius:9,background:"#fdf0ee",color:DS.red,border:"1.5px solid #c0392b",cursor:"pointer",fontSize:12,fontWeight:700}}>Reject</button>
+              <button onClick={()=>reject(s)} style={{padding:"9px 16px",borderRadius:9,background:DS.redDim,color:DS.red,border:"1.5px solid #c0392b",cursor:"pointer",fontSize:12,fontWeight:700}}>Reject</button>
             </div>
           )}
         </div>
@@ -5393,21 +5393,21 @@ function MgrUsers({ reload, fire }) {
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Display Name</label>
             <input value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})} placeholder="e.g. Andrea Johnson"
-              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
           </div>
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Username</label>
             <input value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})} placeholder="e.g. emler"
-              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
           </div>
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>PIN</label>
             <input type="password" value={form.pin} onChange={e=>setForm({...form,pin:e.target.value})} placeholder="Set a PIN"
-              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none"}}/>
+              style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none"}}/>
           </div>
           <div>
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Role</label>
-            <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,outline:"none",background:"#fff"}}>
+            <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
               <option value="client">🏊 Client (Hub content only)</option>
               <option value="management">🎛️ Management (Full access)</option>
             </select>
@@ -5428,7 +5428,7 @@ function MgrUsers({ reload, fire }) {
               <p style={{margin:0,fontSize:11,color:DS.textMut}}>@{u.username} · <span style={{color:(ROLE_COLORS[u.role]||{fg:"#888"}).fg,fontWeight:600}}>{u.role}</span></p>
             </div>
           </div>
-          <button onClick={()=>remove(u.id)} style={{padding:"5px 12px",borderRadius:8,background:"#fdf0ee",border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:600}}>Remove</button>
+          <button onClick={()=>remove(u.id)} style={{padding:"5px 12px",borderRadius:8,background:DS.redDim,border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:600}}>Remove</button>
         </div>
       ))}
     </div>
@@ -5524,7 +5524,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
     reload();
   };
 
-  const S={fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd"};
+  const S={fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`};
   const lbl=(t)=><label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase"}}>{t}</label>;
   const g2=(a,b)=><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{a}{b}</div>;
 
@@ -5570,7 +5570,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
             <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
               <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.green,textTransform:"uppercase"}}>💰 Discount Settings</p>
               {g2(
-                <div>{lbl("Discount Type")}<select value={promo.discount_type} onChange={e=>setP("discount_type",e.target.value)} style={{...S,background:"#fff"}}>
+                <div>{lbl("Discount Type")}<select value={promo.discount_type} onChange={e=>setP("discount_type",e.target.value)} style={{...S,background:DS.bgCard}}>
                   <option value="pct">% off tuition</option>
                   <option value="one_class_pct">% off — 1 class/week only</option>
                   <option value="fixed">Fixed $ off per student</option>
@@ -5580,7 +5580,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                   :<>{lbl("Discount Amount ($)")}<input type="number" min={1} value={promo.discount_fixed} onChange={e=>setP("discount_fixed",+e.target.value)} style={S}/></>
                 }</div>
               )}
-              <div>{lbl("Applies To")}<select value={promo.applies_to} onChange={e=>setP("applies_to",e.target.value)} style={{...S,background:"#fff"}}>
+              <div>{lbl("Applies To")}<select value={promo.applies_to} onChange={e=>setP("applies_to",e.target.value)} style={{...S,background:DS.bgCard}}>
                 <option value="continuous">Continuous classes only (no ODL/clinic)</option>
                 <option value="group">Group classes only</option>
                 <option value="all">All lesson types</option>
@@ -5599,7 +5599,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                 </div>
               </div>
               {g2(
-                <div>{lbl("Month Restriction")}<select value={promo.month_restriction} onChange={e=>setP("month_restriction",e.target.value)} style={{...S,background:"#fff"}}>
+                <div>{lbl("Month Restriction")}<select value={promo.month_restriction} onChange={e=>setP("month_restriction",e.target.value)} style={{...S,background:DS.bgCard}}>
                   <option value="">Any month</option>
                   {MONTHS.map((m,i)=><option key={i} value={String(i)}>{m}</option>)}
                 </select></div>,
@@ -5616,7 +5616,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
 
           {/* CLOSURE */}
           {type==="closure"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
-            <div>{lbl("Location *")}<select value={closure.location_name} onChange={e=>setC("location_name",e.target.value)} style={{...S,background:"#fff"}}>
+            <div>{lbl("Location *")}<select value={closure.location_name} onChange={e=>setC("location_name",e.target.value)} style={{...S,background:DS.bgCard}}>
               <option value="">Select location…</option>
               {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
             </select></div>
@@ -5632,7 +5632,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
               if(!val){setLoc({id:null,name:"",ext:"",privates:false,pool:"Chlorine",addr:""});return;}
               const found=locations.find(l=>String(l.id)===val);
               if(found) setLoc({id:found.id,name:found.name,ext:found.ext||"",privates:found.privates||false,pool:found.pool||"Chlorine",addr:found.addr||""});
-            }} style={{...S,background:"#fff"}}>
+            }} style={{...S,background:DS.bgCard}}>
               <option value="">Select location…</option>
               {locations.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
             </select>
@@ -5640,7 +5640,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
             </div>
             {loc.id!=null&&loc.name&&<>
               {g2(<div>{lbl("Extension")}<input value={loc.ext} onChange={e=>setL("ext",e.target.value)} placeholder="e.g. 1001" style={S}/></div>,
-                 <div>{lbl("Pool Type")}<select value={loc.pool} onChange={e=>setL("pool",e.target.value)} style={{...S,background:"#fff"}}>
+                 <div>{lbl("Pool Type")}<select value={loc.pool} onChange={e=>setL("pool",e.target.value)} style={{...S,background:DS.bgCard}}>
                    <option value="Chlorine">Chlorine</option><option value="Salt">Salt water</option><option value="Therapy">Therapy pool</option>
                  </select></div>)}
               <div>{lbl("Address")}<input value={loc.addr} onChange={e=>setL("addr",e.target.value)} placeholder="Full street address" style={S}/></div>
@@ -5661,7 +5661,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                 price_st_mf:found.price_st_mf||"",price_st_ss:found.price_st_ss||"",
                 price_adaptive:found.price_adaptive||"",reg_fee:found.reg_fee||""
               });
-            }} style={{...S,background:"#fff"}}>
+            }} style={{...S,background:DS.bgCard}}>
               <option value="">Select location…</option>
               {locations.map(l=><option key={l.id} value={String(l.id)}>{l.name}</option>)}
             </select></div>
@@ -5679,7 +5679,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
                 )}
               </div>
 
-              <div style={{background:"#e8f0fe",border:"1.5px solid #bfdbfe",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{background:DS.accentDim,border:"1.5px solid #bfdbfe",borderRadius:10,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
                 <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1d4ed8",textTransform:"uppercase"}}>👤 Private / Semi-Private (per month)</p>
                 {g2(
                   <div>{lbl("Private 30 min ($)")}<input type="number" value={pricing.price_priv} onChange={e=>setPR("price_priv",e.target.value)} placeholder="e.g. 299" style={S}/></div>,
@@ -5710,24 +5710,24 @@ function ClientView({ currentUser, data, reload, onLogout }) {
           {type==="alert"&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"16px",marginBottom:12,display:"flex",flexDirection:"column",gap:12}}>
             <div>{lbl("Title *")}<input value={alert.title} onChange={e=>setA("title",e.target.value)} placeholder="e.g. New pricing effective June 1" style={S}/></div>
             <div>{lbl("Details *")}<textarea value={alert.body} onChange={e=>setA("body",e.target.value)} rows={3} placeholder="Full details for the team…" style={{...S,resize:"vertical"}}/></div>
-            {g2(<div>{lbl("Category")}<select value={alert.category} onChange={e=>setA("category",e.target.value)} style={{...S,background:"#fff"}}>
+            {g2(<div>{lbl("Category")}<select value={alert.category} onChange={e=>setA("category",e.target.value)} style={{...S,background:DS.bgCard}}>
               <option value="general">General</option><option value="pricing">Pricing</option><option value="operations">Operations</option><option value="promos">Promos</option>
             </select></div>,
-            <div>{lbl("Type")}<select value={alert.alert_type} onChange={e=>setA("alert_type",e.target.value)} style={{...S,background:"#fff"}}>
+            <div>{lbl("Type")}<select value={alert.alert_type} onChange={e=>setA("alert_type",e.target.value)} style={{...S,background:DS.bgCard}}>
               <option value="warning">⚠️ Warning</option><option value="info">ℹ️ Info</option><option value="success">✅ Positive</option>
             </select></div>)}
           </div>}
 
           {/* Urgent toggle */}
-          <div style={{background:"#fdf0ee",borderRadius:10,padding:"12px",border:"1.5px solid #f5b7b1",marginBottom:12}}>
+          <div style={{background:DS.redDim,borderRadius:10,padding:"12px",border:"1.5px solid #f5b7b1",marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:urgent?10:0}}>
               <div><p style={{margin:0,fontSize:12,fontWeight:700,color:DS.red}}>🚨 Mark as Urgent</p><p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Bypasses approval — pings manager immediately</p></div>
               <div onClick={()=>setUrgent(!urgent)} style={{width:42,height:24,borderRadius:12,background:urgent?"#c0392b":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:urgent?21:3,transition:"left .2s"}}/>
+                <div style={{width:18,height:18,borderRadius:"50%",background:DS.bgCard,position:"absolute",top:3,left:urgent?21:3,transition:"left .2s"}}/>
               </div>
             </div>
             {urgent&&<input value={urgentWord} onChange={e=>setUrgentWord(e.target.value)} placeholder='Type "URGENT" to confirm'
-              style={{...S,border:`1.5px solid ${urgentWord.toUpperCase()==="URGENT"?"#c0392b":"#ddd"}`,background:"#fff"}}/>}
+              style={{...S,border:`1.5px solid ${urgentWord.toUpperCase()==="URGENT"?"#c0392b":"#ddd"}`,background:DS.bgCard}}/>}
           </div>
 
           <button onClick={submit} disabled={submitting} style={{width:"100%",padding:"12px",borderRadius:10,background:DS.accent,color:"#fff",border:"none",cursor:submitting?"default":"pointer",fontSize:13,fontWeight:700,opacity:submitting?.7:1}}>
@@ -5742,7 +5742,7 @@ function ClientView({ currentUser, data, reload, onLogout }) {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>{TYPE_LABELS[s.type]||s.type}</span>
-                  {s.urgent&&<span style={{fontSize:10,background:"#fde8e8",color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
+                  {s.urgent&&<span style={{fontSize:10,background:DS.redDim,color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>🚨 URGENT</span>}
                 </div>
                 <span style={{fontSize:11,fontWeight:600,color:(STATUS_CFG[s.status]||{}).fg,background:(STATUS_CFG[s.status]||{}).bg,padding:"2px 8px",borderRadius:4}}>{s.status}</span>
               </div>
