@@ -2908,6 +2908,7 @@ function AdHocLunchModal({ onSubmit, onClose }) {
 
 function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={} }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
+  const [showAdHocModal, setShowAdHocModal] = useState(false);
   const cfg = ST[myRep.status]||ST.available;
   const onBreak = myRep.status==="health"||myRep.status==="lunch";
   const totalWaiting = breakQueue.filter(q=>q.status==="waiting").length;
@@ -2924,23 +2925,27 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
               {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
               {key:"admin",icon:"🗂️",label:"Admin Time",dur:"30 min",avail:canTakeAdmin,reason:!canTakeAdmin?"Slots full":null},
             ].map(o=>(
-              <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
+              <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:`1px solid ${o.avail?DS.border:DS.border}`,borderRadius:DS.radius,padding:"12px 14px",cursor:o.avail?"pointer":"default",background:o.avail?DS.bgSurf:DS.bg,opacity:o.avail?1:0.5}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:24}}>{o.icon}</span>
                   <div style={{flex:1}}>
-                    <p style={{margin:0,fontWeight:600,fontSize:14,color:o.avail?"#1a1a1a":"#aaa"}}>{o.label}</p>
-                    <p style={{margin:0,fontSize:11,color:"#aaa"}}>{o.dur}</p>
-                    {o.reason&&<p style={{margin:"2px 0 0",fontSize:11,color:"#e74c3c"}}>{o.reason}</p>}
+                    <p style={{margin:0,fontWeight:600,fontSize:14,color:o.avail?DS.textPri:DS.textMut}}>{o.label}</p>
+                    <p style={{margin:0,fontSize:11,color:DS.textSec}}>{o.dur}</p>
+                    {o.reason&&<p style={{margin:"2px 0 0",fontSize:11,color:DS.red}}>{o.reason}</p>}
                   </div>
-                  {!o.avail&&<span style={{fontSize:10,background:"#fde8e8",color:"#c0392b",padding:"3px 7px",borderRadius:5,fontWeight:700}}>UNAVAILABLE</span>}
+                  {o.avail&&<span style={{fontSize:12,color:DS.accent}}>→</span>}
+                  {!o.avail&&o.queueable&&<span style={{fontSize:10,background:DS.accentDim,color:DS.accent,padding:"3px 7px",borderRadius:DS.radiusSm,fontWeight:600}}>Queue</span>}
+                  {!o.avail&&!o.queueable&&<span style={{fontSize:10,background:DS.redDim,color:DS.red,padding:"3px 7px",borderRadius:DS.radiusSm,fontWeight:600}}>Full</span>}
                 </div>
               </div>
             ))}
           </div>
-          <p style={{margin:"0 0 10px",fontSize:12,color:"#aaa",textAlign:"center"}}>Need lunch outside your schedule?</p>
-          <AdHocLunchModal onSubmit={(time,note)=>{requestAdHocLunch(time,note);setShowBreakModal(false);}} onClose={()=>setShowBreakModal(false)}/>
+          <button onClick={()=>{setShowBreakModal(false); setShowAdHocModal(true);}} style={{width:"100%",padding:"10px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:12}}>
+            Need lunch outside your schedule? →
+          </button>
         </Modal>
       )}
+      {showAdHocModal&&<AdHocLunchModal onSubmit={(time,note)=>{requestAdHocLunch(time,note);setShowAdHocModal(false);}} onClose={()=>setShowAdHocModal(false)}/>}
 
       <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:"#bbb",margin:"0 0 10px",fontWeight:700}}>My Status</p>
       {/* Today's lunch time banner */}
