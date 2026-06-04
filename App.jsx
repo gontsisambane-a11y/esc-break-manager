@@ -2559,15 +2559,16 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
 
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
-  const onLunch  = reps.filter(r=>r.status==="lunch").length;
-  const onHealth = reps.filter(r=>r.status==="health").length;
+  const onLunch  = reps.filter(r=>r.status==="lunch"&&!["pto","sick","off"].includes(r.status)).length;
+  const onHealth = reps.filter(r=>r.status==="health"&&!["pto","sick","off"].includes(r.status)).length;
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
   const maxOut = settings.custom_limit ?? Math.max(2, Math.floor(activeReps.length*0.3));
-  const totalOut = reps.filter(r=>["health","lunch","admin"].includes(r.status)).length;
+  // Only count reps actively on break — exclude off-shift, pto, sick, off
+  const totalOut = reps.filter(r=>["health","lunch","admin"].includes(r.status)&&!["pto","sick","off"].includes(r.status)).length;
   const hLimit = settings.peak_mode ? H_LIMIT_PEAK : H_LIMIT_NORMAL;
   const lunchLeft = LUNCH_LIMIT - onLunch;
   const healthLeft = hLimit - onHealth;
-  const capLeft = maxOut - totalOut;
+  const capLeft = Math.max(0, maxOut - totalOut);
 
   const myAB = activeBreaks.find(b=>b.rep_id===repInfo.id);
   const cooldownActive = !!(myRep.health_time_banked>=HEALTH_MAX_SEC && myRep.last_break_returned_at && elapsedSec(myRep.last_break_returned_at)<COOLDOWN_SEC);
