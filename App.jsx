@@ -1,13 +1,46 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ── CONFIG ────────────────────────────────────────────────────────────
-const SB_URL = "https://uektpsmcgagzxfoxavex.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
-const MANAGER_PIN = "2024";
+const SB_URL     = import.meta.env.VITE_SB_URL     || "https://uektpsmcgagzxfoxavex.supabase.co";
+const SB_KEY     = import.meta.env.VITE_SB_KEY     || "";
+const MANAGER_PIN = import.meta.env.VITE_MANAGER_PIN || "2024";
+const GCHAT_WEBHOOK = import.meta.env.VITE_GCHAT_WEBHOOK || "https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss";
 const HUB_ENABLED = true; // flip to true when approved
 
-const GCHAT_WEBHOOK = "https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss";
 const gchatPing = (text) => fetch(GCHAT_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(e=>console.warn("GChat ping failed",e));
+
+// Notification event definitions — key, label, default channel
+const NOTIF_EVENTS = [
+  {k:"peak_mode",        l:"⚡ Peak mode activated",         ch:"main"},
+  {k:"admin_mode",       l:"🗂️ Admin time opened",           ch:"main"},
+  {k:"hub_promo",        l:"🎯 New promo added",             ch:"main"},
+  {k:"hub_closure",      l:"🚫 School closure logged",       ch:"main"},
+  {k:"hub_location",     l:"📍 Location updated",            ch:"main"},
+  {k:"hub_pricing",      l:"💰 Pricing updated",             ch:"main"},
+  {k:"hub_alert",        l:"🔔 New reminder added",          ch:"main"},
+  {k:"client_urgent",    l:"🚨 Urgent client submission",    ch:"both"},
+  {k:"client_submission",l:"📤 New client submission (queue)",ch:"execo"},
+  {k:"adhoc_request",    l:"🥗 Ad hoc lunch requested",      ch:"execo"},
+  {k:"adhoc_approved",   l:"✅ Ad hoc lunch approved",       ch:"execo"},
+  {k:"adhoc_declined",   l:"❌ Ad hoc lunch declined",       ch:"execo"},
+  {k:"swap_approved",    l:"🔄 Lunch swap approved",         ch:"execo"},
+];
+
+// Smart pinger — checks notif_prefs before firing
+function makePinger(notifPrefs={}, execoWebhook=null){
+  const isOn=(key)=>notifPrefs[key]!==false; // default ON
+  const execoPing=(text)=>{ if(execoWebhook) fetch(execoWebhook,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(()=>{}); };
+  return {
+    main:  (key,text)=>{ if(isOn(key)) gchatPing(text); },
+    execo: (key,text)=>{ if(isOn(key)) execoPing(text); },
+    both:  (key,text)=>{ if(isOn(key)){ gchatPing(text); execoPing(text); } },
+    any:   (key,text,ch="main")=>{
+      if(!isOn(key)) return;
+      if(ch==="main"||ch==="both") gchatPing(text);
+      if(ch==="execo"||ch==="both") execoPing(text);
+    }
+  };
+}
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
@@ -174,6 +207,16 @@ const sbPatch = (tbl,id,d) => sb(`${tbl}?id=eq.${id}`,{method:"PATCH",body:JSON.
 const sbPost  = (tbl,d)    => sb(tbl,{method:"POST",body:JSON.stringify(d)});
 const sbDel   = (tbl,id)   => sb(`${tbl}?id=eq.${id}`,{method:"DELETE"});
 
+// SOC 2 CC7.2 — Audit logging
+const auditLog = (event_type, actor, target, details={}) => {
+  sbPost("audit_log",{
+    event_type, actor, target,
+    details,
+    ip_hint: navigator.userAgent.substring(0,120),
+    created_at: new Date().toISOString()
+  }).catch(()=>{}); // never block on audit log failure
+};
+
 async function loadAll() {
   const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue,todayPTO] = await Promise.all([
     sb("rep_status?select=*&order=id"),
@@ -298,19 +341,59 @@ function LoginScreen({ onSelect, reps, users=[] }) {
   const [search,setSearch]=useState("");
   const filtered=reps.filter(r=>r.name.toLowerCase().includes(search.toLowerCase()));
 
-  const tryMgrLogin = () => {
-    // Check against app_users table first, fallback to MANAGER_PIN
+  const tryMgrLogin = async () => {
     const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="management");
     const legacyOk = !username && pin===MANAGER_PIN;
-    if(user) onSelect("manager", null, user);
-    else if(legacyOk) onSelect("manager", null, {username:"management",display_name:"Management",role:"management"});
-    else setPinErr(true);
+
+    // Check lockout
+    if(user?.locked_until && new Date(user.locked_until) > new Date()){
+      const mins = Math.ceil((new Date(user.locked_until)-new Date())/60000);
+      setPinErr(true);
+      auditLog("login_blocked", username||"legacy", "manager", {reason:"account_locked"});
+      return;
+    }
+
+    if(user) {
+      await sbPatch("app_users",user.id,{failed_attempts:0,locked_until:null}).catch(()=>{});
+      auditLog("login", user.display_name||user.username, "manager");
+      onSelect("manager", null, user);
+    } else if(legacyOk) {
+      auditLog("login", "management", "manager", {method:"legacy_pin"});
+      onSelect("manager", null, {username:"management",display_name:"Management",role:"management"});
+    } else {
+      // Increment failed attempts
+      if(user) {
+        const attempts = (user.failed_attempts||0) + 1;
+        const lockUntil = attempts >= 5 ? new Date(Date.now() + 15*60*1000).toISOString() : null;
+        await sbPatch("app_users",user.id,{failed_attempts:attempts,locked_until:lockUntil}).catch(()=>{});
+      }
+      auditLog("login_failed", username||"unknown", "manager");
+      setPinErr(true);
+    }
   };
 
-  const tryClientLogin = () => {
+  const tryClientLogin = async () => {
     const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="client");
-    if(user) onSelect("client", null, user);
-    else setPinErr(true);
+    const found = users.find(u=>u.username===username&&u.role==="client");
+
+    if(found?.locked_until && new Date(found.locked_until) > new Date()){
+      setPinErr(true);
+      auditLog("login_blocked", username, "client", {reason:"account_locked"});
+      return;
+    }
+    if(user) {
+      await sbPatch("app_users",user.id,{failed_attempts:0,locked_until:null}).catch(()=>{});
+      auditLog("login", user.display_name||user.username, "client");
+      onSelect("client", null, user);
+    } else {
+      if(found) {
+        const attempts = (found.failed_attempts||0) + 1;
+        const lockUntil = attempts >= 5 ? new Date(Date.now()+15*60*1000).toISOString() : null;
+        await sbPatch("app_users",found.id,{failed_attempts:attempts,locked_until:lockUntil}).catch(()=>{});
+      }
+      auditLog("login_failed", username||"unknown", "client");
+      setPinErr(true);
+    }
   };
 
   if(mode==="choose") return (
@@ -451,7 +534,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
   const onHealth = reps.filter(r=>r.status==="health").length;
   const onLunch  = reps.filter(r=>r.status==="lunch").length;
   const onAdmin  = reps.filter(r=>r.status==="admin").length;
-  const adminLimit = settings.admin_limit ?? Math.max(1, Math.floor(activeReps.length * 0.5));
+  const adminLimit = settings.admin_limit ?? 2;
   const hLimit = settings.peak_mode ? H_LIMIT_PEAK : H_LIMIT_NORMAL;
   const notifCount = adHoc.length + swaps.length;
 
@@ -507,7 +590,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
             {icon:"👥",label:"Team Cap",val:`${totalOut}/${maxOut} out`,full:totalOut>=maxOut,color:"#8e44ad"},
             {icon:"🌿",label:"Health",val:`${onHealth}/${hLimit}`,full:onHealth>=hLimit,color:"#2980b9"},
             {icon:"🥗",label:"Lunch",val:`${onLunch}/${LUNCH_LIMIT}`,full:onLunch>=LUNCH_LIMIT,color:"#e07b00"},
-            {icon:"🗂️",label:"Admin",val:settings.admin_mode?`${onAdmin}/${adminLimit}`:"Off",full:onAdmin>=adminLimit,color:"#1d4ed8"},
+            {icon:"🗂️",label:"Admin",val:`${onAdmin}/${adminLimit}`,full:onAdmin>=adminLimit,color:"#1d4ed8"},
           ].map(m=>(
             <div key={m.label} style={{background:"rgba(255,255,255,.08)",borderRadius:9,padding:"8px 10px",border:`1px solid ${m.full?"rgba(231,76,60,.5)":"rgba(255,255,255,.1)"}`}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -538,7 +621,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
         {tab==="kpi"        &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRowsPersist} kpiFileName={kpiFileName} setKpiFileName={setKpiFileNamePersist} clearKpiData={clearKpiData}/>}
-        {tab==="submissions"&&<MgrSubmissions submissions={submissions} reload={reload} fire={fire} currentUser={currentUser}/>}
+        {tab==="submissions"&&<MgrSubmissions submissions={submissions} reload={reload} fire={fire} currentUser={currentUser} settings={settings}/>}
         {tab==="users"      &&<MgrUsers reload={reload} fire={fire}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
         {tab==="pto"       &&<MgrPTO reps={reps} reload={reload} fire={fire}/> }
@@ -729,10 +812,8 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
   };
 
   const EXECO_WEBHOOK = settings.execo_webhook;
-  const excooPing = (text) => {
-    if(!EXECO_WEBHOOK) return;
-    fetch(EXECO_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(()=>{});
-  };
+  const ping = makePinger(settings.notif_prefs||{}, EXECO_WEBHOOK);
+  const excooPing = (key, text) => ping.execo(key, text);
 
   const handleAdHoc = async (req, approve) => {
     await sbPatch("adhoc_lunch_requests",req.id,{status:approve?"approved":"declined"});
@@ -743,10 +824,10 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
         await sbPost("break_log",{rep_id:rep.id,rep_name:rep.name,break_type:"lunch"});
       }
       const ctTime = req.preferred_time ? toMgrTz(req.preferred_time, req.rep_timezone||"Central") : "now";
-      excooPing(`✅ Ad hoc lunch *approved* for ${req.rep_name} at ${ctTime}${req.note?` — "${req.note}"`:""}`);
+      excooPing("adhoc_approved",`✅ Ad hoc lunch *approved* for ${req.rep_name} at ${ctTime}${req.note?` — "${req.note}"`:""}`);
       fire("approved",`Ad hoc lunch approved for ${req.rep_name}`);
     } else {
-      excooPing(`❌ Ad hoc lunch *declined* for ${req.rep_name}`);
+      excooPing("adhoc_declined",`❌ Ad hoc lunch *declined* for ${req.rep_name}`);
       fire("declined",`Ad hoc lunch declined for ${req.rep_name}`);
     }
     reload();
@@ -771,7 +852,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
           await sbPatch("rep_status",repA.id,{lunch_schedule:schA});
           await sbPatch("rep_status",repB.id,{lunch_schedule:schB});
         }
-        excooPing(`🔄 Lunch swap *approved* — ${swap.requester_name} ↔ ${swap.target_name}`);
+        excooPing("swap_approved",`🔄 Lunch swap *approved* — ${swap.requester_name} ↔ ${swap.target_name}`);
         fire("approved",`Lunch swap approved ✓`);
       } else {
         fire("info","Swap declined");
@@ -2071,17 +2152,15 @@ function MgrPTO({ reps, reload, fire }) {
 function MgrSettings({ settings, reps, reload, fire }) {
   const [customCap, setCustomCap] = useState(settings.custom_limit??Math.floor(reps.length*0.3));
   const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status)&&(r.rep_stage||"active")==="active");
-  const [adminLimit, setAdminLimit] = useState(settings.admin_limit??Math.max(1,Math.floor(activeReps.length*0.5)));
+  const [adminLimit, setAdminLimit] = useState(settings.admin_limit??2);
+  const notifPrefs = settings.notif_prefs||{};
+  const ping = makePinger(notifPrefs, settings.execo_webhook);
 
   const togglePeak = async () => {
     const newVal = !settings.peak_mode;
-    const updates = {peak_mode:newVal, updated_at:new Date().toISOString()};
-    if(newVal && settings.admin_mode) updates.admin_mode = false;
-    await sbPatch("app_settings",1,updates);
-    fire("info",`Peak mode ${newVal?"enabled":"disabled"}${newVal&&settings.admin_mode?" — admin mode closed":""}`);
-    if(newVal){
-      gchatPing("⚡ *Volume is building — back to the phones!* Peak mode is now active. Admin time is closed for now. Let's keep those calls answered 💪");
-    }
+    await sbPatch("app_settings",1,{peak_mode:newVal,updated_at:new Date().toISOString()});
+    fire("info",`Peak mode ${newVal?"enabled":"disabled"}`);
+    if(newVal) ping.main("peak_mode","⚡ *Volume is building — back to the phones!* Peak mode is now active. Let's keep those calls answered 💪");
     reload();
   };
 
@@ -2089,9 +2168,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
     const newVal = !settings.admin_mode;
     await sbPatch("app_settings",1,{admin_mode:newVal,updated_at:new Date().toISOString()});
     fire("info",`Admin mode ${newVal?"enabled":"disabled"}`);
-    if(newVal){
-      gchatPing("🗂️ *Admin time is open!* Calls are quiet — jump into the break app and tap Admin Time to take a 30-min slot for emails and tickets. Watch for the banner 👀");
-    }
+    if(newVal) ping.main("admin_mode","🗂️ *Admin time is open!* Calls are quiet — jump into the break app and tap Admin Time to take a 30-min slot for emails and tickets. Watch for the banner 👀");
     reload();
   };
 
@@ -2102,10 +2179,9 @@ function MgrSettings({ settings, reps, reload, fire }) {
   };
 
   const resetAdminLimit = async () => {
-    const def = Math.max(1,Math.floor(activeReps.length*0.5));
     await sbPatch("app_settings",1,{admin_limit:null,updated_at:new Date().toISOString()});
-    setAdminLimit(def);
-    fire("info","Admin limit reset to 50% default");
+    setAdminLimit(2);
+    fire("info","Admin limit reset to 2");
     reload();
   };
 
@@ -2138,30 +2214,53 @@ function MgrSettings({ settings, reps, reload, fire }) {
         {settings.peak_mode&&<p style={{margin:0,fontSize:11,color:"#e74c3c",fontWeight:600}}>⚡ Active — health breaks limited to 1 at a time</p>}
       </div>
 
-      {/* Admin Mode */}
+      {/* Admin Time */}
       <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div>
-            <p style={{margin:0,fontWeight:700,fontSize:14}}>🗂️ Admin Mode</p>
-            <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Allows reps to take 30-min admin slots</p>
-          </div>
-          <div onClick={toggleAdmin} style={{width:46,height:26,borderRadius:13,background:settings.admin_mode?"#1d4ed8":"#ccc",cursor:"pointer",position:"relative",transition:"background .2s"}}>
-            <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:settings.admin_mode?23:3,transition:"left .2s"}}/>
-          </div>
-        </div>
-        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Default: 50% of active team = {Math.max(1,Math.floor(activeReps.length*0.5))} max on admin at once</p>
+        <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🗂️ Admin Time</p>
+        <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Always available — reps can take a 30-min admin slot for emails and tickets. Set how many can go at once.</p>
+        <p style={{margin:"0 0 8px",fontSize:12,color:"#555"}}>Default: 2 reps at a time · Active team: {activeReps.length}</p>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
           <input type="number" min={1} max={activeReps.length} value={adminLimit} onChange={e=>setAdminLimit(parseInt(e.target.value)||1)} style={{width:70,padding:"9px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:14,outline:"none",textAlign:"center"}}/>
           <span style={{fontSize:13,color:"#888"}}>max people on admin at once</span>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <Btn label="Reset to 50%" onClick={resetAdminLimit} outline color="#888" small/>
+          <Btn label="Reset to 2" onClick={resetAdminLimit} outline color="#888" small/>
           <Btn label="Save Limit" onClick={saveAdminLimit} color="#1d4ed8" small/>
         </div>
-        {settings.admin_mode&&<p style={{margin:"10px 0 0",fontSize:11,color:"#1d4ed8",fontWeight:600}}>🗂️ Active — best windows: 7–9am CT and after 6pm CT</p>}
       </div>
 
-      {/* Execo Managers Webhook */}
+      {/* Notification Preferences */}
+      <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
+        <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 GChat Notification Preferences</p>
+        <p style={{margin:"0 0 14px",fontSize:12,color:"#888"}}>Choose which events ping GChat. All are on by default.</p>
+        {["main","execo"].map(ch=>(
+          <div key={ch} style={{marginBottom:14}}>
+            <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#555",textTransform:"uppercase",letterSpacing:.5}}>
+              {ch==="main"?"📢 Main ESC Space":"👔 Execo Managers Space"}
+            </p>
+            {NOTIF_EVENTS.filter(e=>e.ch===ch||e.ch==="both").map(e=>{
+              const isOn = notifPrefs[e.k]!==false;
+              return (
+                <div key={e.k} onClick={async()=>{
+                  const updated={...notifPrefs,[e.k]:!isOn};
+                  await sbPatch("app_settings",1,{notif_prefs:updated,updated_at:new Date().toISOString()});
+                  reload();
+                }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:isOn?"#f8f8f8":"#fdf0ee",marginBottom:5,cursor:"pointer",border:`1px solid ${isOn?"#eee":"#f5b7b1"}`}}>
+                  <span style={{fontSize:12,color:isOn?"#1a1a1a":"#888"}}>{e.l}</span>
+                  <div style={{width:36,height:20,borderRadius:10,background:isOn?"#1a5c35":"#ccc",position:"relative",transition:"background .2s",flexShrink:0}}>
+                    <div style={{width:16,height:16,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:isOn?18:2,transition:"left .2s"}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <button onClick={async()=>{
+          await sbPatch("app_settings",1,{notif_prefs:{},updated_at:new Date().toISOString()});
+          fire("info","All notifications reset to on");
+          reload();
+        }} style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",cursor:"pointer",fontSize:11,color:"#888",fontWeight:600}}>Reset all to ON</button>
+      </div>
       <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #efefef",padding:"16px"}}>
         <p style={{margin:"0 0 4px",fontWeight:700,fontSize:14}}>🔔 Execo Managers GChat</p>
         <p style={{margin:"0 0 12px",fontSize:12,color:"#888"}}>Separate space for ad hoc lunch requests and approvals — for when you are unavailable</p>
@@ -2234,9 +2333,9 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
 
   const canTakeHealth = healthLeft>0 && capLeft>0 && !cooldownActive && breaksLeft>0 && myRep.status==="available";
   const canTakeLunch  = lunchLeft>0 && capLeft>0 && myRep.status==="available";
-  const adminLimit    = Math.max(1, Math.floor(activeReps.length * 0.5));
+  const adminLimit    = settings.admin_limit ?? 2;
   const onAdmin       = reps.filter(r=>r.status==="admin").length;
-  const canTakeAdmin  = settings.admin_mode && onAdmin<adminLimit && capLeft>0 && myRep.status==="available";
+  const canTakeAdmin  = onAdmin<adminLimit && capLeft>0 && myRep.status==="available";
 
   // Queue helpers
   const myQueueEntry = breakQueue.find(q=>q.rep_id===repInfo.id);
@@ -2305,7 +2404,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       }
     }
     if(type==="admin"){
-      if(!settings.admin_mode){fire("declined","Admin mode is not active");return;}
+      
       if(onAdmin>=adminLimit){fire("declined","Admin slots full — too many reps on admin");return;}
     }
     const bankedReset = type==="health" && myRep.health_time_banked>=HEALTH_MAX_SEC && !cooldownActive;
@@ -2350,13 +2449,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       note:note||null,
     });
     // Ping Execo managers space
-    if(settings.execo_webhook){
-      const timeStr = preferredTime ? `Preferred: ${preferredTime} ${tz}` : "No preferred time given";
-      const noteStr = note ? ` — "${note}"` : "";
-      fetch(settings.execo_webhook,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({text:`🥗 *Ad hoc lunch request* from *${repInfo.name}* (${tz}). ${timeStr}${noteStr}. Awaiting manager approval.`})
-      }).catch(()=>{});
-    }
+    const repPing = makePinger(settings.notif_prefs||{}, settings.execo_webhook);
+    repPing.execo("adhoc_request","🥗 *Ad hoc lunch request* from *"+repInfo.name+"* ("+tz+"). "+(preferredTime?"Preferred: "+preferredTime+" "+tz:"No preferred time given")+(note?" — \""+note+"\"":"")+". Awaiting manager approval.");
     fire("info","Ad hoc lunch request sent to manager 📩");
     reload();
   };
@@ -2375,21 +2469,13 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
           </div>
           <button onClick={onLogout} style={{padding:"6px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.7)",cursor:"pointer",fontSize:11}}>Switch</button>
         </div>
-        {settings.admin_mode&&(
-          <div style={{background:"rgba(29,78,216,.25)",border:"1px solid rgba(147,197,253,.4)",borderRadius:10,padding:"10px 13px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:20,flexShrink:0}}>🗂️</span>
-            <div>
-              <p style={{margin:0,fontSize:12,fontWeight:700,color:"#bfdbfe"}}>Admin time is open!</p>
-              <p style={{margin:"1px 0 0",fontSize:11,color:"rgba(191,219,254,.8)"}}>Calls are quiet — use this to clear emails and tickets. Tap Admin Time below to take a 30-min slot.</p>
-            </div>
-          </div>
-        )}
-        <div style={{display:"grid",gridTemplateColumns:settings.admin_mode?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr",gap:8}}>
+        
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
           {[
             {icon:"🌿",label:"Health",avail:healthLeft,total:hLimit,color:"#2980b9",extra:cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:"Available"},
             {icon:"🥗",label:"Lunch",avail:lunchLeft,total:LUNCH_LIMIT,color:"#e07b00",extra:"slots"},
             {icon:"👥",label:"Team Cap",avail:capLeft,total:maxOut,color:"#8e44ad",extra:"slots"},
-            ...(settings.admin_mode?[{icon:"🗂️",label:"Admin",avail:adminLimit-onAdmin,total:adminLimit,color:"#1d4ed8",extra:"slots"}]:[]),
+            {icon:"🗂️",label:"Admin",avail:adminLimit-onAdmin,total:adminLimit,color:"#1d4ed8",extra:"slots"},
           ].map(m=>(
             <div key={m.label} style={{background:"rgba(255,255,255,.12)",borderRadius:11,padding:"10px 11px",border:`1px solid ${m.avail===0?"rgba(231,76,60,.5)":"rgba(255,255,255,.15)"}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -2470,7 +2556,7 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
               {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
-              ...(settings.admin_mode?[{key:"admin",icon:"🗂️",label:"Admin Time",dur:"30 min",avail:canTakeAdmin,reason:!canTakeAdmin?"Slots full":null}]:[]),
+              {key:"admin",icon:"🗂️",label:"Admin Time",dur:"30 min",avail:canTakeAdmin,reason:!canTakeAdmin?"Slots full":null},
             ].map(o=>(
               <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:o.avail?"1.5px solid #ddd":"1.5px solid #f0f0f0",borderRadius:12,padding:"12px 14px",cursor:o.avail?"pointer":"not-allowed",background:o.avail?"#fff":"#f7f7f7",opacity:o.avail?1:0.6}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -2894,7 +2980,7 @@ function HubView({ isManager }) {
       requires_mention:f.requires_mention||false,show_scenarios:f.show_scenarios||false,
     };
     if(f.id) await sbPatch("hub_promos",f.id,payload); else await sbPost("hub_promos",payload);
-    if(isNew) gchatPing(`🎯 *New promo added to the Hub!* "${f.title}"${f.code?` — Code: \`${f.code}\``:""}. Check the Hub for details and talk track.`);
+    if(isNew) ping.main("hub_promo",`🎯 *New promo added to the Hub!* "${f.title}"${f.code?` — Code: \`${f.code}\``:""}. Check the Hub for details and talk track.`);
     fire("approved","Promo saved"); setEditModal(null); reload();
   };
   const deletePromo=async(id)=>{ await sbPatch("hub_promos",id,{active:false}); fire("info","Promo removed"); reload(); };
@@ -2902,7 +2988,7 @@ function HubView({ isManager }) {
     const isNew = !f.id;
     if(f.id) await sbPatch("hub_closures",f.id,{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason});
     else await sbPost("hub_closures",{location_name:f.location_name,start_date:f.start_date,end_date:f.end_date,reason:f.reason});
-    if(isNew) gchatPing(`🚫 *School closure logged:* ${f.location_name} — ${f.start_date} to ${f.end_date}. Reason: ${f.reason}. Do not book enrollments for this location during this period.`);
+    if(isNew) ping.main("hub_closure",`🚫 *School closure logged:* ${f.location_name} — ${f.start_date} to ${f.end_date}. Reason: ${f.reason}. Do not book enrollments for this location during this period.`);
     fire("approved","Closure saved"); setEditModal(null); reload();
   };
   const deleteClosure=async(id)=>{ await sbDel("hub_closures",id); fire("info","Closure removed"); reload(); };
@@ -2910,7 +2996,7 @@ function HubView({ isManager }) {
   const deleteDoc=async(id)=>{ await sbDel("hub_docs",id); fire("info","Doc removed"); reload(); };
   const saveLoc=async(f)=>{
     await sbPatch("hub_locations",f.id,{ext:f.ext,privates:f.privates,pool:f.pool,addr:f.addr});
-    gchatPing(`📍 *Location updated in the Hub:* ${f.name} — details have changed. Check the Hub for the latest info.`);
+    ping.main("hub_location",`📍 *Location updated in the Hub:* ${f.name} — details have changed. Check the Hub for the latest info.`);
     fire("approved","Location updated"); setEditModal(null); reload();
   };
   const saveEvent=async(f)=>{ if(f.id)await sbPatch("hub_events",f.id,{name:f.name,event_date:f.event_date,note:f.note}); else await sbPost("hub_events",{name:f.name,event_date:f.event_date,note:f.note||""}); fire("approved","Event saved"); setEditModal(null); reload(); };
@@ -2919,7 +3005,7 @@ function HubView({ isManager }) {
     const isNew = !f.id;
     if(f.id) await sbPatch("hub_alerts",f.id,{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type});
     else await sbPost("hub_alerts",{title:f.title,body:f.body,category:f.category,alert_type:f.alert_type||"warning",sort_order:0,active:true});
-    if(isNew) gchatPing(`🔔 *New reminder in the Hub:* "${f.title}" — ${f.body}`);
+    if(isNew) ping.main("hub_alert",`🔔 *New reminder in the Hub:* "${f.title}" — ${f.body}`);
     fire("approved","Reminder saved"); setEditModal(null); reload();
   };
   const deleteAlert=async(id)=>{ await sbPatch("hub_alerts",id,{active:false}); fire("info","Reminder removed"); reload(); };
@@ -4723,36 +4809,35 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
 }
 
 // ── MGR: SUBMISSION QUEUE ─────────────────────────────────────────────
-function MgrSubmissions({ submissions=[], reload, fire, currentUser }) {
+function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={} }) {
   const [filter, setFilter] = useState("pending");
   const TYPE_LABELS = {promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",pricing:"💰 Pricing",alert:"🔔 Reminder"};
+  const ping = makePinger(settings.notif_prefs||{}, settings.execo_webhook);
 
   const filtered = submissions.filter(s=>filter==="all"||s.status===filter);
 
   const approve = async (s) => {
-    // Apply the submission to the actual hub table
     const p = s.payload;
     try {
       if(s.type==="promo"){
         if(p.id) await sbPatch("hub_promos",p.id,p); else await sbPost("hub_promos",{...p,active:true});
-        gchatPing(`🎯 *New promo added to the Hub!* "${p.title}"${p.code?` — Code: \`${p.code}\``:""}. Check the Hub for details.`);
+        ping.main("hub_promo",`🎯 *New promo added to the Hub!* "${p.title}"${p.code?` — Code: \`${p.code}\``:""}. Check the Hub for details.`);
       } else if(s.type==="closure"){
         await sbPost("hub_closures",p);
-        gchatPing(`🚫 *School closure:* ${p.location_name} — ${p.start_date} to ${p.end_date}. ${p.reason}`);
+        ping.main("hub_closure",`🚫 *School closure:* ${p.location_name} — ${p.start_date} to ${p.end_date}. ${p.reason}`);
       } else if(s.type==="location"){
         await sbPatch("hub_locations",p.id,p);
-        gchatPing(`📍 *Location updated:* ${p.name} — check the Hub for latest details.`);
+        ping.main("hub_location",`📍 *Location updated:* ${p.name} — check the Hub for latest details.`);
       } else if(s.type==="pricing"){
-        // Only update non-empty price fields
         const updates={};
         ["price_mf","price_ss","price_priv","price_semi","price_priv20","price_odl",
          "price_odl_ss","price_clinic","price_st_mf","price_st_ss","price_adaptive","reg_fee"
         ].forEach(k=>{ if(p[k]!==""&&p[k]!=null) updates[k]=parseFloat(p[k]); });
         await sbPatch("hub_locations",p.id,updates);
-        gchatPing(`💰 *Pricing updated:* ${p.name} — new rates now live in the calculator.`);
+        ping.main("hub_pricing",`💰 *Pricing updated:* ${p.name} — new rates now live in the calculator.`);
       } else if(s.type==="alert"){
         await sbPost("hub_alerts",{...p,active:true,sort_order:0});
-        gchatPing(`🔔 *New reminder:* "${p.title}" — ${p.body}`);
+        ping.main("hub_alert",`🔔 *New reminder:* "${p.title}" — ${p.body}`);
       }
       await sbPatch("hub_submissions",s.id,{status:"approved",reviewed_by:currentUser?.display_name||"Manager",reviewed_at:new Date().toISOString()});
       fire("approved","Submission approved and published ✅");
@@ -4762,6 +4847,7 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser }) {
 
   const reject = async (s) => {
     await sbPatch("hub_submissions",s.id,{status:"rejected",reviewed_by:currentUser?.display_name||"Manager",reviewed_at:new Date().toISOString()});
+    auditLog("reject", currentUser?.display_name||"Manager", `${s.type}:${s.payload?.title||s.payload?.location_name||s.id}`);
     fire("info","Submission rejected");
     reload();
   };
@@ -4943,10 +5029,13 @@ function ClientView({ currentUser, data, reload, onLogout }) {
 
   const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+  const [appSettings, setAppSettings] = useState({});
+
   useEffect(()=>{
     const who=encodeURIComponent(currentUser?.display_name||currentUser?.username||"client");
     sb("hub_submissions?submitted_by=eq."+who+"&order=submitted_at.desc&limit=50").then(s=>setSubmissions(s||[])).catch(()=>{});
     sb("hub_locations?order=name").then(l=>setLocations(l||[])).catch(()=>{});
+    sb("app_settings?id=eq.1").then(r=>setAppSettings(r?.[0]||{})).catch(()=>{});
   },[]);
 
   const submit = async () => {
@@ -4961,7 +5050,12 @@ function ClientView({ currentUser, data, reload, onLogout }) {
 
     await sbPost("hub_submissions",{type,payload,submitted_by:currentUser?.display_name||currentUser?.username||"client",urgent,status:"pending"});
 
-    if(urgent) gchatPing("🚨 *URGENT Hub submission from "+(currentUser?.display_name||"client")+"!* "+(payload.title||payload.location_name||"Update")+" — requires immediate review.");
+    const clientPing = makePinger(appSettings.notif_prefs||{}, appSettings.execo_webhook);
+    if(urgent){
+      clientPing.both("client_urgent","🚨 *URGENT Hub submission from "+(currentUser?.display_name||"client")+"!* "+(payload.title||payload.location_name||"Update")+" — requires immediate review.");
+    } else {
+      clientPing.execo("client_submission","📤 *New Hub submission from "+(currentUser?.display_name||"client")+"* — "+TYPE_LABELS[type]+": "+(payload.title||payload.location_name||payload.name||"Update")+". Awaiting manager approval.");
+    }
 
     fire("approved",urgent?"Urgent submission sent 🚨":"Submitted for approval ✅");
     setPromo({title:"",code:"",rules:"",expires_on:"",proactive:false,discount_pct:0,discount_fixed:0,discount_type:"pct",applies_to:"continuous",one_class_only:false,multi_class_still:true,customer_types:["lead","lapsed"],month_restriction:"",requires_mention:false,show_scenarios:false});
@@ -5273,7 +5367,21 @@ export default function App() {
     </div>
   );
 
-  const pendingCount = submissions.filter(s=>s.status==="pending").length;
+  // Session timeout — auto logout after 8 hours (SOC 2 CC6.1)
+  const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+  const lastActivityRef = React.useRef(Date.now());
+
+  useEffect(()=>{
+    const updateActivity = () => { lastActivityRef.current = Date.now(); };
+    window.addEventListener("click", updateActivity);
+    window.addEventListener("keydown", updateActivity);
+    const check = setInterval(()=>{
+      if(view !== "login" && Date.now() - lastActivityRef.current > SESSION_TIMEOUT_MS){
+        setView("login"); setCurrentUser(null); setCurrentRep(null);
+      }
+    }, 60000);
+    return ()=>{ clearInterval(check); window.removeEventListener("click",updateActivity); window.removeEventListener("keydown",updateActivity); };
+  },[view]);
 
   return (
     <>
@@ -5283,9 +5391,9 @@ export default function App() {
         else if(role==="client"){setCurrentUser(user);setView("client");}
         else{setCurrentRep(rep);setView("rep");}
       }} reps={data.reps} users={users}/>}
-      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount}/>}
-      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen}/>}
-      {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
+      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"manager","session");setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount}/>}
+      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentRep?.name||"rep","session");setView("login");}} centreOpen={centreOpen}/>}
+      {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{auditLog("logout",currentUser?.display_name||"client","session");setView("login");setCurrentUser(null);}}/>}
     </>
   );
 }
