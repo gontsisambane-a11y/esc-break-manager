@@ -5143,9 +5143,9 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
   },{});
 
   const typeColors = {
-    error:  {bg:"#fdf0ee",border:"#f5b7b1",icon:"🚨",text:"#c0392b"},
-    warning:{bg:"#fffdf8",border:"#f0c080",icon:"⚠️",text:"#856404"},
-    info:   {bg:"#e8f0fe",border:"#aed6f1",icon:"ℹ️",text:"#1a4a8a"},
+    error:  {bg:DS.redDim,   border:DS.red+"40",   icon:"🚨", text:DS.red},
+    warning:{bg:DS.amberDim, border:DS.amber+"40", icon:"⚠️", text:DS.amber},
+    info:   {bg:DS.accentDim,border:DS.accent+"40",icon:"ℹ️", text:DS.accent},
   };
 
   return (
@@ -5177,11 +5177,11 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
               <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:DS.textSec,letterSpacing:.3}}>{cat}</p>
               {items.map(item=>(
                 <div key={item.id} onClick={()=>toggle(item.id)}
-                  style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 10px",borderRadius:9,cursor:"pointer",background:checked[item.id]?"#f0faf4":"#fafafa",border:`1px solid ${checked[item.id]?"#c8e6c9":"#efefef"}`,marginBottom:5,transition:"all .15s"}}>
-                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${checked[item.id]?"#1a5c35":"#ddd"}`,background:checked[item.id]?"#1a5c35":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all .15s"}}>
+                  style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 10px",borderRadius:9,cursor:"pointer",background:checked[item.id]?DS.greenDim:DS.bgSurf,border:`1px solid ${checked[item.id]?DS.green+"40":DS.border}`,marginBottom:5,transition:"all .15s"}}>
+                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${checked[item.id]?DS.green:DS.textMut}`,background:checked[item.id]?DS.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all .15s"}}>
                     {checked[item.id]&&<span style={{fontSize:12,color:"#fff",fontWeight:800}}>✓</span>}
                   </div>
-                  <p style={{margin:0,fontSize:12,color:checked[item.id]?"#1a5c35":"#444",lineHeight:1.5,textDecoration:checked[item.id]?"line-through":"none",transition:"all .15s"}}>{item.text}</p>
+                  <p style={{margin:0,fontSize:12,color:checked[item.id]?DS.green:DS.textSec,lineHeight:1.5,textDecoration:checked[item.id]?"line-through":"none",transition:"all .15s"}}>{item.text}</p>
                 </div>
               ))}
             </div>
@@ -5196,7 +5196,7 @@ function RemindersTab({alerts, isManager, onAdd, onEdit}) {
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.red,margin:0,fontWeight:700}}>⚠️ Common Mistakes — Rules</p>
-          {isManager&&<button onClick={onAdd} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add Reminder</button>}
+          {isManager&&<button onClick={onAdd} style={{padding:"6px 14px",borderRadius:8,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,position:"relative",zIndex:2}}>+ Add Reminder</button>}
         </div>
         {Object.entries(alertsByCat).map(([cat,catAlerts])=>(
           <div key={cat} style={{marginBottom:12}}>
