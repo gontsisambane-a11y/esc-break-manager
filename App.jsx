@@ -1,102 +1,139 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
-// ── EXECO DESIGN SYSTEM ───────────────────────────────────────────────
-const DS = {
-  bg:       "#0d1b2e",
-  bgCard:   "#0f2440",
-  bgSurf:   "#162d4a",
-  bgHover:  "#1a3555",
-  border:   "rgba(59,130,246,0.15)",
-  borderHi: "rgba(59,130,246,0.35)",
-  accent:   "#3b82f6",
-  accentHi: "#60a5fa",
-  accentDim:"rgba(59,130,246,0.12)",
-  green:    "#10b981",
-  greenDim: "rgba(16,185,129,0.12)",
-  amber:    "#f59e0b",
-  amberDim: "rgba(245,158,11,0.12)",
-  red:      "#ef4444",
-  redDim:   "rgba(239,68,68,0.12)",
-  textPri:  "#f0f6ff",
-  textSec:  "#7a9cbf",
-  textMut:  "#3d5a78",
-  radius:   "12px",
-  radiusSm: "8px",
-  radiusLg: "16px",
+// ── EXECO THEME SYSTEM ────────────────────────────────────────────────
+const THEMES = {
+  dark: {
+    bg:        "#0d1b2e",
+    bgCard:    "#0f2440",
+    bgSurf:    "#162d4a",
+    bgHover:   "#1a3555",
+    border:    "rgba(59,130,246,0.15)",
+    borderHi:  "rgba(59,130,246,0.35)",
+    accent:    "#3b82f6",
+    accentHi:  "#60a5fa",
+    accentDim: "rgba(59,130,246,0.12)",
+    green:     "#10b981",
+    greenDim:  "rgba(16,185,129,0.12)",
+    amber:     "#f59e0b",
+    amberDim:  "rgba(245,158,11,0.12)",
+    red:       "#ef4444",
+    redDim:    "rgba(239,68,68,0.12)",
+    textPri:   "#f0f6ff",
+    textSec:   "#7a9cbf",
+    textMut:   "#3d5a78",
+    radius:    "12px",
+    radiusSm:  "8px",
+    radiusLg:  "16px",
+  },
+  light: {
+    bg:        "#f0f4f8",
+    bgCard:    "#ffffff",
+    bgSurf:    "#f4f7fb",
+    bgHover:   "#e8eef5",
+    border:    "rgba(59,130,246,0.2)",
+    borderHi:  "rgba(59,130,246,0.4)",
+    accent:    "#2563eb",
+    accentHi:  "#3b82f6",
+    accentDim: "rgba(37,99,235,0.08)",
+    green:     "#059669",
+    greenDim:  "rgba(5,150,105,0.08)",
+    amber:     "#d97706",
+    amberDim:  "rgba(217,119,6,0.08)",
+    red:       "#dc2626",
+    redDim:    "rgba(220,38,38,0.08)",
+    textPri:   "#0f172a",
+    textSec:   "#475569",
+    textMut:   "#94a3b8",
+    radius:    "12px",
+    radiusSm:  "8px",
+    radiusLg:  "16px",
+  }
 };
 
-const gStyle = `
+// Global theme state — read from localStorage, default dark
+let _theme = (typeof localStorage !== "undefined" && localStorage.getItem("esc_theme")) || "dark";
+let _themeListeners = [];
+
+function getDS() { return THEMES[_theme]; }
+function setTheme(t) {
+  _theme = t;
+  if(typeof localStorage !== "undefined") localStorage.setItem("esc_theme", t);
+  document.body.style.background = THEMES[t].bg;
+  document.body.style.color = THEMES[t].textPri;
+  _themeListeners.forEach(fn => fn(t));
+}
+
+function useTheme() {
+  const [theme, setT] = useState(_theme);
+  useEffect(()=>{
+    const fn = (t) => setT(t);
+    _themeListeners.push(fn);
+    return ()=>{ _themeListeners = _themeListeners.filter(f=>f!==fn); };
+  },[]);
+  return [theme, (t)=>setTheme(t)];
+}
+
+// DS is now a proxy — always reads current theme
+const DS = new Proxy({}, { get: (_,k) => THEMES[_theme][k] });
+
+function ThemeToggle({ size="normal" }) {
+  const [theme, setT] = useTheme();
+  const isDark = theme === "dark";
+  const s = size === "small";
+  return (
+    <button
+      onClick={()=>setT(isDark?"light":"dark")}
+      title={isDark?"Switch to light mode":"Switch to dark mode"}
+      style={{
+        display:"flex",alignItems:"center",gap:s?4:6,
+        padding:s?"4px 10px":"6px 12px",
+        borderRadius:DS.radiusSm,
+        border:`1px solid ${DS.border}`,
+        background:"transparent",
+        color:DS.textSec,
+        cursor:"pointer",
+        fontSize:s?11:12,
+        fontWeight:500,
+        transition:"all .15s",
+        flexShrink:0,
+      }}
+    >
+      <span style={{fontSize:s?13:15}}>{isDark?"☀️":"🌙"}</span>
+      {!s&&<span>{isDark?"Day":"Night"}</span>}
+    </button>
+  );
+}
+
+function buildGStyle(t) {
+  const d = THEMES[t];
+  return `
   * { box-sizing: border-box; }
   @keyframes popIn { from { transform: scale(0.95) translateY(4px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
   @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
-  body { background: ${DS.bg}; color: ${DS.textPri}; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; }
-
-  /* Force all white/light backgrounds to dark theme */
+  body { background: ${d.bg}; color: ${d.textPri}; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; transition: background .2s, color .2s; }
   input, select, textarea {
-    background: ${DS.bgSurf} !important;
-    color: ${DS.textPri} !important;
-    border: 1px solid ${DS.border} !important;
-    border-radius: ${DS.radiusSm} !important;
-    padding: 9px 12px !important;
-    outline: none !important;
-    transition: border-color .15s;
+    background: ${d.bgSurf} !important; color: ${d.textPri} !important;
+    border: 1px solid ${d.border} !important; border-radius: ${d.radiusSm} !important;
+    padding: 9px 12px !important; outline: none !important; transition: border-color .15s;
   }
-  input:focus, select:focus, textarea:focus { border-color: ${DS.accent} !important; }
-  select option { background: ${DS.bgCard}; color: ${DS.textPri}; }
-
-  /* Fix all white card backgrounds */
-  [style*="background:#fff"], [style*='background: #fff'],
-  [style*="background:#ffffff"], [style*='background: #ffffff'],
-  [style*="background:#fffdf8"], [style*="background:#f4f6f2"],
-  [style*="background:#f8f8f8"], [style*="background:#fafafa"],
-  [style*="background:#f9f9f9"] {
-    background: ${DS.bgCard} !important;
-  }
-
-  /* Fix white borders */
-  [style*="border:1.5px solid #efefef"], [style*="border: 1.5px solid #efefef"],
-  [style*="border:1.5px solid #ddd"], [style*="border: 1.5px solid #ddd"],
-  [style*="border:1.5px solid #eee"], [style*="border: 1.5px solid #eee"],
-  [style*="border:1px solid #eee"], [style*="border: 1px solid #eee"] {
-    border-color: ${DS.border} !important;
-  }
-
-  /* Fix dark text on now-dark backgrounds */
-  [style*="color:#1a1a1a"], [style*="color: #1a1a1a"],
-  [style*="color:#111"], [style*="color:#333"],
-  [style*="color:#555"], [style*="color:#444"] {
-    color: ${DS.textPri} !important;
-  }
-  [style*="color:#888"], [style*="color:#999"],
-  [style*="color:#aaa"], [style*="color:#bbb"],
-  [style*="color:#666"] {
-    color: ${DS.textSec} !important;
-  }
-
-  /* Table headers and cells */
-  table { border-collapse: collapse; }
-  th { background: ${DS.bgSurf} !important; color: ${DS.textSec} !important; border-bottom: 1px solid ${DS.border} !important; }
-  td { border-bottom: 1px solid ${DS.border} !important; color: ${DS.textPri} !important; background: transparent !important; }
-  tr:nth-child(even) td { background: ${DS.bgSurf}22 !important; }
-
-  /* Fix label colours */
-  label { color: ${DS.textSec} !important; }
-
-  /* Scrollbars */
+  input:focus, select:focus, textarea:focus { border-color: ${d.accent} !important; }
+  select option { background: ${d.bgCard}; color: ${d.textPri}; }
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: ${DS.border}; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: ${DS.borderHi}; }
-
-  /* Fix roster/report cards */
-  [style*="background:#fff8ee"] { background: ${DS.amberDim} !important; }
-  [style*="background:#e8f0fe"] { background: ${DS.accentDim} !important; }
-  [style*="background:#eafaf1"] { background: ${DS.greenDim} !important; }
-  [style*="background:#fdf0ee"] { background: ${DS.redDim} !important; }
-  [style*="background:#f5eefb"] { background: rgba(139,92,246,0.1) !important; }
-  [style*="background:#fde8e8"] { background: ${DS.redDim} !important; }
+  ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: ${d.borderHi}; }
+  table { border-collapse: collapse; }
+  th { background: ${d.bgSurf} !important; color: ${d.textSec} !important; border-bottom: 1px solid ${d.border} !important; }
+  td { border-bottom: 1px solid ${d.border} !important; color: ${d.textPri} !important; background: transparent !important; }
 `;
+}
+
+// gStyle is now computed dynamically — components use useTheme() to re-render
+const gStyle = buildGStyle(_theme);
+
+
+
 // ── AI INSIGHTS ENGINE ────────────────────────────────────────────────
 async function callClaude(prompt, system="You are an operations analyst for a swim school enrollment call centre. Be concise, specific, and actionable. Never use bullet points — write in plain short sentences. Max 2 sentences unless instructed otherwise.") {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -667,6 +704,8 @@ function HealthTimer({ startedAt, bankedSec }) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────
 function LoginScreen({ onSelect, reps, users=[] }) {
+  const [theme] = useTheme();
+  const gStyle = buildGStyle(theme);
   const [mode,setMode]=useState("choose");
   const [pin,setPin]=useState("");
   const [username,setUsername]=useState("");
@@ -724,6 +763,8 @@ function LoginScreen({ onSelect, reps, users=[] }) {
 
   if(mode==="choose") return (
     <div style={{minHeight:"100vh",background:DS.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <style>{gStyle}</style>
+      <div style={{position:"absolute",top:16,right:16}}><ThemeToggle size="small"/></div>
       <div style={{marginBottom:36,textAlign:"center"}}>
         <div style={{fontSize:13,fontWeight:700,color:DS.accent,letterSpacing:3,textTransform:"uppercase",marginBottom:12}}>execo</div>
         <h1 style={{margin:"0 0 8px",fontSize:28,fontWeight:700,color:DS.textPri,letterSpacing:"-.5px"}}>ESC Operations</h1>
@@ -796,7 +837,9 @@ function LoginScreen({ onSelect, reps, users=[] }) {
 function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissions=[], pendingCount=0, kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName }) {
   const { reps, settings, adHoc, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("overview");
-  const [toast, setToast] = useState(null); // empty deps — only run once on mount
+  const [toast, setToast] = useState(null);
+  const [theme] = useTheme(); // re-render on theme change
+  const gStyle = buildGStyle(theme); // empty deps — only run once on mount
 
   const KPI_COLS = ["hs_deal_id","hs_agent_name","hs_call_timestamp","hs_call_disposition_label","hs_call_direction","contact_preferred_location","deal_stage"];
 
@@ -891,6 +934,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {settings.peak_mode&&<span style={{fontSize:10,background:DS.redDim,color:DS.red,padding:"3px 10px",borderRadius:DS.radiusSm,fontWeight:700,border:`1px solid ${DS.red}40`,letterSpacing:.5}}>⚡ PEAK</span>}
+            <ThemeToggle size="small"/>
             <span style={{fontSize:11,color:DS.textSec}}>{currentUser?.display_name||"Manager"}</span>
             <button onClick={onLogout} style={{padding:"5px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Sign out</button>
           </div>
@@ -2875,6 +2919,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   const [tab, setTab] = useState("my");
   const [toast, setToast] = useState(null);
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
+  const [theme] = useTheme();
+  const gStyle = buildGStyle(theme);
 
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
@@ -3033,7 +3079,10 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
             <h1 style={{margin:"2px 0 1px",fontSize:20,fontWeight:700,color:DS.textPri}}>Hey, {repInfo.name}</h1>
             <p style={{margin:0,fontSize:11,color:DS.textSec}}>{todayLabel(myRep?.timezone)}</p>
           </div>
-          <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Switch</button>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <ThemeToggle size="small"/>
+            <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Switch</button>
+          </div>
         </div>
 
         {/* Capacity tiles */}
