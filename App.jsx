@@ -321,6 +321,26 @@ function makePinger(notifPrefs={}, execoWebhook=null){
     }
   };
 }
+// ── CALL VOLUME INTELLIGENCE ─────────────────────────────────────────
+// Derived from 125,241 calls Jan 2024–Jun 2026
+const CALL_VOL_WEEKDAY = {7:0.4,8:3.7,9:6.5,10:9.6,11:10.3,12:10.0,13:9.2,14:9.4,15:11.1,16:11.1,17:8.8,18:5.6,19:2.6};
+const CALL_VOL_WEEKEND = {7:0.5,8:8.5,9:10.2,10:12.1,11:13.0,12:12.4,13:11.8,14:10.5,15:8.2,16:4.1,17:2.1,18:1.2};
+const PEAK_WD = new Set([10,11,12,13,14,15,16,17]);
+const PEAK_WE = new Set([8,9,10,11,12,13,14]);
+const HIGH_WD = new Set([9,18]);
+
+function getCallRisk() {
+  const ct = new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"}));
+  const h = ct.getHours(), d = ct.getDay();
+  const isWE = d===0||d===6;
+  const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
+  const pct = vol[h]||0;
+  if((isWE?PEAK_WE:PEAK_WD).has(h)) return {level:"peak",  label:"Peak hours — phones are busy",  color:DS.red,   pct};
+  if(!isWE&&HIGH_WD.has(h))          return {level:"high",  label:"High volume window",             color:DS.amber, pct};
+  if(pct < 3 || pct === 0)           return {level:"safe",  label:"Quiet window — good time for breaks", color:DS.green, pct};
+  return                                    {level:"normal",label:"Normal volume",                  color:DS.textSec,pct};
+}
+
 const HEALTH_MAX_SEC = 600;
 const HEALTH_PER_DAY = 3;
 const HEALTH_DAILY_BANK = HEALTH_MAX_SEC * HEALTH_PER_DAY; // 1800 sec = 30 min total per day
@@ -877,6 +897,19 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
         </div>
 
         {!centreOpen&&<div style={{background:DS.amberDim,border:`1px solid ${DS.amber}30`,borderRadius:DS.radiusSm,padding:"6px 12px",marginBottom:10,fontSize:11,color:DS.amber,fontWeight:600}}>Centre closed — opens 2:00pm SAST</div>}
+
+        {centreOpen&&(()=>{
+          const risk = getCallRisk();
+          return (
+            <div style={{background:`${risk.color}15`,border:`1px solid ${risk.color}30`,borderRadius:DS.radiusSm,padding:"6px 12px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:11,color:risk.color,fontWeight:600}}>
+                {risk.level==="peak"?"⚡ Peak hours":risk.level==="high"?"▲ High volume":risk.level==="safe"?"✓ Quiet window":"● Normal volume"} — {risk.pct>0?`~${risk.pct}% of calls/hr`:"outside operating hours"}
+              </span>
+              {risk.level==="peak"&&!settings.peak_mode&&<span style={{fontSize:10,color:risk.color,opacity:.8}}>Consider enabling Peak Mode →</span>}
+              {risk.level==="safe"&&settings.peak_mode&&<span style={{fontSize:10,color:risk.color,opacity:.8}}>Consider disabling Peak Mode →</span>}
+            </div>
+          );
+        })()}
 
         {/* Stats row */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
@@ -1455,6 +1488,141 @@ function AddRepModal({ onClose, onAdd }) {
 }
 
 // ── MGR: SCHEDULES ────────────────────────────────────────────────────
+function LunchOptimiser({ reps }) {
+  const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const today = DAYS[new Date().getDay()];
+  const [day, setDay] = useState(today);
+
+  // Get today's lunch schedules for all reps
+  const scheduled = reps
+    .filter(r=>!["off","pto","sick"].includes(r.status))
+    .map(r=>{
+      const sched = (r.lunch_schedule||{})[day];
+      if(!sched?.time) return null;
+      const [h,m] = sched.time.split(":").map(Number);
+      const endMin = h*60 + m + (sched.duration||60);
+      return {
+        name: r.name,
+        tz: r.timezone||"Central",
+        startCT: convertToCT(h, m, r.timezone||"Central"),
+        endCT: convertToCT(Math.floor(endMin/60), endMin%60, r.timezone||"Central"),
+        startLabel: sched.time,
+        dur: sched.duration||60,
+      };
+    }).filter(Boolean);
+
+  function convertToCT(h, m, tz) {
+    const offsets = {Central:0, Eastern:1, Pacific:-2, SA:7};
+    const diff = offsets[tz]||0;
+    return h*60 + m - diff*60;
+  }
+
+  function fmtCT(mins) {
+    const h = Math.floor(((mins%1440)+1440)%1440/60);
+    const m = ((mins%1440)+1440)%1440%60;
+    return `${h%12||12}:${String(m).padStart(2,"0")}${h>=12?"pm":"am"}`;
+  }
+
+  // Find conflicts — reps lunching at the same CT time
+  const conflicts = [];
+  for(let i=0;i<scheduled.length;i++){
+    for(let j=i+1;j<scheduled.length;j++){
+      const a=scheduled[i], b=scheduled[j];
+      // overlap check
+      if(a.startCT < b.endCT && b.startCT < a.endCT){
+        conflicts.push({a:a.name, b:b.name, ctTime:fmtCT(Math.max(a.startCT,b.startCT))});
+      }
+    }
+  }
+
+  // Risk per slot — based on real call volume data
+  function getSlotRisk(ctMins) {
+    const h = Math.floor(((ctMins%1440)+1440)%1440/60);
+    const isWE = new Date().getDay()===0||new Date().getDay()===6;
+    const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
+    const pct = vol[h]||0;
+    if((isWE?PEAK_WE:PEAK_WD).has(h)) return {level:"peak", color:DS.red, pct};
+    if(!isWE&&HIGH_WD.has(h)) return {level:"high", color:DS.amber, pct};
+    return {level:"ok", color:DS.green, pct};
+  }
+
+  // Suggest better windows (30-min slots with lowest volume in CT)
+  function getBestWindows() {
+    const slots = [];
+    for(let h=8;h<=20;h++){
+      const isWE = new Date().getDay()===0||new Date().getDay()===6;
+      const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
+      const pct = vol[h]||0;
+      slots.push({h, pct});
+    }
+    return slots.sort((a,b)=>a.pct-b.pct).slice(0,3);
+  }
+
+  const bestWindows = getBestWindows();
+
+  return (
+    <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:DS.radius,padding:"14px",marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div>
+          <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>🥗 Lunch Coverage Intelligence</p>
+          <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Based on real call volume patterns · {scheduled.length} reps scheduled today</p>
+        </div>
+        <select value={day} onChange={e=>setDay(e.target.value)} style={{padding:"6px 10px",fontSize:12,borderRadius:DS.radiusSm}}>
+          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=><option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+
+      {/* Conflicts */}
+      {conflicts.length>0&&(
+        <div style={{background:DS.redDim,border:`1px solid ${DS.red}40`,borderRadius:DS.radiusSm,padding:"10px 12px",marginBottom:10}}>
+          <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:DS.red}}>⚠️ {conflicts.length} Lunch Conflict{conflicts.length>1?"s":""} — Both reps off phones at the same time</p>
+          {conflicts.map((c,i)=>(
+            <p key={i} style={{margin:"0 0 2px",fontSize:11,color:DS.textSec}}>• {c.a} + {c.b} overlap around {c.ctTime} CT</p>
+          ))}
+        </div>
+      )}
+
+      {/* Best windows */}
+      <div style={{marginBottom:10}}>
+        <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Lowest risk lunch windows today</p>
+        <div style={{display:"flex",gap:6}}>
+          {bestWindows.map((w,i)=>(
+            <div key={i} style={{flex:1,background:DS.greenDim,border:`1px solid ${DS.green}30`,borderRadius:DS.radiusSm,padding:"6px 8px",textAlign:"center"}}>
+              <p style={{margin:0,fontSize:12,fontWeight:700,color:DS.green}}>{w.h%12||12}{w.h>=12?"pm":"am"} CT</p>
+              <p style={{margin:"2px 0 0",fontSize:9,color:DS.textMut}}>{w.pct>0?`~${w.pct}% vol`:"off hours"}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Rep schedule with risk */}
+      {scheduled.length>0&&(
+        <div>
+          <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Today's schedule vs call volume</p>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {scheduled.sort((a,b)=>a.startCT-b.startCT).map((r,i)=>{
+              const risk = getSlotRisk(r.startCT);
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${risk.color}30`}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:risk.color,flexShrink:0}}/>
+                  <span style={{fontSize:12,fontWeight:600,color:DS.textPri,minWidth:80}}>{r.name}</span>
+                  <span style={{fontSize:11,color:DS.textSec}}>{r.startLabel} {r.tz} · {r.dur}min</span>
+                  <span style={{fontSize:10,color:DS.textMut,marginLeft:"auto"}}>CT: {fmtCT(r.startCT)}</span>
+                  {risk.level==="peak"&&<span style={{fontSize:9,background:DS.redDim,color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700,flexShrink:0}}>⚡ PEAK</span>}
+                  {risk.level==="high"&&<span style={{fontSize:9,background:DS.amberDim,color:DS.amber,padding:"2px 6px",borderRadius:4,fontWeight:700,flexShrink:0}}>▲ HIGH</span>}
+                  {risk.level==="ok"&&<span style={{fontSize:9,background:DS.greenDim,color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700,flexShrink:0}}>✓ LOW</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {scheduled.length===0&&<p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"12px 0"}}>No lunch schedules set for {day}</p>}
+    </div>
+  );
+}
+
+// ── MGR: SCHEDULES ────────────────────────────────────────────────────
 function MgrSchedules({ reps, reload, fire }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
@@ -1536,6 +1704,7 @@ function MgrSchedules({ reps, reload, fire }) {
 
   return (
     <div style={{marginTop:16}}>
+      <LunchOptimiser reps={reps}/>
       {editing&&(
         <Modal title={`Edit ${editing.name}`} sub="SCHEDULE" onClose={()=>setEditing(null)} wide>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -1851,14 +2020,21 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
   const handleFile = (e) => {
     const file = e.target.files[0];
     if(!file) return;
+    // Reset input so same file can be re-uploaded
+    e.target.value = "";
     setUploading(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
         const parsed = parseCSV(ev.target.result);
-        const filtered = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
-        console.log(`KPI upload: ${parsed.length} rows parsed, ${filtered.length} matched ESC agents`);
-        await setKpiRows(filtered);
+        const newRows = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
+        console.log(`KPI upload: ${parsed.length} rows parsed, ${newRows.length} matched ESC agents`);
+        // Merge with existing — deduplicate by hs_deal_id
+        const existing = new Set(kpiRows.map(r=>r.hs_deal_id));
+        const toAdd = newRows.filter(r=>!existing.has(r.hs_deal_id));
+        const merged = [...kpiRows, ...toAdd];
+        console.log(`Adding ${toAdd.length} new rows (${newRows.length - toAdd.length} duplicates skipped). Total: ${merged.length}`);
+        await setKpiRows(merged);
         await setKpiFileName(file.name);
         console.log("KPI save complete");
       } catch(err) {
@@ -1947,15 +2123,20 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"32px 20px",textAlign:"center"}}>
         <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
         <p style={{fontSize:15,fontWeight:700,color:DS.textPri,margin:"0 0 6px"}}>KPI Dashboard</p>
-        <p style={{fontSize:12,color:DS.textSec,margin:"0 0 20px"}}>Upload the bookings CSV from Supabase every Monday to refresh performance data. Data is shared across all managers automatically.</p>
-        <button onClick={()=>fileRef.current?.click()} style={{padding:"10px 24px",borderRadius:10,background:"#1a5c35",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
-          {uploading?"Processing…":"📂 Upload bookings CSV"}
+        <p style={{fontSize:12,color:DS.textSec,margin:"0 0 20px"}}>Upload your weekly bookings CSV. Each week's data is merged automatically — no duplicates.</p>
+        <button onClick={()=>fileRef.current?.click()} style={{padding:"10px 24px",borderRadius:10,background:DS.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
+          {uploading?"Processing…":"📂 Upload CSV"}
         </button>
         <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
-        <p style={{fontSize:10,color:DS.textMut,marginTop:12}}>Supabase → Table Editor → bookings → Export CSV</p>
+        <p style={{fontSize:10,color:DS.textMut,marginTop:12}}>Upload every Monday · New rows merge with existing data · Duplicates skipped automatically</p>
       </div>
     </div>
   );
+
+  // Calculate date range from data
+  const dates = kpiRows.map(r=>new Date(r.hs_call_timestamp)).filter(d=>!isNaN(d));
+  const minDate = dates.length ? new Date(Math.min(...dates)).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
+  const maxDate = dates.length ? new Date(Math.max(...dates)).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
 
   return (
     <div style={{marginTop:16}}>
@@ -1963,14 +2144,15 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
           <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.textPri}}>📊 KPI Dashboard</p>
-          <p style={{margin:0,fontSize:10,color:DS.textMut}}>{kpiFileName} · {kpiRows.length.toLocaleString()} calls</p>
+          <p style={{margin:0,fontSize:10,color:DS.textMut}}>{kpiRows.length.toLocaleString()} calls · {minDate} – {maxDate}</p>
+          {kpiFileName&&<p style={{margin:0,fontSize:9,color:DS.textMut}}>Last upload: {kpiFileName}</p>}
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:DS.greenDim,border:"1.5px solid #1a5c35",color:DS.green,cursor:"pointer",fontSize:11,fontWeight:700}}>
-            ➕ Add Weekly CSV
+          <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:DS.accentDim,border:`1px solid ${DS.borderHi}`,color:DS.accent,cursor:"pointer",fontSize:11,fontWeight:700}}>
+            {uploading?"Adding…":"➕ Add Week"}
           </button>
-          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:DS.redDim,border:"1.5px solid #c0392b",color:DS.red,cursor:"pointer",fontSize:11,fontWeight:700}}>
-            🗑 Clear
+          <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:DS.redDim,border:`1px solid ${DS.red}40`,color:DS.red,cursor:"pointer",fontSize:11,fontWeight:700}}>
+            🗑 Clear All
           </button>
         </div>
         <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
