@@ -136,7 +136,7 @@ const gStyle = buildGStyle(_theme);
 
 // ── AI INSIGHTS ENGINE ────────────────────────────────────────────────
 async function callClaude(prompt, system="You are an operations analyst for a swim school enrollment call centre. Be concise, specific, and actionable. Never use bullet points — write in plain short sentences. Max 2 sentences unless instructed otherwise.") {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/claude", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({
@@ -889,8 +889,16 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
 
   const setKpiFileNamePersist = async (name) => {
     setKpiFileName(name);
-    await sb("kpi_upload_meta",{method:"PATCH",body:JSON.stringify({last_filename:name,last_uploaded_at:new Date().toISOString(),total_rows:kpiRows.length})})
-      .catch(()=>{});
+    await fetch(`${SB_URL}/rest/v1/kpi_upload_meta`,{
+      method:"POST",
+      headers:{
+        apikey:SB_KEY,
+        Authorization:`Bearer ${SB_KEY}`,
+        "Content-Type":"application/json",
+        "Prefer":"resolution=merge-duplicates,return=minimal"
+      },
+      body:JSON.stringify({id:1, last_filename:name, last_uploaded_at:new Date().toISOString(), total_rows:kpiRows.length})
+    }).catch(e=>console.error("KPI meta save failed:",e));
   };
 
   const clearKpiData = async () => {
