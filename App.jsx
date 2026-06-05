@@ -6440,20 +6440,24 @@ export default function App() {
 
   useEffect(()=>{
     const loadAllKpi = async () => {
-      const pageSize = 1000;
-      let allRows = [];
-      let from = 0;
-      while(true) {
-        const chunk = await fetch(
-          `${SB_URL}/rest/v1/kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=${pageSize}&offset=${from}`,
-          {headers:{apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`}}
-        ).then(r=>r.json()).catch(()=>[]);
-        if(!chunk||!chunk.length) break;
-        allRows = [...allRows, ...chunk];
-        if(chunk.length < pageSize) break;
-        from += pageSize;
-      }
-      if(allRows.length) setKpiRows(allRows);
+      try {
+        const pageSize = 1000;
+        let allRows = [];
+        let from = 0;
+        while(true) {
+          const res = await fetch(
+            `${SB_URL}/rest/v1/kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=${pageSize}&offset=${from}`,
+            { headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, Accept:"application/json" } }
+          );
+          const chunk = await res.json();
+          if(!Array.isArray(chunk) || chunk.length === 0) break;
+          allRows = allRows.concat(chunk);
+          if(chunk.length < pageSize) break;
+          from += pageSize;
+        }
+        if(allRows.length) setKpiRows(allRows);
+        console.log(`KPI loaded: ${allRows.length} rows`);
+      } catch(e) { console.error("KPI load failed:", e); }
     };
     loadAllKpi();
     sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); }).catch(()=>{});
