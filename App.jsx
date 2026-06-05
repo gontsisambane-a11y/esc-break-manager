@@ -740,6 +740,14 @@ function LoginScreen({ onSelect, reps, users=[] }) {
     }
   };
 
+  const tryTeamLeadLogin = async () => {
+    const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="team_lead");
+    if(user){
+      await sbPatch("app_users",user.id,{failed_attempts:0,locked_until:null}).catch(()=>{});
+      onSelect("team_lead",null,user);
+    } else { setPinErr(true); }
+  };
+
   const tryClientLogin = async () => {
     const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="client");
     const found = users.find(u=>u.username===username&&u.role==="client");
@@ -772,9 +780,10 @@ function LoginScreen({ onSelect, reps, users=[] }) {
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%",maxWidth:300}}>
         {[
-          {mode:"pin",  label:"Manager",     sub:"Full oversight & controls",   icon:"⬡"},
-          {mode:"rep",  label:"Rep",         sub:"Your breaks & performance",   icon:"◎"},
-          {mode:"client",label:"Client portal",sub:"Hub content management",    icon:"◈"},
+          {mode:"pin",       label:"Manager",       sub:"Full oversight & controls",     icon:"⬡"},
+          {mode:"team_lead", label:"Team Lead",      sub:"Team view & flag issues",       icon:"◇"},
+          {mode:"rep",       label:"Rep",            sub:"Your breaks & performance",     icon:"◎"},
+          {mode:"client",    label:"Client portal",  sub:"Hub content management",        icon:"◈"},
         ].map(b=>(
           <button key={b.mode} onClick={()=>setMode(b.mode)} style={{padding:"16px 20px",borderRadius:DS.radius,border:`1px solid ${DS.border}`,background:DS.bgCard,color:DS.textPri,cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left",transition:"all .15s"}}>
             <div style={{width:36,height:36,borderRadius:DS.radiusSm,background:DS.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:DS.accent,flexShrink:0}}>{b.icon}</div>
@@ -807,6 +816,7 @@ function LoginScreen({ onSelect, reps, users=[] }) {
   );
 
   if(mode==="pin") return authCard("Manager sign in", "Management access", tryMgrLogin);
+  if(mode==="team_lead") return authCard("Team Lead sign in", "Team lead access", tryTeamLeadLogin, DS.green);
   if(mode==="client") return authCard("Client portal", "Emler — Hub management", tryClientLogin, DS.accentHi);
 
   return (
@@ -3138,115 +3148,213 @@ function RepKPI({ repName, kpiRows=[] }) {
   const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
   const PAID_TARGET  = 20;
   const TOTAL_TARGET = 45;
+  const [tab, setTab] = useState("week");
 
-  // Match by first name
-  const firstName = repName?.split(" ")[0]||repName;
-  const myRows = kpiRows.filter(r=>{
-    const fn = r.hs_agent_name?.split(" ")[0]||"";
-    return fn.toLowerCase()===firstName.toLowerCase();
-  });
+  const firstName = (repName?.split(" ")[0]||repName||"").toLowerCase();
+  const myRows = kpiRows.filter(r=>(r.hs_agent_name?.split(" ")[0]||"").toLowerCase()===firstName);
 
   if(!myRows.length) return null;
 
-  // Get week key
-  const getWeekKey = (ts) => {
-    const d = new Date(ts);
-    const day = d.getDay();
-    const mon = new Date(d);
-    mon.setDate(d.getDate()-(day===0?6:day-1));
-    return mon.toISOString().split("T")[0];
-  };
+  // ── helpers ──────────────────────────────────────────────────────────
+  function ctDate(ts) {
+    return new Date(new Date(ts).toLocaleString("en-US",{timeZone:"America/Chicago"}));
+  }
+  function dateStr(d) { return d.toISOString().split("T")[0]; }
 
-  // Build weekly stats
+  // Week key = Sunday of that week (week ends Sunday)
+  function weekEndingSunday(d) {
+    const day = d.getDay(); // 0=Sun
+    const sun = new Date(d);
+    sun.setDate(d.getDate() + (day===0 ? 0 : 7-day));
+    return dateStr(sun);
+  }
+
+  function calcStats(rows) {
+    const calls = rows.length;
+    const paid  = rows.filter(r=>PAID_DISPS.has(r.hs_call_disposition_label)).length;
+    const trial = rows.filter(r=>TRIAL_DISPS.has(r.hs_call_disposition_label)).length;
+    return {
+      calls, paid, trial,
+      paidCvr:  calls ? parseFloat((paid/calls*100).toFixed(1)) : 0,
+      trialCvr: calls ? parseFloat((trial/calls*100).toFixed(1)) : 0,
+      totalCvr: calls ? parseFloat(((paid+trial)/calls*100).toFixed(1)) : 0,
+    };
+  }
+
+  function color(val, target) {
+    if(val >= target)     return DS.green;
+    if(val >= target - 5) return DS.amber;
+    return DS.red;
+  }
+  function bg(val, target) {
+    if(val >= target)     return DS.greenDim;
+    if(val >= target - 5) return DS.amberDim;
+    return DS.redDim;
+  }
+  function border(val, target) {
+    if(val >= target)     return DS.green+"30";
+    if(val >= target - 5) return DS.amber+"30";
+    return DS.red+"30";
+  }
+
+  // ── WEEKLY ───────────────────────────────────────────────────────────
+  // Build all weeks ending Sunday
   const weekMap = {};
   myRows.forEach(r=>{
-    const wk = getWeekKey(r.hs_call_timestamp);
-    if(!weekMap[wk]) weekMap[wk]={calls:0,paid:0,trial:0};
-    weekMap[wk].calls++;
-    if(PAID_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].paid++;
-    if(TRIAL_DISPS.has(r.hs_call_disposition_label)) weekMap[wk].trial++;
+    const d = ctDate(r.hs_call_timestamp);
+    const wk = weekEndingSunday(d);
+    if(!weekMap[wk]) weekMap[wk] = [];
+    weekMap[wk].push(r);
   });
-
   const weeks = Object.entries(weekMap)
     .sort(([a],[b])=>a.localeCompare(b))
-    .map(([wk,d])=>({
-      wk, calls:d.calls, paid:d.paid, trial:d.trial,
-      paidCvr: d.calls ? parseFloat((d.paid/d.calls*100).toFixed(1)) : 0,
-      totalCvr: d.calls ? parseFloat(((d.paid+d.trial)/d.calls*100).toFixed(1)) : 0,
-    }));
+    .map(([wk, rows])=>({wk, ...calcStats(rows)}));
 
-  if(!weeks.length) return null;
+  // Previous completed week = last full week before current week ending Sunday
+  const todayCT = ctDate(new Date());
+  const currentWeekKey = weekEndingSunday(todayCT);
+  const completedWeeks = weeks.filter(w=>w.wk < currentWeekKey);
+  const lastWeek = completedWeeks[completedWeeks.length-1];
+  const prevWeek = completedWeeks[completedWeeks.length-2];
 
-  const current = weeks[weeks.length-1];
-  const prev    = weeks.length>1 ? weeks[weeks.length-2] : null;
-  const last4   = weeks.slice(-4);
+  // ── DAILY (previous shift) ────────────────────────────────────────────
+  const dayMap = {};
+  myRows.forEach(r=>{
+    const d = ctDate(r.hs_call_timestamp);
+    const dk = dateStr(d);
+    if(!dayMap[dk]) dayMap[dk]=[];
+    dayMap[dk].push(r);
+  });
+  const allDays = Object.keys(dayMap).sort();
+  const todayStr = dateStr(todayCT);
+  // Previous shift = most recent day with calls, excluding today
+  const prevShiftKey = [...allDays].reverse().find(d=>d < todayStr);
+  const prevShiftRows = prevShiftKey ? dayMap[prevShiftKey] : [];
+  const prevShiftStats = calcStats(prevShiftRows);
+  const prevShiftLabel = prevShiftKey
+    ? new Date(prevShiftKey+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})
+    : null;
 
-  const paidDiff  = prev ? (current.paidCvr  - prev.paidCvr).toFixed(1)  : null;
-  const totalDiff = prev ? (current.totalCvr - prev.totalCvr).toFixed(1) : null;
+  // ── MONTHLY ──────────────────────────────────────────────────────────
+  const monthMap = {};
+  myRows.forEach(r=>{
+    const d = ctDate(r.hs_call_timestamp);
+    const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    if(!monthMap[mk]) monthMap[mk]=[];
+    monthMap[mk].push(r);
+  });
+  const months = Object.entries(monthMap)
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([mk, rows])=>{
+      const [y,m] = mk.split("-");
+      const label = new Date(parseInt(y), parseInt(m)-1, 1).toLocaleDateString("en-US",{month:"long",year:"numeric"});
+      return {mk, label, ...calcStats(rows)};
+    });
+  const currentMonthKey = `${todayCT.getFullYear()}-${String(todayCT.getMonth()+1).padStart(2,"0")}`;
+  const prevMonths = months.filter(m=>m.mk <= currentMonthKey).slice(-3);
 
-  const metPaid  = current.paidCvr  >= PAID_TARGET;
-  const metTotal = current.totalCvr >= TOTAL_TARGET;
+  // ── STAT TILE ─────────────────────────────────────────────────────────
+  function StatTile({label, val, target, sub}) {
+    return (
+      <div style={{background:bg(val,target),borderRadius:DS.radiusSm,padding:"10px 12px",border:`1px solid ${border(val,target)}`}}>
+        <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>{label}</p>
+        <p style={{margin:"0 0 2px",fontSize:22,fontWeight:700,color:color(val,target),lineHeight:1}}>{val}%</p>
+        <p style={{margin:0,fontSize:9,color:DS.textMut}}>{sub}</p>
+      </div>
+    );
+  }
 
-  const trendIcon = (diff) => {
-    if(diff===null) return "";
-    const n = parseFloat(diff);
-    if(n > 0)  return "↑";
-    if(n < 0)  return "↓";
-    return "→";
-  };
-  const trendColor = (diff, met) => {
-    if(diff===null) return "#888";
-    const n = parseFloat(diff);
-    if(n > 0) return "#1a5c35";
-    if(n < 0) return "#c0392b";
-    return "#888";
-  };
-
-  // Sparkline max
-  const maxCvr = Math.max(...last4.map(w=>w.totalCvr), TOTAL_TARGET+10);
+  function StatsBlock({stats, label, sub}) {
+    if(!stats||!stats.calls) return (
+      <div style={{padding:"16px 0",textAlign:"center"}}>
+        <p style={{margin:0,fontSize:12,color:DS.textMut}}>No calls recorded{label?` for ${label}`:""}</p>
+      </div>
+    );
+    return (
+      <div>
+        <p style={{margin:"0 0 8px",fontSize:11,color:DS.textSec}}>{stats.calls} calls · {stats.paid} paid · {stats.trial} trial{sub?` · ${sub}`:""}</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <StatTile label="Paid CVR" val={stats.paidCvr} target={PAID_TARGET} sub={`Target ${PAID_TARGET}% · ${stats.paidCvr>=PAID_TARGET?"✓ Met":`${Math.abs(stats.paidCvr-PAID_TARGET).toFixed(1)}% away`}`}/>
+          <StatTile label="Total CVR" val={stats.totalCvr} target={TOTAL_TARGET} sub={`Target ${TOTAL_TARGET}% · ${stats.totalCvr>=TOTAL_TARGET?"✓ Met":`${Math.abs(stats.totalCvr-TOTAL_TARGET).toFixed(1)}% away`}`}/>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"12px 14px",marginTop:0,border:`1px solid ${DS.border}`}}>
-      <p style={{margin:"0 0 8px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1.5,fontWeight:600}}>My performance — this week</p>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:metPaid&&metTotal?0:8}}>
-        {[
-          {label:"Paid CVR",val:current.paidCvr,target:PAID_TARGET,diff:paidDiff,met:metPaid},
-          {label:"Total CVR",val:current.totalCvr,target:TOTAL_TARGET,diff:totalDiff,met:metTotal},
-        ].map(m=>(
-          <div key={m.label} style={{background:m.met?DS.greenDim:DS.redDim,borderRadius:DS.radiusSm,padding:"8px 10px",border:`1px solid ${m.met?DS.green+"30":DS.red+"30"}`}}>
-            <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>{m.label}</p>
-            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:18,fontWeight:700,color:m.met?DS.green:DS.red}}>{m.val}%</span>
-              {m.diff!==null&&<span style={{fontSize:11,color:parseFloat(m.diff)>0?DS.green:parseFloat(m.diff)<0?DS.red:DS.textSec}}>{parseFloat(m.diff)>0?"↑":parseFloat(m.diff)<0?"↓":"→"}{Math.abs(parseFloat(m.diff))}%</span>}
-            </div>
-            <p style={{margin:"2px 0 0",fontSize:9,color:DS.textMut}}>{m.met?"Above":"Below"} {m.target}% target · {current.calls} calls</p>
-          </div>
+    <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"12px 14px",border:`1px solid ${DS.border}`}}>
+      <p style={{margin:"0 0 10px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1.5,fontWeight:600}}>📊 My Performance</p>
+
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:4,marginBottom:12,background:DS.bg,borderRadius:DS.radiusSm,padding:3}}>
+        {[{k:"week",l:"Weekly"},{k:"day",l:"Previous Shift"},{k:"month",l:"Monthly"}].map(t=>(
+          <button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",background:tab===t.k?DS.bgCard:"transparent",color:tab===t.k?DS.textPri:DS.textMut,cursor:"pointer",fontSize:11,fontWeight:tab===t.k?600:400,transition:"all .15s"}}>
+            {t.l}
+          </button>
         ))}
       </div>
 
-      {last4.length>1&&(
-        <div style={{marginTop:10}}>
-          <p style={{margin:"0 0 6px",fontSize:9,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>Last {last4.length} weeks</p>
-          <div style={{display:"flex",alignItems:"flex-end",gap:4,height:28}}>
-            {last4.map((w,i)=>{
-              const h = Math.max(4, Math.round((w.totalCvr/maxCvr)*28));
-              const isLast = i===last4.length-1;
-              const col = w.totalCvr>=TOTAL_TARGET?DS.green:w.totalCvr>=TOTAL_TARGET-5?DS.amber:DS.red;
-              return (
-                <div key={w.wk} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <span style={{fontSize:8,color:DS.textMut}}>{w.totalCvr}%</span>
-                  <div style={{width:"100%",height:h,borderRadius:2,background:col,opacity:isLast?1:.55}}/>
-                  <span style={{fontSize:8,color:DS.textMut}}>{w.wk.slice(5)}</span>
+      {/* WEEKLY */}
+      {tab==="week"&&(
+        lastWeek ? (
+          <div>
+            <p style={{margin:"0 0 8px",fontSize:11,color:DS.textSec,fontWeight:600}}>
+              Week ending {new Date(lastWeek.wk+"T12:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric"})}
+            </p>
+            <StatsBlock stats={lastWeek}/>
+            {prevWeek&&(
+              <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${DS.border}`}}>
+                <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Previous week · ending {new Date(prevWeek.wk+"T12:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric"})}</p>
+                <div style={{display:"flex",gap:10}}>
+                  {[{l:"Paid CVR",v:prevWeek.paidCvr,t:PAID_TARGET},{l:"Total CVR",v:prevWeek.totalCvr,t:TOTAL_TARGET}].map(m=>(
+                    <div key={m.l} style={{flex:1,background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"6px 10px",border:`1px solid ${DS.border}`}}>
+                      <p style={{margin:"0 0 2px",fontSize:9,color:DS.textMut}}>{m.l}</p>
+                      <p style={{margin:0,fontSize:16,fontWeight:700,color:color(m.v,m.t)}}>{m.v}%</p>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
-        </div>
+        ) : <p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"12px 0"}}>No completed week data yet</p>
       )}
-      <CoachingNudge repName={repName} weeks={weeks}/>
+
+      {/* PREVIOUS SHIFT */}
+      {tab==="day"&&(
+        prevShiftKey ? (
+          <div>
+            <p style={{margin:"0 0 8px",fontSize:11,color:DS.textSec,fontWeight:600}}>{prevShiftLabel}</p>
+            <StatsBlock stats={prevShiftStats}/>
+          </div>
+        ) : <p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"12px 0"}}>No previous shift data found</p>
+      )}
+
+      {/* MONTHLY */}
+      {tab==="month"&&(
+        prevMonths.length ? (
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {[...prevMonths].reverse().map((m,i)=>(
+              <div key={m.mk}>
+                <p style={{margin:"0 0 6px",fontSize:11,color:i===0?DS.textPri:DS.textSec,fontWeight:i===0?600:400}}>{m.label}{i===0?" (current)":""}</p>
+                <div style={{display:"flex",gap:8}}>
+                  {[{l:"Paid CVR",v:m.paidCvr,t:PAID_TARGET},{l:"Total CVR",v:m.totalCvr,t:TOTAL_TARGET}].map(s=>(
+                    <div key={s.l} style={{flex:1,background:bg(s.v,s.t),borderRadius:DS.radiusSm,padding:"8px 10px",border:`1px solid ${border(s.v,s.t)}`}}>
+                      <p style={{margin:"0 0 2px",fontSize:9,color:DS.textMut}}>{s.l}</p>
+                      <p style={{margin:"0 0 2px",fontSize:18,fontWeight:700,color:color(s.v,s.t),lineHeight:1}}>{s.v}%</p>
+                      <p style={{margin:0,fontSize:9,color:DS.textMut}}>{m.calls} calls</p>
+                    </div>
+                  ))}
+                </div>
+                {i < prevMonths.length-1&&<div style={{height:1,background:DS.border,marginTop:12}}/>}
+              </div>
+            ))}
+          </div>
+        ) : <p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"12px 0"}}>No monthly data yet</p>
+      )}
     </div>
   );
 }
+
 
 function AdHocLunchModal({ onSubmit, onClose }) {
   const [preferredTime, setPreferredTime] = useState("");
@@ -5557,8 +5665,26 @@ function HubAlertModal({item,onClose,onSave,onDelete}) {
 // ── MGR: SUBMISSION QUEUE ─────────────────────────────────────────────
 function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={} }) {
   const [filter, setFilter] = useState("pending");
+  const [flags, setFlags] = useState([]);
+  const [flagFilter, setFlagFilter] = useState("open");
+  const [activeSection, setActiveSection] = useState("submissions");
   const TYPE_LABELS = {promo:"🎯 Promo",closure:"🚫 Closure",location:"📍 Location",pricing:"💰 Pricing",alert:"🔔 Reminder"};
+  const FLAG_TYPE_LABELS = {pricing:"💰 Pricing",location:"📍 Location",promo:"🎯 Promo",closure:"🚫 Closure",reminder:"🔔 Reminder",other:"📋 Other"};
   const ping = makePinger(settings.notif_prefs||{}, settings.execo_webhook);
+
+  useEffect(()=>{
+    sb("hub_flags?order=submitted_at.desc").then(r=>setFlags(r||[])).catch(()=>{});
+  },[]);
+
+  const resolveFlag = async (flag, action) => {
+    await sbPatch("hub_flags", flag.id, {
+      status: action,
+      reviewed_by: currentUser?.display_name||"Manager",
+      reviewed_at: new Date().toISOString()
+    });
+    setFlags(f=>f.map(fl=>fl.id===flag.id?{...fl,status:action}:fl));
+    fire("approved", action==="resolved"?"Flag marked resolved":"Flag dismissed");
+  };
 
   const filtered = submissions.filter(s=>filter==="all"||s.status===filter);
 
@@ -5599,14 +5725,28 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
 
   return (
     <div style={{marginTop:16}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <p style={{margin:0,fontSize:14,fontWeight:700,color:DS.textPri}}>🏊 Hub Submission Queue</p>
-        <div style={{display:"flex",gap:6}}>
-          {["pending","approved","rejected","all"].map(f=>(
-            <button key={f} onClick={()=>setFilter(f)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${filter===f?"#003087":"#ddd"}`,background:filter===f?"#003087":"#fff",color:filter===f?"#fff":"#888",cursor:"pointer",fontSize:11,fontWeight:600,textTransform:"capitalize"}}>{f}</button>
-          ))}
-        </div>
+      {/* Section toggle */}
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        {[
+          {k:"submissions", l:`🏊 Client Submissions${submissions.filter(s=>s.status==="pending").length>0?` (${submissions.filter(s=>s.status==="pending").length})`:""}`},
+          {k:"flags",       l:`🚩 Team Lead Flags${flags.filter(f=>f.status==="open").length>0?` (${flags.filter(f=>f.status==="open").length})`:""}`},
+        ].map(s=>(
+          <button key={s.k} onClick={()=>setActiveSection(s.k)} style={{padding:"7px 16px",borderRadius:DS.radiusSm,border:`1px solid ${activeSection===s.k?DS.accent:DS.border}`,background:activeSection===s.k?DS.accentDim:"transparent",color:activeSection===s.k?DS.accent:DS.textSec,cursor:"pointer",fontSize:12,fontWeight:activeSection===s.k?600:400}}>
+            {s.l}
+          </button>
+        ))}
       </div>
+
+      {/* SUBMISSIONS */}
+      {activeSection==="submissions"&&<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.textPri}}>🏊 Hub Submission Queue</p>
+          <div style={{display:"flex",gap:6}}>
+            {["pending","approved","rejected","all"].map(f=>(
+              <button key={f} onClick={()=>setFilter(f)} style={{padding:"5px 12px",borderRadius:8,border:`1px solid ${filter===f?DS.accent:DS.border}`,background:filter===f?DS.accentDim:"transparent",color:filter===f?DS.accent:DS.textSec,cursor:"pointer",fontSize:11,fontWeight:600,textTransform:"capitalize"}}>{f}</button>
+            ))}
+          </div>
+        </div>
 
       {filtered.length===0&&<div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}><p style={{fontSize:20,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No {filter} submissions</p></div>}
 
@@ -5638,6 +5778,47 @@ function MgrSubmissions({ submissions=[], reload, fire, currentUser, settings={}
           )}
         </div>
       ))}
+      </>}
+
+      {/* FLAGS */}
+      {activeSection==="flags"&&<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.textPri}}>🚩 Team Lead Flags</p>
+          <div style={{display:"flex",gap:6}}>
+            {["open","resolved","dismissed","all"].map(f=>(
+              <button key={f} onClick={()=>setFlagFilter(f)} style={{padding:"5px 12px",borderRadius:8,border:`1px solid ${flagFilter===f?DS.accent:DS.border}`,background:flagFilter===f?DS.accentDim:"transparent",color:flagFilter===f?DS.accent:DS.textSec,cursor:"pointer",fontSize:11,fontWeight:600,textTransform:"capitalize"}}>{f}</button>
+            ))}
+          </div>
+        </div>
+
+        {flags.filter(f=>flagFilter==="all"||f.status===flagFilter).length===0&&(
+          <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${DS.border}`,padding:"28px",textAlign:"center"}}>
+            <p style={{fontSize:20,margin:"0 0 6px"}}>✅</p>
+            <p style={{fontSize:13,color:DS.textMut}}>No {flagFilter} flags</p>
+          </div>
+        )}
+
+        {flags.filter(f=>flagFilter==="all"||f.status===flagFilter).map(flag=>(
+          <div key={flag.id} style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${flag.status==="open"?DS.amber+"40":DS.border}`,padding:"14px",marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:12,fontWeight:700,color:DS.amber}}>{FLAG_TYPE_LABELS[flag.type]||flag.type}</span>
+                <span style={{fontSize:11,color:DS.textMut}}>by {flag.submitted_by} · {new Date(flag.submitted_at).toLocaleString()}</span>
+              </div>
+              <span style={{fontSize:10,fontWeight:600,color:flag.status==="open"?DS.amber:flag.status==="resolved"?DS.green:DS.textMut,background:flag.status==="open"?DS.amberDim:flag.status==="resolved"?DS.greenDim:DS.bgSurf,padding:"2px 8px",borderRadius:4,textTransform:"uppercase"}}>{flag.status}</span>
+            </div>
+            <p style={{margin:"0 0 4px",fontSize:13,fontWeight:600,color:DS.textPri}}>{flag.title}</p>
+            <p style={{margin:"0 0 10px",fontSize:12,color:DS.textSec,lineHeight:1.5}}>{flag.description}</p>
+            {flag.status==="open"&&(
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>resolveFlag(flag,"resolved")} style={{padding:"6px 14px",borderRadius:DS.radiusSm,border:"none",background:DS.green,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>✓ Mark Resolved</button>
+                <button onClick={()=>resolveFlag(flag,"dismissed")} style={{padding:"6px 14px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textMut,cursor:"pointer",fontSize:11}}>Dismiss</button>
+              </div>
+            )}
+            {flag.reviewed_by&&<p style={{margin:"8px 0 0",fontSize:10,color:DS.textMut}}>{flag.status} by {flag.reviewed_by} · {new Date(flag.reviewed_at).toLocaleString()}</p>}
+          </div>
+        ))}
+      </>}
     </div>
   );
 }
@@ -5700,6 +5881,7 @@ function MgrUsers({ reload, fire }) {
             <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:4}}>Role</label>
             <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:13,outline:"none",background:DS.bgCard}}>
               <option value="client">🏊 Client (Hub content only)</option>
+              <option value="team_lead">◇ Team Lead (Team view + flag issues)</option>
               <option value="management">🎛️ Management (Full access)</option>
             </select>
           </div>
@@ -5727,6 +5909,152 @@ function MgrUsers({ reload, fire }) {
 }
 
 // ── CLIENT VIEW (Emler) ───────────────────────────────────────────────
+// ── TEAM LEAD VIEW ────────────────────────────────────────────────────
+function FlagModal({ currentUser, onClose }) {
+  const [type, setType] = useState("pricing");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const FLAG_TYPES = [
+    {k:"pricing",    l:"💰 Pricing"},
+    {k:"location",   l:"📍 Location"},
+    {k:"promo",      l:"🎯 Promo"},
+    {k:"closure",    l:"🚫 Closure"},
+    {k:"reminder",   l:"🔔 Reminder"},
+    {k:"other",      l:"📋 Other"},
+  ];
+
+  const submit = async () => {
+    if(!title.trim()||!description.trim()) return;
+    setSubmitting(true);
+    await sbPost("hub_flags",{
+      type, title, description,
+      submitted_by: currentUser?.display_name||currentUser?.username||"Team Lead",
+      status:"open"
+    });
+    setDone(true);
+    setSubmitting(false);
+    setTimeout(onClose, 1500);
+  };
+
+  return (
+    <Modal title="Flag an Issue" sub="TEAM LEAD · HUB QUALITY" onClose={onClose}>
+      {done ? (
+        <div style={{textAlign:"center",padding:"20px 0"}}>
+          <p style={{fontSize:24,margin:"0 0 8px"}}>✓</p>
+          <p style={{fontSize:13,color:DS.green,fontWeight:600}}>Flag submitted — manager will review</p>
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Category</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+              {FLAG_TYPES.map(t=>(
+                <div key={t.k} onClick={()=>setType(t.k)} style={{padding:"7px 10px",borderRadius:DS.radiusSm,border:`1px solid ${type===t.k?DS.accent:DS.border}`,background:type===t.k?DS.accentDim:DS.bgSurf,cursor:"pointer",fontSize:12,color:type===t.k?DS.accent:DS.textSec,textAlign:"center",fontWeight:type===t.k?600:400}}>
+                  {t.l}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>What's wrong? *</label>
+            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Leawood pricing is outdated" style={{width:"100%"}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:DS.textSec,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Details *</label>
+            <textarea value={description} onChange={e=>setDescription(e.target.value)} rows={3} placeholder="Describe exactly what's wrong or missing, and what it should say…" style={{width:"100%",resize:"vertical"}}/>
+          </div>
+          <Btn label={submitting?"Submitting…":"Submit Flag"} onClick={submit} disabled={submitting||!title.trim()||!description.trim()} color={DS.accent}/>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function TeamLeadView({ currentUser, data, reload, onLogout }) {
+  const { reps, settings, adHoc, swaps, activeBreaks } = data;
+  const [tab, setTab] = useState("overview");
+  const [toast, setToast] = useState(null);
+  const [showFlag, setShowFlag] = useState(false);
+  const [theme] = useTheme();
+  const gStyle = buildGStyle(theme);
+  const fire = (type,msg)=>setToast({type,msg,id:Date.now()});
+
+  const onHealth = reps.filter(r=>r.status==="health").length;
+  const onLunch  = reps.filter(r=>r.status==="lunch").length;
+  const onAdmin  = reps.filter(r=>r.status==="admin").length;
+  const available = reps.filter(r=>r.status==="available"&&!["off","pto","sick"].includes(r.status)).length;
+
+  const TABS = [
+    {k:"overview", l:"Overview"},
+    {k:"requests", l:`Requests${adHoc.filter(r=>r.status==="pending").length>0?` (${adHoc.filter(r=>r.status==="pending").length})`:""}`},
+    {k:"team",     l:"Team"},
+  ];
+
+  return (
+    <div style={{fontFamily:"'Inter',-apple-system,sans-serif",minHeight:"100vh",background:DS.bg,paddingBottom:60}}>
+      <style>{gStyle}</style>
+      {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      {showFlag&&<FlagModal currentUser={currentUser} onClose={()=>setShowFlag(false)}/>}
+
+      {/* Header */}
+      <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`,padding:"14px 18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:DS.accent,letterSpacing:2,textTransform:"uppercase"}}>execo</div>
+            <div style={{width:1,height:16,background:DS.border}}/>
+            <div>
+              <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>Team Lead — ESC</p>
+              <p style={{margin:0,fontSize:11,color:DS.textSec}}>{currentUser?.display_name||"Team Lead"} · {todayLabel()}</p>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <button onClick={()=>setShowFlag(true)} style={{padding:"6px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.amber}40`,background:DS.amberDim,color:DS.amber,cursor:"pointer",fontSize:11,fontWeight:600}}>
+              🚩 Flag Issue
+            </button>
+            <ThemeToggle size="small"/>
+            <button onClick={onLogout} style={{padding:"5px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,background:"transparent",color:DS.textSec,cursor:"pointer",fontSize:11}}>Sign out</button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          {[
+            {n:available, l:"Available", c:DS.green},
+            {n:onHealth,  l:"Health break", c:onHealth>0?DS.accent:DS.textMut},
+            {n:onLunch,   l:"On lunch", c:onLunch>0?DS.amber:DS.textMut},
+            {n:onAdmin,   l:"Admin time", c:onAdmin>0?DS.accentHi:DS.textMut},
+          ].map(s=>(
+            <div key={s.l} style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"8px 10px",border:`1px solid ${DS.border}`}}>
+              <p style={{margin:0,fontSize:20,fontWeight:700,color:s.c,lineHeight:1}}>{s.n}</p>
+              <p style={{margin:"3px 0 0",fontSize:10,color:DS.textMut}}>{s.l}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`}}>
+        <div style={{display:"flex",padding:"0 16px"}}>
+          {TABS.map(t=>(
+            <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"11px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:tab===t.k?600:400,color:tab===t.k?DS.accent:DS.textSec,borderBottom:tab===t.k?`2px solid ${DS.accent}`:"2px solid transparent",marginBottom:-1,transition:"all .15s"}}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"16px",maxWidth:720,margin:"0 auto"}}>
+        {tab==="overview"&&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={settings.peak_mode?1:2} maxOut={settings.custom_limit??Math.max(2,Math.floor(reps.filter(r=>!["off","pto","sick"].includes(r.status)).length*0.3))} reload={reload} fire={fire} settings={settings} centreOpen={true} onAdmin={onAdmin} adminLimit={settings.admin_limit??2} readOnly={true}/>}
+        {tab==="requests"&&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire} settings={settings}/>}
+        {tab==="team"&&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire} readOnly={true}/>}
+      </div>
+    </div>
+  );
+}
+
 function ClientView({ currentUser, data, reload, onLogout }) {
   const [tab, setTab] = useState("home");
   const [toast, setToast] = useState(null);
@@ -6143,14 +6471,16 @@ export default function App() {
   return (
     <>
       <style>{gStyle}</style>
-      {view==="login"   && <LoginScreen onSelect={(role,rep,user)=>{
+      {view==="login"     && <LoginScreen onSelect={(role,rep,user)=>{
         if(role==="manager"){setCurrentUser(user);setView("manager");}
         else if(role==="client"){setCurrentUser(user);setView("client");}
+        else if(role==="team_lead"){setCurrentUser(user);setView("team_lead");}
         else{setCurrentRep(rep);setView("rep");}
       }} reps={data.reps} users={users}/>}
-      {view==="manager" && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
-      {view==="rep"     && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen} kpiRows={kpiRows}/>}
-      {view==="client"  && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
+      {view==="manager"   && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
+      {view==="team_lead" && <TeamLeadView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
+      {view==="rep"       && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen} kpiRows={kpiRows}/>}
+      {view==="client"    && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
     </>
   );
 }
