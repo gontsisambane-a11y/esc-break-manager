@@ -1076,7 +1076,10 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
     fire("info",`Peak limit ${peakOverride[rep.id]?"restored":"overridden"} for ${rep.name}`);
   };
 
-  const onBreak = centreOpen ? reps.filter(r=>r.status==="health"||r.status==="lunch"||r.status==="admin") : [];
+  const onHealth_ = centreOpen ? reps.filter(r=>r.status==="health") : [];
+  const onLunch_  = centreOpen ? reps.filter(r=>r.status==="lunch")  : [];
+  const onAdmin_  = centreOpen ? reps.filter(r=>r.status==="admin")  : [];
+  const onBreak   = [...onHealth_, ...onLunch_, ...onAdmin_];
   const available = reps.filter(r=>r.status==="available" && centreOpen && isRepOnShift(r) && (r.rep_stage||"active")!=="not_started");
   const offShift  = reps.filter(r=>r.status==="available" && (!centreOpen || !isRepOnShift(r)) && (r.rep_stage||"active")!=="not_started");
   const inTraining = reps.filter(r=>r.status==="available" && r.rep_stage==="not_started");
@@ -1125,7 +1128,9 @@ function MgrOverview({ reps, activeBreaks, hLimit, maxOut, reload, fire, setting
       {oooModal&&(
         <OOOModal rep={oooModal} onClose={()=>setOooModal(null)} onMark={handleMarkOOO}/>
       )}
-      {onBreak.length>0&&<Section title="🌿🥗🗂️ On Break / Admin" items={onBreak} Row={RepRow} color="#2980b9"/>}
+      {onHealth_.length>0&&<Section title="🌿 Health Break" items={onHealth_} Row={RepRow} color={DS.accent}/>}
+      {onLunch_.length>0&&<Section title="🥗 On Lunch" items={onLunch_} Row={RepRow} color={DS.amber}/>}
+      {onAdmin_.length>0&&<Section title="🗂️ Admin Time" items={onAdmin_} Row={RepRow} color={DS.accentHi}/>}
       {available.length>0&&<Section title="✅ Available" items={available} Row={RepRow} color="#1a5c35"/>}
       {offShift.length>0&&<Section title="🌙 Off Shift" items={offShift} Row={RepRow} color="#999"/>}
       {inTraining.length>0&&<Section title="🎓 Training / Not Started / Ramping" items={inTraining} Row={RepRow} color="#b85c00"/>}
@@ -3386,11 +3391,28 @@ function AdHocLunchModal({ onSubmit, onClose }) {
 function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={} }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [showAdHocModal, setShowAdHocModal] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const cfg = ST[myRep.status]||ST.available;
-  const onBreak = myRep.status==="health"||myRep.status==="lunch";
+  const onBreak = myRep.status==="health"||myRep.status==="lunch"||myRep.status==="admin";
   const totalWaiting = breakQueue.filter(q=>q.status==="waiting").length;
   const isOOO = myRep.status==="pto"||myRep.status==="sick";
   const isOff = myRep.status==="off";
+
+  // Countdown timer for lunch and admin (30 min = 1800s, lunch varies)
+  useEffect(()=>{
+    if(!onBreak||myRep.status==="health") return; // health has its own timer
+    const start = myAB?.started_at ? new Date(myAB.started_at) : new Date(myRep.updated_at||Date.now());
+    const tick = ()=>setElapsed(Math.floor((Date.now()-start.getTime())/1000));
+    tick();
+    const t = setInterval(tick, 1000);
+    return ()=>clearInterval(t);
+  },[onBreak, myRep.status, myAB?.started_at]);
+
+  const ADMIN_DUR = 30*60; // 30 min in seconds
+  const LUNCH_DUR = 60*60; // 60 min default
+  const breakDur = myRep.status==="admin" ? ADMIN_DUR : LUNCH_DUR;
+  const remaining = Math.max(0, breakDur - elapsed);
+  const overtime = elapsed > breakDur;
 
   return (
     <div>
@@ -3441,14 +3463,32 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
           </div>
         </div>
         {myRep.status==="health"&&myAB&&<HealthTimer startedAt={myAB.started_at} bankedSec={myRep.health_time_banked||0}/>}
+        {(myRep.status==="lunch"||myRep.status==="admin")&&(
+          <div style={{background:overtime?DS.redDim:DS.bgSurf,borderRadius:DS.radiusSm,padding:"10px 14px",marginBottom:12,border:`1px solid ${overtime?DS.red+"40":DS.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:12,color:overtime?DS.red:DS.textSec,fontWeight:600}}>
+                {myRep.status==="admin"?"🗂️ Admin Time":"🥗 Lunch Break"}
+              </span>
+              <span style={{fontSize:20,fontWeight:800,color:overtime?DS.red:DS.textPri,fontVariantNumeric:"tabular-nums"}}>
+                {overtime?"+":""}{fmtTime(overtime?elapsed-breakDur:remaining)}
+              </span>
+            </div>
+            <div style={{marginTop:6,height:4,borderRadius:2,background:DS.bgHover,overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:2,background:overtime?DS.red:elapsed/breakDur>0.8?DS.amber:DS.accent,width:`${Math.min(100,(elapsed/breakDur)*100)}%`,transition:"width .5s"}}/>
+            </div>
+            {overtime&&<p style={{margin:"4px 0 0",fontSize:10,color:DS.red,fontWeight:600}}>⚠️ Over time — please wrap up and return</p>}
+          </div>
+        )}
         {!isOOO&&!isOff&&(
-          <div style={{borderTop:onBreak?"1.5px solid rgba(0,0,0,.06)":"none",paddingTop:onBreak?12:0}}>
+          <div style={{borderTop:onBreak?`1px solid ${DS.border}`:"none",paddingTop:onBreak?12:0}}>
             <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
               <span style={{fontSize:11,color:DS.textSec}}>🌿 {myRep.health_breaks_today||0}/{HEALTH_PER_DAY} full breaks · banked {fmtDur(myRep.health_time_banked||0)}/10m{cooldownActive?` · Cooldown: ${fmtTime(cooldownLeft)}`:""}</span>
-              {cooldownActive&&<span style={{fontSize:11,color:"#e07b00",fontWeight:600}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
+              {cooldownActive&&<span style={{fontSize:11,color:DS.amber,fontWeight:600}}>⏳ Cooldown: {fmtTime(cooldownLeft)}</span>}
             </div>
             {onBreak?(
-              <button onClick={returnFromBreak} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>I'm back! 👋</button>
+              <button onClick={returnFromBreak} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:overtime?DS.red:DS.green,color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>
+                {overtime?"Return Now ⚠️":"I'm back! 👋"}
+              </button>
             ):(
               <>
                 <button onClick={()=>setShowBreakModal(true)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"#1a5c35",color:"#fff",cursor:"pointer",fontSize:15,fontWeight:700}}>Request a Break 🌿</button>
