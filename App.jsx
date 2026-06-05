@@ -2204,7 +2204,8 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
   const parseCSV = (text) => {
     const lines = text.trim().split("\n");
     const headers = lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
-    return lines.slice(1).map(line=>{
+
+    const rawRows = lines.slice(1).map(line=>{
       const vals = []; let cur="", inQ=false;
       for(let c of line){ if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){vals.push(cur.trim());cur="";}else{cur+=c;} }
       vals.push(cur.trim());
@@ -2212,6 +2213,43 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       headers.forEach((h,i)=>{ obj[h]=vals[i]||""; });
       return obj;
     });
+
+    // Detect CSV format
+    const isCallsFormat = headers.includes("agent_name") && headers.includes("start_time");
+    const isHubSpotFormat = headers.includes("hs_agent_name") && headers.includes("hs_call_timestamp");
+
+    if(isCallsFormat) {
+      // Map calls CSV columns to our KPI schema
+      // call_id → hs_deal_id, agent_name → hs_agent_name, start_time → hs_call_timestamp
+      // call_result → hs_call_disposition_label, direction → hs_call_direction
+      // caller_location → contact_preferred_location
+      const RESULT_MAP = {
+        "Contact Hung Up": "Connected",
+        "Connected": "Connected",
+        "Registered": "Registered",
+        "Registered: Trial": "Registered: Trial",
+        "Registered: Eval/L1O": "Registered: Eval/L1O",
+        "Registered: Eval/WBO": "Registered: Eval/WBO",
+        "Outbound - Registered": "Outbound - Registered",
+        "Outbound - Trial": "Outbound - Trial",
+      };
+      return rawRows.map(r=>({
+        hs_deal_id:                  r.call_id || r.session_id || "",
+        hs_agent_name:               r.agent_name || "",
+        hs_call_timestamp:           r.start_time || "",
+        hs_call_disposition_label:   RESULT_MAP[r.call_result] || r.call_result || "",
+        hs_call_direction:           r.direction || "",
+        contact_preferred_location:  r.caller_location || r.point_of_contact || "",
+        deal_stage:                  "",
+      }));
+    }
+
+    if(isHubSpotFormat) {
+      return rawRows; // already in correct format
+    }
+
+    // Unknown format — return as-is and let filter handle it
+    return rawRows;
   };
 
   const handleFile = (e) => {
@@ -2243,13 +2281,15 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
     reader.readAsText(file);
   };
 
+  const toCT = (ts) => new Date(new Date(ts).toLocaleString("en-US",{timeZone:"America/Chicago"}));
+  const ctStr = (d) => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),dd=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${dd}`; };
   const getWeekKey = (ts) => {
-    const d = new Date(ts);
+    const d = toCT(ts);
     const day = d.getDay();
     const mon = new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
-    return mon.toISOString().split("T")[0];
+    return ctStr(mon);
   };
-  const getMonthKey = (ts) => { const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
+  const getMonthKey = (ts) => { const d=toCT(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
   const getRampWeek = (ts, agentName) => {
     const start = RAMP_START_MAP[agentName] || new Date("2026-05-29T00:00:00Z");
     const diff = new Date(ts) - start;
@@ -2320,12 +2360,12 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"32px 20px",textAlign:"center"}}>
         <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
         <p style={{fontSize:15,fontWeight:700,color:DS.textPri,margin:"0 0 6px"}}>KPI Dashboard</p>
-        <p style={{fontSize:12,color:DS.textSec,margin:"0 0 20px"}}>Upload your weekly bookings CSV. Each week's data is merged automatically — no duplicates.</p>
+        <p style={{fontSize:12,color:DS.textSec,margin:"0 0 20px"}}>Export your bookings CSV from Supabase daily and upload here. Data is stored and shared across all devices.</p>
         <button onClick={()=>fileRef.current?.click()} style={{padding:"10px 24px",borderRadius:10,background:DS.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
-          {uploading?"Processing…":"📂 Upload CSV"}
+          {uploading?"Processing…":"📂 Upload Bookings CSV"}
         </button>
         <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
-        <p style={{fontSize:10,color:DS.textMut,marginTop:12}}>Upload every Monday · New rows merge with existing data · Duplicates skipped automatically</p>
+        <p style={{fontSize:10,color:DS.textMut,marginTop:12}}>Supabase → Table Editor → bookings → Export CSV</p>
       </div>
     </div>
   );
@@ -2337,16 +2377,15 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
 
   return (
     <div style={{marginTop:16}}>
-      {/* Header with upload */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
           <p style={{margin:0,fontSize:13,fontWeight:700,color:DS.textPri}}>📊 KPI Dashboard</p>
-          <p style={{margin:0,fontSize:10,color:DS.textMut}}>{kpiRows.length.toLocaleString()} calls · {minDate} – {maxDate}</p>
+          <p style={{margin:0,fontSize:10,color:DS.textMut}}>{kpiRows.length.toLocaleString()} records · {minDate} – {maxDate}</p>
           {kpiFileName&&<p style={{margin:0,fontSize:9,color:DS.textMut}}>Last upload: {kpiFileName}</p>}
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>fileRef.current?.click()} style={{padding:"7px 14px",borderRadius:9,background:DS.accentDim,border:`1px solid ${DS.borderHi}`,color:DS.accent,cursor:"pointer",fontSize:11,fontWeight:700}}>
-            {uploading?"Adding…":"➕ Add Week"}
+            {uploading?"Adding…":"➕ Add CSV"}
           </button>
           <button onClick={()=>clearKpiData&&clearKpiData()} style={{padding:"7px 14px",borderRadius:9,background:DS.redDim,border:`1px solid ${DS.red}40`,color:DS.red,cursor:"pointer",fontSize:11,fontWeight:700}}>
             🗑 Clear All
@@ -3248,7 +3287,13 @@ function RepKPI({ repName, kpiRows=[] }) {
   function ctDate(ts) {
     return new Date(new Date(ts).toLocaleString("en-US",{timeZone:"America/Chicago"}));
   }
-  function dateStr(d) { return d.toISOString().split("T")[0]; }
+  // Extract YYYY-MM-DD directly from the CT date object — do NOT use toISOString() which converts back to UTC
+  function dateStr(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
 
   // Week key = Sunday of that week (week ends Sunday)
   function weekEndingSunday(d) {
@@ -6510,7 +6555,7 @@ export default function App() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // KPI data at root level so reps and managers both see it
+  // KPI data — uploaded daily from bookings Supabase export
   const [kpiRows, setKpiRows] = useState([]);
   const [kpiFileName, setKpiFileName] = useState(null);
 
