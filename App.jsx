@@ -1177,6 +1177,94 @@ function OOOModal({ rep, onClose, onMark }) {
 }
 
 // ── MGR: REQUESTS ─────────────────────────────────────────────────────
+function AdHocImpactSummary({ req, reps, settings }) {
+  const TZ_OFFSET = {"Central":-300,"Eastern":-240,"Pacific":-420,"SA":120};
+
+  // Convert requested time to CT minutes
+  const getCtMins = () => {
+    if(!req.preferred_time) {
+      const ct = new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"}));
+      return ct.getHours()*60 + ct.getMinutes();
+    }
+    const [h,m] = req.preferred_time.split(":").map(Number);
+    const repOffset = TZ_OFFSET[req.rep_timezone||"Central"];
+    return ((h*60+m - repOffset) + 1440) % 1440;
+  };
+
+  const ctMins = getCtMins();
+  const ctHour = Math.floor(ctMins/60);
+  const isWE = new Date().getDay()===0||new Date().getDay()===6;
+  const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
+  const pct = vol[ctHour]||0;
+  const risk = (isWE?PEAK_WE:PEAK_WD).has(ctHour) ? "peak" : HIGH_WD.has(ctHour) ? "high" : "low";
+  const riskColor = risk==="peak"?DS.red:risk==="high"?DS.amber:DS.green;
+  const riskLabel = risk==="peak"?"⚡ Peak hours":risk==="high"?"▲ High volume":"✓ Quiet window";
+
+  // Who's already on lunch or scheduled during this window
+  const day = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date().getDay()];
+  const alreadyOnLunch = reps.filter(r=>r.status==="lunch").map(r=>r.name);
+  const scheduledDuring = reps.filter(r=>{
+    if(r.name===req.rep_name) return false;
+    const sched = r.lunch_schedule?.[day];
+    if(!sched?.time) return false;
+    const [lh,lm] = sched.time.split(":").map(Number);
+    const lOffset = TZ_OFFSET[r.timezone||"Central"];
+    const lUtcMin = ((lh*60+lm - lOffset) + 1440) % 1440;
+    const dur = sched.duration||60;
+    const reqUtcMin = ((ctMins - TZ_OFFSET["Central"]) + 1440) % 1440;
+    return reqUtcMin >= lUtcMin && reqUtcMin < lUtcMin+dur;
+  }).map(r=>r.name);
+
+  // Active reps right now
+  const activeReps = reps.filter(r=>!["off","pto","sick"].includes(r.status));
+  const currentlyAvailable = reps.filter(r=>r.status==="available").length;
+  const afterApproval = currentlyAvailable - 1;
+  const totalOffPhones = alreadyOnLunch.length + scheduledDuring.length + 1; // +1 for this rep
+
+  return (
+    <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"10px 12px",margin:"8px 0",border:`1px solid ${riskColor}30`}}>
+      <p style={{margin:"0 0 8px",fontSize:10,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>Impact if approved</p>
+
+      {/* Call volume risk */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <span style={{fontSize:11,color:DS.textSec}}>Call volume at {Math.floor(ctMins/60)%12||12}{ctMins<12*60||ctMins>=24*60?"am":"pm"} CT</span>
+        <span style={{fontSize:11,fontWeight:700,color:riskColor,background:`${riskColor}15`,padding:"2px 8px",borderRadius:4}}>{riskLabel} {pct>0?`~${pct}%`:""}</span>
+      </div>
+
+      {/* Coverage impact */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <span style={{fontSize:11,color:DS.textSec}}>Reps available after</span>
+        <span style={{fontSize:11,fontWeight:700,color:afterApproval<=2?DS.red:afterApproval<=4?DS.amber:DS.green}}>{afterApproval} of {activeReps.length} on phones</span>
+      </div>
+
+      {/* Others already off */}
+      {scheduledDuring.length>0&&(
+        <div style={{marginBottom:4}}>
+          <span style={{fontSize:10,color:DS.textMut}}>Also on lunch this window: </span>
+          <span style={{fontSize:10,color:DS.amber,fontWeight:600}}>{scheduledDuring.join(", ")}</span>
+        </div>
+      )}
+      {alreadyOnLunch.length>0&&(
+        <div style={{marginBottom:4}}>
+          <span style={{fontSize:10,color:DS.textMut}}>Currently on lunch: </span>
+          <span style={{fontSize:10,color:DS.amber,fontWeight:600}}>{alreadyOnLunch.join(", ")}</span>
+        </div>
+      )}
+
+      {/* Summary verdict */}
+      <div style={{marginTop:8,padding:"6px 10px",borderRadius:DS.radiusSm,background:`${riskColor}10`,border:`1px solid ${riskColor}20`}}>
+        <p style={{margin:0,fontSize:11,color:riskColor,fontWeight:600}}>
+          {risk==="peak"&&afterApproval<=3 ? "⚠️ High risk — peak hours with low coverage" :
+           risk==="peak" ? "⚠️ Peak hours — approve only if necessary" :
+           risk==="high"&&afterApproval<=3 ? "⚡ Caution — above average volume, thin coverage" :
+           afterApproval<=2 ? "⚠️ Very thin coverage — only 2 reps on phones" :
+           "✓ Coverage looks acceptable for this time"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
   const TZ_OFFSET = {"Central":-300,"Eastern":-240,"Pacific":-420,"SA":120};
   const MGR_TZ = "Central"; // manager always views in CT
@@ -1308,20 +1396,8 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
                   </div>
                 )}
 
-                {/* Conflict analysis */}
-                <div style={{background:DS.bgSurf,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
-                  <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:DS.textSec}}>📊 Impact Analysis</p>
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {peak&&<p style={{margin:0,fontSize:11,color:DS.red,fontWeight:600}}>⚠️ Preferred time falls in PEAK window — high call volume</p>}
-                    {!peak&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ Off-peak window — lower call volume</p>}
-                    {conflicts.length>0&&<p style={{margin:0,fontSize:11,color:"#b85c00"}}>⚠️ Already on lunch at that time: {conflicts.join(", ")}</p>}
-                    {conflicts.length===0&&ctTime&&<p style={{margin:0,fontSize:11,color:DS.green}}>✅ No schedule conflicts at preferred time</p>}
-                    <p style={{margin:0,fontSize:11,color:capLeft<=0?"#c0392b":"#555"}}>Team cap: {reps.filter(x=>["health","lunch","admin"].includes(x.status)).length} out now · {capLeft} slot{capLeft!==1?"s":""} remaining</p>
-                    {onLunchNow>0&&<p style={{margin:0,fontSize:11,color:DS.textSec}}>{onLunchNow} rep{onLunchNow!==1?"s":""} currently on lunch</p>}
-                  </div>
-                </div>
-
-                <AdHocDecisionSupport req={r} reps={reps} settings={settings}/>
+                {/* Impact Summary with real call volume data */}
+                <AdHocImpactSummary req={r} reps={reps} settings={settings}/>
 
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={()=>handleAdHoc(r,false)} style={{padding:"7px 14px",borderRadius:DS.radiusSm,border:`1px solid ${DS.red}40`,background:DS.redDim,cursor:"pointer",fontSize:12,color:DS.red,fontWeight:600}}>Decline</button>
