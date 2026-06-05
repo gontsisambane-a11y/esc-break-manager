@@ -1488,139 +1488,193 @@ function AddRepModal({ onClose, onAdd }) {
 }
 
 // ── MGR: SCHEDULES ────────────────────────────────────────────────────
-function LunchOptimiser({ reps }) {
+function LunchOptimiser({ reps, reload, fire }) {
   const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const today = DAYS[new Date().getDay()];
   const [day, setDay] = useState(today);
+  const [applying, setApplying] = useState({});
+  const [applied, setApplied] = useState({});
 
-  // Get today's lunch schedules for all reps
-  const scheduled = reps
-    .filter(r=>!["off","pto","sick"].includes(r.status))
-    .map(r=>{
-      const sched = (r.lunch_schedule||{})[day];
-      if(!sched?.time) return null;
-      const [h,m] = sched.time.split(":").map(Number);
-      const endMin = h*60 + m + (sched.duration||60);
-      return {
-        name: r.name,
-        tz: r.timezone||"Central",
-        startCT: convertToCT(h, m, r.timezone||"Central"),
-        endCT: convertToCT(Math.floor(endMin/60), endMin%60, r.timezone||"Central"),
-        startLabel: sched.time,
-        dur: sched.duration||60,
-      };
-    }).filter(Boolean);
-
-  function convertToCT(h, m, tz) {
-    const offsets = {Central:0, Eastern:1, Pacific:-2, SA:7};
-    const diff = offsets[tz]||0;
-    return h*60 + m - diff*60;
+  function ctMinutes(h, m, tz) {
+    const offsets = {Central:0, Eastern:1, Pacific:-2, SA:7, GMT:5, IST:-5};
+    return h*60 + m - (offsets[tz]||0)*60;
   }
-
   function fmtCT(mins) {
-    const h = Math.floor(((mins%1440)+1440)%1440/60);
-    const m = ((mins%1440)+1440)%1440%60;
+    const norm = ((mins%1440)+1440)%1440;
+    const h = Math.floor(norm/60), m = norm%60;
     return `${h%12||12}:${String(m).padStart(2,"0")}${h>=12?"pm":"am"}`;
   }
+  function fmtTime(mins) {
+    const norm = ((mins%1440)+1440)%1440;
+    const h = Math.floor(norm/60), m = norm%60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+  }
+  function volRisk(ctMin) {
+    const h = Math.floor(((ctMin%1440)+1440)%1440/60);
+    const isWE = new Date().getDay()===0||new Date().getDay()===6;
+    const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
+    const pct = vol[h]||0;
+    if((isWE?PEAK_WE:PEAK_WD).has(h)) return {level:"peak", color:DS.red, pct, h};
+    if(!isWE&&HIGH_WD.has(h)) return {level:"high", color:DS.amber, pct, h};
+    return {level:"ok", color:DS.green, pct, h};
+  }
 
-  // Find conflicts — reps lunching at the same CT time
-  const conflicts = [];
+  // Get scheduled reps for selected day
+  const scheduled = reps
+    .filter(r=>!["off","pto","sick"].includes(r.status) && (r.lunch_schedule||{})[day]?.time)
+    .map(r=>{
+      const s = r.lunch_schedule[day];
+      const [h,m] = s.time.split(":").map(Number);
+      const dur = s.duration||60;
+      const startCT = ctMinutes(h, m, r.timezone||"Central");
+      return { id:r.id, name:r.name, tz:r.timezone||"Central", localTime:s.time, dur, startCT, endCT:startCT+dur };
+    });
+
+  // Generate suggestions
+  const suggestions = [];
+
+  // 1. Conflict: two reps overlapping
   for(let i=0;i<scheduled.length;i++){
     for(let j=i+1;j<scheduled.length;j++){
       const a=scheduled[i], b=scheduled[j];
-      // overlap check
       if(a.startCT < b.endCT && b.startCT < a.endCT){
-        conflicts.push({a:a.name, b:b.name, ctTime:fmtCT(Math.max(a.startCT,b.startCT))});
+        // Find best alternative for the later one
+        const mover = a.startCT > b.startCT ? a : b;
+        const stayer = a.startCT > b.startCT ? b : a;
+        // Try slots 30 min before or after with lowest risk
+        const candidates = [-60,-30,30,60,90].map(delta=>{
+          const newCT = mover.startCT + delta;
+          const risk = volRisk(newCT);
+          // Check no new conflicts
+          const hasConflict = scheduled.some(r=>r.id!==mover.id && newCT < r.endCT && (newCT+mover.dur) > r.startCT);
+          return {delta, newCT, risk, hasConflict};
+        }).filter(c=>!c.hasConflict).sort((a,b)=>a.risk.pct-b.risk.pct);
+
+        if(candidates.length>0){
+          const best = candidates[0];
+          // Convert back to local time for mover
+          const offsets = {Central:0, Eastern:1, Pacific:-2, SA:7, GMT:5, IST:-5};
+          const localMins = ((best.newCT + (offsets[mover.tz]||0)*60) % 1440 + 1440) % 1440;
+          suggestions.push({
+            id: `conflict-${i}-${j}`,
+            type: "conflict",
+            title: `${a.name} & ${b.name} overlap`,
+            desc: `Both off phones ${fmtCT(Math.max(a.startCT,b.startCT))} CT. Move ${mover.name}'s lunch to ${fmtCT(best.newCT)} CT (${fmtTime(localMins)} ${mover.tz}).`,
+            risk: best.risk,
+            action: { repId: mover.id, day, newTime: fmtTime(localMins) },
+            severity: "high"
+          });
+        } else {
+          suggestions.push({
+            id: `conflict-${i}-${j}`,
+            type: "conflict",
+            title: `${a.name} & ${b.name} overlap`,
+            desc: `Both off phones ${fmtCT(Math.max(a.startCT,b.startCT))} CT. No clean alternative found — manual adjustment needed.`,
+            risk: {level:"peak", color:DS.red},
+            action: null,
+            severity: "high"
+          });
+        }
       }
     }
   }
 
-  // Risk per slot — based on real call volume data
-  function getSlotRisk(ctMins) {
-    const h = Math.floor(((ctMins%1440)+1440)%1440/60);
-    const isWE = new Date().getDay()===0||new Date().getDay()===6;
-    const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
-    const pct = vol[h]||0;
-    if((isWE?PEAK_WE:PEAK_WD).has(h)) return {level:"peak", color:DS.red, pct};
-    if(!isWE&&HIGH_WD.has(h)) return {level:"high", color:DS.amber, pct};
-    return {level:"ok", color:DS.green, pct};
-  }
+  // 2. Peak-hour lunches
+  scheduled.forEach(r=>{
+    const risk = volRisk(r.startCT);
+    if(risk.level==="peak"){
+      // Find best alternative
+      const candidates = [-90,-60,-30,30,60,90].map(delta=>{
+        const newCT = r.startCT + delta;
+        const newRisk = volRisk(newCT);
+        const hasConflict = scheduled.some(s=>s.id!==r.id && newCT < s.endCT && (newCT+r.dur) > s.startCT);
+        return {delta, newCT, risk:newRisk, hasConflict};
+      }).filter(c=>!c.hasConflict && c.risk.level!=="peak").sort((a,b)=>a.risk.pct-b.risk.pct);
 
-  // Suggest better windows (30-min slots with lowest volume in CT)
-  function getBestWindows() {
-    const slots = [];
-    for(let h=8;h<=20;h++){
-      const isWE = new Date().getDay()===0||new Date().getDay()===6;
-      const vol = isWE ? CALL_VOL_WEEKEND : CALL_VOL_WEEKDAY;
-      const pct = vol[h]||0;
-      slots.push({h, pct});
+      if(candidates.length>0){
+        const best = candidates[0];
+        const offsets = {Central:0, Eastern:1, Pacific:-2, SA:7, GMT:5, IST:-5};
+        const localMins = ((best.newCT + (offsets[r.tz]||0)*60) % 1440 + 1440) % 1440;
+        // Skip if already covered by conflict suggestion
+        const alreadyFlagged = suggestions.some(s=>s.action?.repId===r.id);
+        if(!alreadyFlagged){
+          suggestions.push({
+            id: `peak-${r.id}`,
+            type: "peak",
+            title: `${r.name} lunching at peak (${fmtCT(r.startCT)} CT)`,
+            desc: `~${risk.pct}% of daily calls happen at this hour. Suggest moving to ${fmtCT(best.newCT)} CT (${fmtTime(localMins)} ${r.tz}) — ~${best.risk.pct}% volume.`,
+            risk: best.risk,
+            action: { repId: r.id, day, newTime: fmtTime(localMins) },
+            severity: "medium"
+          });
+        }
+      }
     }
-    return slots.sort((a,b)=>a.pct-b.pct).slice(0,3);
-  }
+  });
 
-  const bestWindows = getBestWindows();
+  const approveChange = async (sug) => {
+    if(!sug.action) return;
+    setApplying(p=>({...p,[sug.id]:true}));
+    const rep = reps.find(r=>r.id===sug.action.repId);
+    if(!rep) return;
+    const updatedSchedule = {...(rep.lunch_schedule||{})};
+    updatedSchedule[sug.action.day] = {...(updatedSchedule[sug.action.day]||{}), time: sug.action.newTime};
+    await sbPatch("rep_status", rep.id, {lunch_schedule: updatedSchedule});
+    setApplied(p=>({...p,[sug.id]:true}));
+    setApplying(p=>({...p,[sug.id]:false}));
+    fire("approved", `${rep.name}'s lunch updated to ${sug.action.newTime}`);
+    reload();
+  };
 
   return (
     <div style={{background:DS.bgCard,border:`1px solid ${DS.border}`,borderRadius:DS.radius,padding:"14px",marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
-          <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>🥗 Lunch Coverage Intelligence</p>
-          <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Based on real call volume patterns · {scheduled.length} reps scheduled today</p>
+          <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>🥗 Lunch Schedule Optimiser</p>
+          <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>AI-powered suggestions based on real call volume · {scheduled.length} reps scheduled</p>
         </div>
         <select value={day} onChange={e=>setDay(e.target.value)} style={{padding:"6px 10px",fontSize:12,borderRadius:DS.radiusSm}}>
           {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=><option key={d} value={d}>{d}</option>)}
         </select>
       </div>
 
-      {/* Conflicts */}
-      {conflicts.length>0&&(
-        <div style={{background:DS.redDim,border:`1px solid ${DS.red}40`,borderRadius:DS.radiusSm,padding:"10px 12px",marginBottom:10}}>
-          <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:DS.red}}>⚠️ {conflicts.length} Lunch Conflict{conflicts.length>1?"s":""} — Both reps off phones at the same time</p>
-          {conflicts.map((c,i)=>(
-            <p key={i} style={{margin:"0 0 2px",fontSize:11,color:DS.textSec}}>• {c.a} + {c.b} overlap around {c.ctTime} CT</p>
-          ))}
+      {suggestions.length===0&&scheduled.length>0&&(
+        <div style={{background:DS.greenDim,border:`1px solid ${DS.green}30`,borderRadius:DS.radiusSm,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:16}}>✓</span>
+          <p style={{margin:0,fontSize:12,color:DS.green,fontWeight:600}}>All lunches look good for {day} — no conflicts or peak-hour issues detected.</p>
         </div>
       )}
 
-      {/* Best windows */}
-      <div style={{marginBottom:10}}>
-        <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Lowest risk lunch windows today</p>
-        <div style={{display:"flex",gap:6}}>
-          {bestWindows.map((w,i)=>(
-            <div key={i} style={{flex:1,background:DS.greenDim,border:`1px solid ${DS.green}30`,borderRadius:DS.radiusSm,padding:"6px 8px",textAlign:"center"}}>
-              <p style={{margin:0,fontSize:12,fontWeight:700,color:DS.green}}>{w.h%12||12}{w.h>=12?"pm":"am"} CT</p>
-              <p style={{margin:"2px 0 0",fontSize:9,color:DS.textMut}}>{w.pct>0?`~${w.pct}% vol`:"off hours"}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {suggestions.length===0&&scheduled.length===0&&(
+        <p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"12px 0"}}>No lunch schedules set for {day} — go to the rep schedules below to add them.</p>
+      )}
 
-      {/* Rep schedule with risk */}
-      {scheduled.length>0&&(
-        <div>
-          <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Today's schedule vs call volume</p>
-          <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {scheduled.sort((a,b)=>a.startCT-b.startCT).map((r,i)=>{
-              const risk = getSlotRisk(r.startCT);
-              return (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${risk.color}30`}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:risk.color,flexShrink:0}}/>
-                  <span style={{fontSize:12,fontWeight:600,color:DS.textPri,minWidth:80}}>{r.name}</span>
-                  <span style={{fontSize:11,color:DS.textSec}}>{r.startLabel} {r.tz} · {r.dur}min</span>
-                  <span style={{fontSize:10,color:DS.textMut,marginLeft:"auto"}}>CT: {fmtCT(r.startCT)}</span>
-                  {risk.level==="peak"&&<span style={{fontSize:9,background:DS.redDim,color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700,flexShrink:0}}>⚡ PEAK</span>}
-                  {risk.level==="high"&&<span style={{fontSize:9,background:DS.amberDim,color:DS.amber,padding:"2px 6px",borderRadius:4,fontWeight:700,flexShrink:0}}>▲ HIGH</span>}
-                  {risk.level==="ok"&&<span style={{fontSize:9,background:DS.greenDim,color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700,flexShrink:0}}>✓ LOW</span>}
-                </div>
-              );
-            })}
+      {suggestions.map(sug=>(
+        <div key={sug.id} style={{background:DS.bgSurf,border:`1px solid ${sug.severity==="high"?DS.red+"40":DS.amber+"40"}`,borderRadius:DS.radiusSm,padding:"12px 14px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div style={{flex:1}}>
+              <p style={{margin:"0 0 4px",fontSize:12,fontWeight:700,color:sug.severity==="high"?DS.red:DS.amber}}>
+                {sug.severity==="high"?"⚠️":"⚡"} {sug.title}
+              </p>
+              <p style={{margin:"0 0 8px",fontSize:12,color:DS.textSec,lineHeight:1.5}}>{sug.desc}</p>
+              {sug.action&&<p style={{margin:0,fontSize:10,color:DS.textMut}}>
+                New time: <strong style={{color:sug.risk.color}}>{sug.action.newTime}</strong> local · volume risk: <strong style={{color:sug.risk.color}}>{sug.risk.pct>0?`~${sug.risk.pct}%`:"off-hours"}</strong>
+              </p>}
+            </div>
+            {sug.action&&(
+              applied[sug.id]
+                ? <span style={{fontSize:11,color:DS.green,fontWeight:600,flexShrink:0}}>✓ Applied</span>
+                : <button onClick={()=>approveChange(sug)} disabled={applying[sug.id]} style={{padding:"7px 16px",borderRadius:DS.radiusSm,background:DS.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,opacity:applying[sug.id]?.7:1}}>
+                    {applying[sug.id]?"Applying…":"Approve"}
+                  </button>
+            )}
           </div>
         </div>
-      )}
-      {scheduled.length===0&&<p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"12px 0"}}>No lunch schedules set for {day}</p>}
+      ))}
     </div>
   );
 }
+
 
 // ── MGR: SCHEDULES ────────────────────────────────────────────────────
 function MgrSchedules({ reps, reload, fire }) {
