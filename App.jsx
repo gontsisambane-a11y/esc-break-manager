@@ -151,7 +151,46 @@ async function callClaude(prompt, system="You are an operations analyst for a sw
 }
 
 // 1. BREAK RECOMMENDATION — shown on rep screen
-function BreakRecommendation({ repName, reps, settings, kpiRows, onAdmin, onLunch, onHealth, canTakeAdmin, canTakeHealth, cooldownActive }) {
+// ── KPI QUERY HOOK ────────────────────────────────────────────────────
+// Each component fetches only what it needs — no global 66k row load
+const KPI_SELECT = "hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage";
+
+async function fetchKpi(filters) {
+  const pageSize = 1000;
+  let allRows = [], from = 0;
+  while(true) {
+    const qs = Object.entries(filters).map(([k,v])=>`${k}=${v}`).join("&");
+    const res = await fetch(
+      `${SB_URL}/rest/v1/kpi_bookings?select=${KPI_SELECT}&${qs}&order=hs_call_timestamp.asc&limit=${pageSize}&offset=${from}`,
+      { headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, Accept:"application/json" } }
+    );
+    const chunk = await res.json();
+    if(!Array.isArray(chunk)||!chunk.length) break;
+    allRows = allRows.concat(chunk);
+    if(chunk.length < pageSize) break;
+    from += pageSize;
+  }
+  return allRows;
+}
+
+function useKpiQuery(filters, deps=[]) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    setLoading(true);
+    fetchKpi(filters).then(r=>{ setRows(r); setLoading(false); }).catch(()=>setLoading(false));
+  }, deps);
+  return { rows, loading };
+}
+
+// Get date string N days ago in CT
+function ctDaysAgo(n) {
+  const d = new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"}));
+  d.setDate(d.getDate()-n);
+  return d.toISOString().split("T")[0];
+}
+
+function BreakRecommendation({ repName, reps, settings, onAdmin, onLunch, onHealth, canTakeAdmin, canTakeHealth, cooldownActive }) {
   const [insight, setInsight] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -255,14 +294,18 @@ One sentence: should the manager approve now, delay, or decline? Consider call v
 }
 
 // 4. WEEKLY TEAM SUMMARY — shown in KPI tab after CSV upload
-function WeeklyTeamSummary({ kpiRows, reps }) {
+function WeeklyTeamSummary({ reps }) {
+  const since = ctDaysAgo(14);
+  const { rows: kpiRows, loading: kpiLoading } = useKpiQuery({"hs_call_timestamp":`gte.${since}`}, []);
   const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
 
+  if(kpiLoading) return <p style={{fontSize:11,color:DS.textMut,padding:"8px 0"}}>Loading summary…</p>;
+
   const generate = async () => {
-    if(loading||generated) return;
-    setLoading(true);
+    if(generating||generated) return;
+    setGenerating(true);
 
     const PAID = ["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"];
     const TRIAL = ["Registered: Trial","Outbound - Trial"];
@@ -297,8 +340,8 @@ Top performers this week: ${top3||"none"}. Below 40% total CVR: ${flagged||"none
 Write a 3-4 sentence plain-English team summary a manager would send to leadership. Cover overall trend, standouts, and one specific action item. Be direct and use names.`;
 
     callClaude(prompt, "You are a sales operations analyst. Write in plain sentences, no bullet points, no headers. Tone is professional but direct.")
-      .then(text=>{ setSummary(text); setLoading(false); setGenerated(true); })
-      .catch(()=>setLoading(false));
+      .then(text=>{ setSummary(text); setGenerating(false); setGenerated(true); })
+      .catch(()=>setGenerating(false));
   };
 
   return (
@@ -309,7 +352,7 @@ Write a 3-4 sentence plain-English team summary a manager would send to leadersh
           <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Plain-English team performance digest</p>
         </div>
         {!generated&&<button onClick={generate} disabled={loading} style={{padding:"7px 14px",borderRadius:DS.radiusSm,background:DS.accent,color:"#fff",border:"none",cursor:loading?"default":"pointer",fontSize:12,fontWeight:600,opacity:loading?.7:1}}>
-          {loading?"Generating…":"Generate"}
+          {generating?"Generating…":"Generate"}
         </button>}
       </div>
       {summary&&<p style={{margin:0,fontSize:13,color:DS.textPri,lineHeight:1.7,borderTop:`1px solid ${DS.border}`,paddingTop:12}}>{summary}</p>}
@@ -555,17 +598,24 @@ const sbDel   = (tbl,id)   => sb(`${tbl}?id=eq.${id}`,{method:"DELETE"});
 // SOC 2 CC7.2 — Audit logging
 
 async function loadAll() {
-  const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue,todayPTO] = await Promise.all([
+  const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue] = await Promise.all([
     sb("rep_status?select=*&order=id"),
     sb("app_settings?id=eq.1"),
     sb("adhoc_lunch_requests?status=eq.pending&order=created_at.desc"),
     sb("lunch_swaps?status=in.(pending)&order=created_at.desc"),
     sb("break_log?ended_at=is.null&select=*"),
     sb(`break_queue?date=eq.${todayStr()}&status=in.(waiting,notified)&order=queued_at`),
-    sb(`calloffs?calloff_date=eq.${todayStr()}&reason=eq.pto&select=rep_name`),
   ]);
   const settings = settArr[0]||{id:1,peak_mode:false,custom_limit:null,pto_seeded:false,admin_mode:false,admin_limit:null};
-  // seed hardcoded PTO once
+  return { reps, settings, adHoc, swaps, activeBreaks:activeBreaks.filter(b=>reps.find(r=>r.id===b.rep_id&&["health","lunch"].includes(r.status))), breakQueue:breakQueue||[] };
+}
+
+// Daily reset — runs once on app load only, not on every poll
+async function runDailyReset(reps, settings) {
+  const today = businessDayStr();
+  const todayPTO = await sb(`calloffs?calloff_date=eq.${todayStr()}&reason=eq.pto&select=rep_name`).catch(()=>[]);
+  const todayPTONames = (todayPTO||[]).map(p=>p.rep_name);
+
   if(!settings.pto_seeded) {
     try {
       for(const p of HARDCODED_PTO) {
@@ -575,37 +625,25 @@ async function loadAll() {
       await sbPatch("app_settings",1,{pto_seeded:true});
     } catch(e) { console.warn("PTO seed error",e); }
   }
-  // daily reset
-  const today = businessDayStr();
-  const todayPTONames = todayPTO.map(p=>p.rep_name);
+
+  const patches = [];
   for(const r of reps) {
     const isNewDay = r.updated_at && businessDayStr(r.updated_at) !== today;
-    // Reset health counters on new day
     if(isNewDay && (r.health_breaks_today>0||r.health_time_banked>0)) {
-      await sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_today:0,health_time_banked:0,last_break_returned_at:null});
+      patches.push(sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_today:0,health_time_banked:0,last_break_returned_at:null}));
       r.health_breaks_today=0; r.health_time_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
     }
-    // Reset stuck break/admin statuses from previous day
     if(isNewDay && ["health","lunch","admin"].includes(r.status)) {
-      await sbPatch("rep_status",r.id,{status:"available",updated_at:new Date().toISOString()});
+      patches.push(sbPatch("rep_status",r.id,{status:"available",updated_at:new Date().toISOString()}));
       r.status="available";
     }
-    // auto-apply today's PTO from DB
     if(todayPTONames.includes(r.name) && r.status==="available") {
-      await sbPatch("rep_status",r.id,{status:"pto",ooo_note:"PTO"});
+      patches.push(sbPatch("rep_status",r.id,{status:"pto",ooo_note:"PTO"}));
       r.status="pto"; r.ooo_note="PTO";
     }
   }
-  // Auto-fix stuck breaks: reps marked available/pto/sick but still have open break_log entries
-  for(const r of reps) {
-    if(!["health","lunch"].includes(r.status)) {
-      const hasOpenLog = activeBreaks.some(b=>b.rep_id===r.id);
-      if(hasOpenLog) {
-        await sb(`break_log?rep_id=eq.${r.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:HEALTH_MAX_SEC})});
-      }
-    }
-  }
-  return { reps, settings, adHoc, swaps, activeBreaks:activeBreaks.filter(b=>reps.find(r=>r.id===b.rep_id&&["health","lunch"].includes(r.status))), breakQueue:breakQueue||[] };
+  // Run all patches in parallel
+  await Promise.all(patches);
 }
 
 async function loadReportData(start, end) {
@@ -844,7 +882,7 @@ function LoginScreen({ onSelect, reps, users=[] }) {
 }
 
 // ── MANAGER VIEW ──────────────────────────────────────────────────────
-function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissions=[], pendingCount=0, kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName }) {
+function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissions=[], pendingCount=0, kpiFileName=null, setKpiFileName }) {
   const { reps, settings, adHoc, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("overview");
   const [toast, setToast] = useState(null);
@@ -1025,7 +1063,7 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
         {tab==="team"      &&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire}/>}
         {tab==="schedules" &&<MgrSchedules reps={reps} reload={reload} fire={fire}/>}
         {tab==="reports"   &&<MgrReports reps={reps}/>}
-        {tab==="kpi"        &&<MgrKPI reps={reps} kpiRows={kpiRows} setKpiRows={setKpiRowsPersist} kpiFileName={kpiFileName} setKpiFileName={setKpiFileNamePersist} clearKpiData={clearKpiData}/>}
+        {tab==="kpi"        &&<MgrKPI reps={reps} kpiFileName={kpiFileName} setKpiFileName={setKpiFileNamePersist} clearKpiData={clearKpiData}/>}
         {tab==="submissions"&&<MgrSubmissions submissions={submissions} reload={reload} fire={fire} currentUser={currentUser} settings={settings}/>}
         {tab==="users"      &&<MgrUsers reload={reload} fire={fire}/>}
         {tab==="settings"  &&<MgrSettings settings={settings} reps={reps} reload={reload} fire={fire}/>}
@@ -2170,10 +2208,14 @@ function LunchTodayBanner({myRep}) {
 }
 
 // ── MGR: KPI DASHBOARD ────────────────────────────────────────────────
-function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKpiData }) {
+function MgrKPI({ reps=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKpiData }) {
   const [kpiTab, setKpiTab]   = useState("summary");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
+
+  // Fetch last 90 days only — not all 66k rows
+  const since = ctDaysAgo(90);
+  const { rows: kpiRows, loading: kpiLoading } = useKpiQuery({"hs_call_timestamp":`gte.${since}`}, []);
 
   const PAID_DISPS  = new Set(["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"]);
   const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
@@ -2355,6 +2397,13 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
   const tdStyle = {fontSize:11,padding:"7px 8px",borderBottom:`1px solid ${DS.border}`,textAlign:"center"};
   const nameStyle = {fontSize:12,fontWeight:600,color:DS.textPri,padding:"7px 8px",borderBottom:`1px solid ${DS.border}`,textAlign:"left",whiteSpace:"nowrap"};
 
+  if(kpiLoading) return (
+    <div style={{marginTop:16,background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"32px 20px",textAlign:"center"}}>
+      <p style={{fontSize:28,margin:"0 0 8px"}}>📊</p>
+      <p style={{fontSize:13,color:DS.textMut}}>Loading KPI data…</p>
+    </div>
+  );
+
   if(!kpiRows.length) return (
     <div style={{marginTop:16}}>
       <div style={{background:DS.bgCard,borderRadius:14,border:`1px solid ${DS.border}`,padding:"32px 20px",textAlign:"center"}}>
@@ -2405,7 +2454,7 @@ function MgrKPI({ reps=[], kpiRows=[], setKpiRows, kpiFileName=null, setKpiFileN
       </div>
 
       {/* AI Weekly Summary */}
-      <WeeklyTeamSummary kpiRows={kpiRows} reps={reps}/>
+      <WeeklyTeamSummary reps={reps}/>
 
       {/* Sub tabs */}
       <div style={{display:"flex",borderBottom:"1.5px solid #ebebeb",marginBottom:14,overflowX:"auto"}}>
@@ -3052,7 +3101,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
 }
 
 // ── REP VIEW ──────────────────────────────────────────────────────────
-function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
+function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const { reps, settings, swaps, activeBreaks, breakQueue=[] } = data;
   const [tab, setTab] = useState("my");
   const [toast, setToast] = useState(null);
@@ -3240,8 +3289,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
         </div>
 
         {settings.peak_mode&&<div style={{marginTop:10,background:DS.redDim,border:`1px solid ${DS.red}30`,borderRadius:DS.radiusSm,padding:"6px 12px",fontSize:11,color:DS.red,fontWeight:600}}>⚡ Peak mode — health breaks limited to 1 at a time</div>}
-        {kpiRows.length>0&&<div style={{marginTop:10}}><RepKPI repName={repInfo.name} kpiRows={kpiRows}/></div>}
-        <BreakRecommendation repName={repInfo.name} reps={reps} settings={settings} kpiRows={kpiRows} onAdmin={onAdmin} onLunch={onLunch} onHealth={onHealth} canTakeAdmin={canTakeAdmin} canTakeHealth={canTakeHealth} cooldownActive={cooldownActive}/>
+        <div style={{marginTop:10}}><RepKPI repName={repInfo.name}/></div>
+        <BreakRecommendation repName={repInfo.name} reps={reps} settings={settings} onAdmin={onAdmin} onLunch={onLunch} onHealth={onHealth} canTakeAdmin={canTakeAdmin} canTakeHealth={canTakeHealth} cooldownActive={cooldownActive}/>
       </div>
 
       {/* Rep Tabs */}
@@ -3271,16 +3320,27 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen, kpiRows=[] }) {
   );
 }
 
-function RepKPI({ repName, kpiRows=[] }) {
+function RepKPI({ repName, agentFullName }) {
   const PAID_DISPS  = new Set(["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"]);
   const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
   const PAID_TARGET  = 20;
   const TOTAL_TARGET = 45;
   const [tab, setTab] = useState("week");
 
-  const firstName = (repName?.split(" ")[0]||repName||"").toLowerCase();
-  const myRows = kpiRows.filter(r=>(r.hs_agent_name?.split(" ")[0]||"").toLowerCase()===firstName);
+  // Fetch only this rep's last 90 days — not all 66k rows
+  const since = ctDaysAgo(90);
+  const { rows: myRows, loading } = useKpiQuery(
+    agentFullName
+      ? { "hs_agent_name": `eq.${encodeURIComponent(agentFullName)}`, "hs_call_timestamp": `gte.${since}` }
+      : { "hs_agent_name": `ilike.*${encodeURIComponent(repName?.split(" ")[0]||"")}*`, "hs_call_timestamp": `gte.${since}` },
+    [repName, agentFullName]
+  );
 
+  if(loading) return (
+    <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"12px 14px",border:`1px solid ${DS.border}`,textAlign:"center"}}>
+      <p style={{margin:0,fontSize:11,color:DS.textMut}}>Loading your stats…</p>
+    </div>
+  );
   if(!myRows.length) return null;
 
   // ── helpers ──────────────────────────────────────────────────────────
@@ -6556,31 +6616,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   // KPI data — uploaded daily from bookings Supabase export
-  const [kpiRows, setKpiRows] = useState([]);
   const [kpiFileName, setKpiFileName] = useState(null);
 
   useEffect(()=>{
-    const loadAllKpi = async () => {
-      try {
-        const pageSize = 1000;
-        let allRows = [];
-        let from = 0;
-        while(true) {
-          const res = await fetch(
-            `${SB_URL}/rest/v1/kpi_bookings?select=hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_disposition_label,hs_call_direction,contact_preferred_location,deal_stage&order=hs_call_timestamp.asc&limit=${pageSize}&offset=${from}`,
-            { headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, Accept:"application/json" } }
-          );
-          const chunk = await res.json();
-          if(!Array.isArray(chunk) || chunk.length === 0) break;
-          allRows = allRows.concat(chunk);
-          if(chunk.length < pageSize) break;
-          from += pageSize;
-        }
-        if(allRows.length) setKpiRows(allRows);
-        console.log(`KPI loaded: ${allRows.length} rows`);
-      } catch(e) { console.error("KPI load failed:", e); }
-    };
-    loadAllKpi();
     sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); }).catch(()=>{});
   },[]);
 
@@ -6602,10 +6640,17 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    reload();
-    const interval = setInterval(reload, 15000);
+    const init = async () => {
+      const d = await loadAll();
+      await runDailyReset(d.reps, d.settings);
+      const fresh = await loadAll(); // reload after reset
+      setData(fresh);
+      setLoading(false);
+    };
+    init();
+    const interval = setInterval(async ()=>{ const d=await loadAll(); setData(d); }, 30000);
     return ()=>clearInterval(interval);
-  },[reload]);
+  },[]);
 
   const [centreOpen, setCentreOpen] = useState(getCentreStatus().isOpen);
 
@@ -6665,9 +6710,9 @@ export default function App() {
         else if(role==="team_lead"){setCurrentUser(user);setView("team_lead");}
         else{setCurrentRep(rep);setView("rep");}
       }} reps={data.reps} users={users}/>}
-      {view==="manager"   && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiRows={kpiRows} setKpiRows={setKpiRows} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
+      {view==="manager"   && <ManagerView data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}} centreOpen={centreOpen} currentUser={currentUser} submissions={submissions} pendingCount={pendingCount} kpiFileName={kpiFileName} setKpiFileName={setKpiFileName}/>}
       {view==="team_lead" && <TeamLeadView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
-      {view==="rep"       && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen} kpiRows={kpiRows}/>}
+      {view==="rep"       && <RepView repInfo={currentRep} data={data} reload={reload} onLogout={()=>setView("login")} centreOpen={centreOpen}/>}
       {view==="client"    && <ClientView currentUser={currentUser} data={data} reload={reload} onLogout={()=>{setView("login");setCurrentUser(null);}}/>}
     </>
   );
