@@ -208,11 +208,8 @@ function BreakRecommendation({ repName, reps, settings, onAdmin, onLunch, onHeal
     const isPeak = ctHour>=14&&ctHour<17;
 
     const paid_disps = ["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"];
-    const myRows = kpiRows.filter(r=>r.hs_agent_name?.split(" ")[0]?.toLowerCase()===repName.split(" ")[0]?.toLowerCase());
-    const thisWeek = myRows.filter(r=>{ const d=new Date(r.hs_call_timestamp); const day=d.getDay(); const mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1)); return (new Date()-mon)<7*24*3600*1000; });
-    const paidCvr = thisWeek.length ? (thisWeek.filter(r=>paid_disps.includes(r.hs_call_disposition_label)).length/thisWeek.length*100).toFixed(1) : null;
 
-    callClaude(`Rep: ${repName}. Team available: ${activeCount}/${totalCount}. Current CT hour: ${ctHour.toFixed(0)}. Peak window (3-5pm CT): ${isPeak}. On health: ${onHealth}. On lunch: ${onLunch}. On admin: ${onAdmin}. Can take health break: ${canTakeHealth}. On cooldown: ${cooldownActive}. Can take admin: ${canTakeAdmin}. Rep paid CVR this week: ${paidCvr||"unknown"}%. Peak mode: ${settings.peak_mode}.
+    callClaude(`Rep: ${repName}. Team available: ${activeCount}/${totalCount}. Current CT hour: ${ctHour.toFixed(0)}. Peak window (3-5pm CT): ${isPeak}. On health: ${onHealth}. On lunch: ${onLunch}. On admin: ${onAdmin}. Can take health break: ${canTakeHealth}. On cooldown: ${cooldownActive}. Can take admin: ${canTakeAdmin}. Peak mode: ${settings.peak_mode}.
 
 Give a one-sentence recommendation: is now a good time to take a break, do admin, or stay on the phones? Consider team coverage and call volume timing.`)
       .then(text=>{ setInsight(text); sessionStorage.setItem(key,text); setLoading(false); })
@@ -891,37 +888,19 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
 
   const KPI_COLS = ["hs_deal_id","hs_agent_name","hs_call_timestamp","hs_call_disposition_label","hs_call_direction","contact_preferred_location","deal_stage"];
 
-  const setKpiRowsPersist = async (updater) => {
-    const prev = kpiRows;
-    const next = typeof updater==="function" ? updater(prev) : updater;
-    setKpiRows(next);
-    const rows = Array.isArray(next) ? next : [];
-    if(rows.length===0) return;
-    // Strip to only the columns that exist in the table
-    const stripped = rows.map(r => {
-      const obj = {};
-      KPI_COLS.forEach(k => { obj[k] = r[k]||null; });
-      return obj;
-    });
+  const setKpiRowsPersist = async (rows) => {
+    if(!Array.isArray(rows)||!rows.length) return;
+    const stripped = rows.map(r=>{ const o={}; KPI_COLS.forEach(k=>{ o[k]=r[k]||null; }); return o; });
     console.log(`Upserting ${stripped.length} rows to kpi_bookings...`);
     for(let i=0;i<stripped.length;i+=500){
       const chunk=stripped.slice(i,i+500);
       const res = await fetch(`${SB_URL}/rest/v1/kpi_bookings`,{
         method:"POST",
-        headers:{
-          apikey:SB_KEY,
-          Authorization:`Bearer ${SB_KEY}`,
-          "Content-Type":"application/json",
-          "Prefer":"resolution=merge-duplicates,return=minimal"
-        },
+        headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
         body:JSON.stringify(chunk)
       });
-      if(!res.ok){
-        const err = await res.text();
-        console.error(`KPI upsert chunk ${i/500} failed:`, res.status, err);
-      } else {
-        console.log(`KPI chunk ${Math.floor(i/500)+1} saved (${chunk.length} rows)`);
-      }
+      if(!res.ok){ const err=await res.text(); console.error(`KPI upsert chunk ${i/500} failed:`,res.status,err); }
+      else { console.log(`KPI chunk ${Math.floor(i/500)+1} saved (${chunk.length} rows)`); }
     }
   };
 
@@ -929,20 +908,13 @@ function ManagerView({ data, reload, onLogout, centreOpen, currentUser, submissi
     setKpiFileName(name);
     await fetch(`${SB_URL}/rest/v1/kpi_upload_meta`,{
       method:"POST",
-      headers:{
-        apikey:SB_KEY,
-        Authorization:`Bearer ${SB_KEY}`,
-        "Content-Type":"application/json",
-        "Prefer":"resolution=merge-duplicates,return=minimal"
-      },
-      body:JSON.stringify({id:1, last_filename:name, last_uploaded_at:new Date().toISOString(), total_rows:kpiRows.length})
+      headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+      body:JSON.stringify({id:1, last_filename:name, last_uploaded_at:new Date().toISOString()})
     }).catch(e=>console.error("KPI meta save failed:",e));
   };
 
   const clearKpiData = async () => {
-    setKpiRows([]);
     setKpiFileName(null);
-    // DELETE all rows — requires id=gte.0 pattern to avoid Supabase blocking full table delete
     await sb("kpi_bookings?id=gte.0",{method:"DELETE"}).catch(()=>{});
     await sb("kpi_upload_meta?id=eq.1",{method:"PATCH",body:JSON.stringify({last_filename:null,total_rows:0})}).catch(()=>{});
   };
@@ -2297,7 +2269,6 @@ function MgrKPI({ reps=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKp
   const handleFile = (e) => {
     const file = e.target.files[0];
     if(!file) return;
-    // Reset input so same file can be re-uploaded
     e.target.value = "";
     setUploading(true);
     const reader = new FileReader();
@@ -2306,12 +2277,8 @@ function MgrKPI({ reps=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKp
         const parsed = parseCSV(ev.target.result);
         const newRows = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
         console.log(`KPI upload: ${parsed.length} rows parsed, ${newRows.length} matched ESC agents`);
-        // Merge with existing — deduplicate by hs_deal_id
-        const existing = new Set(kpiRows.map(r=>r.hs_deal_id));
-        const toAdd = newRows.filter(r=>!existing.has(r.hs_deal_id));
-        const merged = [...kpiRows, ...toAdd];
-        console.log(`Adding ${toAdd.length} new rows (${newRows.length - toAdd.length} duplicates skipped). Total: ${merged.length}`);
-        await setKpiRows(merged);
+        // setKpiRowsPersist handles deduplication via Supabase unique constraint
+        await setKpiRows(newRows);
         await setKpiFileName(file.name);
         console.log("KPI save complete");
       } catch(err) {
