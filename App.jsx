@@ -2277,8 +2277,19 @@ function MgrKPI({ reps=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKp
         const parsed = parseCSV(ev.target.result);
         const newRows = parsed.filter(r=>ESC_AGENTS.has(r.hs_agent_name));
         console.log(`KPI upload: ${parsed.length} rows parsed, ${newRows.length} matched ESC agents`);
-        // setKpiRowsPersist handles deduplication via Supabase unique constraint
-        await setKpiRows(newRows);
+        // Upload to Supabase — deduplication handled by unique constraint on hs_deal_id
+        const KPI_COLS = ["hs_deal_id","hs_agent_name","hs_call_timestamp","hs_call_disposition_label","hs_call_direction","contact_preferred_location","deal_stage"];
+        const stripped = newRows.map(r=>{ const o={}; KPI_COLS.forEach(k=>{ o[k]=r[k]||null; }); return o; });
+        for(let i=0;i<stripped.length;i+=500){
+          const chunk=stripped.slice(i,i+500);
+          const res = await fetch(`${SB_URL}/rest/v1/kpi_bookings`,{
+            method:"POST",
+            headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+            body:JSON.stringify(chunk)
+          });
+          if(!res.ok){ const err=await res.text(); console.error(`KPI chunk ${i/500} failed:`,res.status,err); }
+          else { console.log(`KPI chunk ${Math.floor(i/500)+1} saved (${chunk.length} rows)`); }
+        }
         await setKpiFileName(file.name);
         console.log("KPI save complete");
       } catch(err) {
