@@ -348,7 +348,7 @@ Write a 3-4 sentence plain-English team summary a manager would send to leadersh
           <p style={{margin:0,fontSize:13,fontWeight:600,color:DS.textPri}}>AI Weekly Summary</p>
           <p style={{margin:"2px 0 0",fontSize:11,color:DS.textSec}}>Plain-English team performance digest</p>
         </div>
-        {!generated&&<button onClick={generate} disabled={loading} style={{padding:"7px 14px",borderRadius:DS.radiusSm,background:DS.accent,color:"#fff",border:"none",cursor:loading?"default":"pointer",fontSize:12,fontWeight:600,opacity:loading?.7:1}}>
+        {!generated&&<button onClick={generate} disabled={generating} style={{padding:"7px 14px",borderRadius:DS.radiusSm,background:DS.accent,color:"#fff",border:"none",cursor:generating?"default":"pointer",fontSize:12,fontWeight:600,opacity:generating?.7:1}}>
           {generating?"Generating…":"Generate"}
         </button>}
       </div>
