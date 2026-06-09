@@ -362,7 +362,7 @@ const SB_URL      = "https://uektpsmcgagzxfoxavex.supabase.co";
 const SB_KEY      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3Rwc21jZ2Fnenhmb3hhdmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTY0NDcsImV4cCI6MjA5MzU3MjQ0N30.eJ15qDLM2bCCR5zK1eiiKoXx_JJTsPhjuBjZdpoVWW0";
 const MANAGER_PIN = "2024";
 const GCHAT_WEBHOOK = "https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss";
-const HUB_ENABLED = true; // flip to true when approved
+const HUB_ENABLED = true;
 
 const gchatPing = (text) => fetch(GCHAT_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(e=>console.warn("GChat ping failed",e));
 
