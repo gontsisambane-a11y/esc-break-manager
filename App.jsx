@@ -158,10 +158,10 @@ const KPI_SELECT = "hs_deal_id,hs_agent_name,hs_call_timestamp,hs_call_dispositi
 async function fetchKpi(filters) {
   const pageSize = 1000;
   let allRows = [], from = 0;
+  const qs = Object.entries(filters||{}).filter(([,v])=>v).map(([k,v])=>`${k}=${v}`).join("&");
   while(true) {
-    const qs = Object.entries(filters).map(([k,v])=>`${k}=${v}`).join("&");
     const res = await fetch(
-      `${SB_URL}/rest/v1/kpi_bookings?select=${KPI_SELECT}&${qs}&order=hs_call_timestamp.asc&limit=${pageSize}&offset=${from}`,
+      `${SB_URL}/rest/v1/kpi_bookings?select=${KPI_SELECT}${qs?`&${qs}`:""}&order=hs_call_timestamp.asc&limit=${pageSize}&offset=${from}`,
       { headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, Accept:"application/json" } }
     );
     const chunk = await res.json();
@@ -173,13 +173,18 @@ async function fetchKpi(filters) {
   return allRows;
 }
 
-function useKpiQuery(filters, deps=[]) {
+function useKpiQuery(filterKey, filterVal, since) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(()=>{
     setLoading(true);
-    fetchKpi(filters).then(r=>{ setRows(r); setLoading(false); }).catch(()=>setLoading(false));
-  }, deps);
+    const filters = {};
+    if(filterKey) filters[filterKey] = filterVal;
+    if(since) filters["hs_call_timestamp"] = `gte.${since}`;
+    fetchKpi(filters)
+      .then(r=>{ setRows(r); setLoading(false); })
+      .catch(()=>setLoading(false));
+  }, [filterKey, filterVal, since]);
   return { rows, loading };
 }
 
@@ -293,7 +298,7 @@ One sentence: should the manager approve now, delay, or decline? Consider call v
 // 4. WEEKLY TEAM SUMMARY — shown in KPI tab after CSV upload
 function WeeklyTeamSummary({ reps }) {
   const since = ctDaysAgo(14);
-  const { rows: kpiRows, loading: kpiLoading } = useKpiQuery({"hs_call_timestamp":`gte.${since}`}, []);
+  const { rows: kpiRows, loading: kpiLoading } = useKpiQuery(null, null, since);
   const [summary, setSummary] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
@@ -2187,7 +2192,7 @@ function MgrKPI({ reps=[], setKpiRows, kpiFileName=null, setKpiFileName, clearKp
 
   // Fetch last 90 days only — not all 66k rows
   const since = ctDaysAgo(90);
-  const { rows: kpiRows, loading: kpiLoading } = useKpiQuery({"hs_call_timestamp":`gte.${since}`}, []);
+  const { rows: kpiRows, loading: kpiLoading } = useKpiQuery(null, null, since);
 
   const PAID_DISPS  = new Set(["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"]);
   const TRIAL_DISPS = new Set(["Registered: Trial","Outbound - Trial"]);
@@ -3304,14 +3309,12 @@ function RepKPI({ repName, agentFullName }) {
   const TOTAL_TARGET = 45;
   const [tab, setTab] = useState("week");
 
-  // Fetch only this rep's last 90 days — not all 66k rows
   const since = ctDaysAgo(90);
-  const { rows: myRows, loading } = useKpiQuery(
-    agentFullName
-      ? { "hs_agent_name": `eq.${encodeURIComponent(agentFullName)}`, "hs_call_timestamp": `gte.${since}` }
-      : { "hs_agent_name": `ilike.*${encodeURIComponent(repName?.split(" ")[0]||"")}*`, "hs_call_timestamp": `gte.${since}` },
-    [repName, agentFullName]
-  );
+  const agentKey = agentFullName ? "hs_agent_name" : "hs_agent_name";
+  const agentVal = agentFullName
+    ? `eq.${encodeURIComponent(agentFullName)}`
+    : `ilike.*${encodeURIComponent(repName?.split(" ")[0]||"")}*`;
+  const { rows: myRows, loading } = useKpiQuery(agentKey, agentVal, since);
 
   if(loading) return (
     <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"12px 14px",border:`1px solid ${DS.border}`,textAlign:"center"}}>
