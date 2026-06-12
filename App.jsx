@@ -591,7 +591,8 @@ async function sb(path, opts={}) {
     ...opts, headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, "Content-Type":"application/json", Prefer:"return=representation", ...(opts.headers||{}) }
   });
   if(!res.ok) throw new Error(await res.text());
-  const t = await res.text(); return t ? JSON.parse(t) : [];
+  const body = await res.text();
+  return body ? JSON.parse(body) : [];
 }
 const sbPatch = (tbl,id,d) => sb(`${tbl}?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(d)});
 const sbPost  = (tbl,d)    => sb(tbl,{method:"POST",body:JSON.stringify(d)});
