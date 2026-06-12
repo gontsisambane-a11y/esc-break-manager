@@ -598,7 +598,7 @@ async function loadAll() {
   const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue] = await Promise.all([
     sb("rep_status?select=*&order=id"),
     sb("app_settings?id=eq.1"),
-    sb("adhoc_lunch_requests?status=eq.pending&order=created_at.desc"),
+    sb("adhoc_lunch_requests?status=in.(pending,approved)&order=created_at.desc&limit=50"),
     sb("lunch_swaps?status=in.(pending)&order=created_at.desc"),
     sb("break_log?ended_at=is.null&select=*"),
     sb(`break_queue?date=eq.${todayStr()}&status=in.(waiting,notified)&order=queued_at`),
@@ -3564,9 +3564,8 @@ function AdHocLunchModal({ onSubmit, onClose }) {
 function LunchApprovalBanner({ repInfo, adHocRequests=[] }) {
   const [dismissed, setDismissed] = useState(false);
 
-  // Find most recent approved request that hasn't been seen
-  const unseen = adHocRequests.find(r=>
-    r.rep_id===repInfo.id &&
+  const unseen = (adHocRequests||[]).find(r=>
+    r.rep_id===repInfo?.id &&
     r.status==="approved" &&
     r.seen_by_rep===false
   );
