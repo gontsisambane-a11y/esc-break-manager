@@ -6592,13 +6592,7 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // KPI data — uploaded daily from bookings Supabase export
   const [kpiFileName, setKpiFileName] = useState(null);
-
-  useEffect(()=>{
-    sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); }).catch(()=>{});
-  },[]);
 
   const reload = useCallback(async()=>{
     try {
@@ -6618,15 +6612,17 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
+    // Run daily reset once then start polling
     const init = async () => {
-      const d = await loadAll();
-      await runDailyReset(d.reps, d.settings);
-      const fresh = await loadAll(); // reload after reset
-      setData(fresh);
-      setLoading(false);
+      try {
+        const d = await loadAll();
+        await runDailyReset(d.reps, d.settings);
+      } catch(e) { console.error("Init error:",e); }
+      reload();
     };
     init();
-    const interval = setInterval(async ()=>{ const d=await loadAll(); setData(d); }, 30000);
+    sb("kpi_upload_meta?id=eq.1").then(r=>{ if(r?.[0]?.last_filename) setKpiFileName(r[0].last_filename); }).catch(()=>{});
+    const interval = setInterval(reload, 30000);
     return ()=>clearInterval(interval);
   },[]);
 
