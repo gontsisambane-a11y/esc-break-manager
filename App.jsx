@@ -1324,7 +1324,11 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
   const excooPing = (key, text) => ping.execo(key, text);
 
   const handleAdHoc = async (req, approve) => {
-    await sbPatch("adhoc_lunch_requests",req.id,{status:approve?"approved":"declined"});
+    await sbPatch("adhoc_lunch_requests",req.id,{
+      status:approve?"approved":"declined",
+      notified_at: approve ? new Date().toISOString() : null,
+      seen_by_rep: false,
+    });
     if(approve) {
       const rep = reps.find(r=>r.id===req.rep_id);
       if(rep) {
@@ -3080,7 +3084,7 @@ function MgrSettings({ settings, reps, reload, fire }) {
 
 // ── REP VIEW ──────────────────────────────────────────────────────────
 function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
-  const { reps, settings, swaps, activeBreaks, breakQueue=[] } = data;
+  const { reps, settings, swaps, activeBreaks, breakQueue=[], adHoc=[] } = data;
   const [tab, setTab] = useState("my");
   const [toast, setToast] = useState(null);
   const fire = (type,msg) => setToast({type,msg,id:Date.now()});
@@ -3274,7 +3278,6 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       {/* Rep Tabs */}
       <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`}}>
         <div style={{display:"flex",padding:"0 16px"}}>
-          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"Hub"}]:[])].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)} style={{
               padding:"11px 14px",border:"none",background:"none",cursor:"pointer",
               fontSize:12,fontWeight:tab===t.k?600:400,
@@ -3288,7 +3291,10 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
 
       <div style={{padding:"16px",maxWidth:480,margin:"0 auto"}}>
         {tab==="my"&&(
-          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
+          <>
+            <LunchApprovalBanner repInfo={repInfo} adHocRequests={adHoc}/>
+            <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
+          </>
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
@@ -3551,6 +3557,40 @@ function AdHocLunchModal({ onSubmit, onClose }) {
           <button onClick={()=>onSubmit(preferredTime,note)} style={{flex:2,padding:"10px",borderRadius:DS.radiusSm,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Send Request</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LunchApprovalBanner({ repInfo, adHocRequests=[] }) {
+  const [dismissed, setDismissed] = useState(false);
+
+  // Find most recent approved request that hasn't been seen
+  const unseen = adHocRequests.find(r=>
+    r.rep_id===repInfo.id &&
+    r.status==="approved" &&
+    r.seen_by_rep===false
+  );
+
+  const dismiss = async () => {
+    if(unseen) await sbPatch("adhoc_lunch_requests",unseen.id,{seen_by_rep:true});
+    setDismissed(true);
+  };
+
+  if(!unseen||dismissed) return null;
+
+  return (
+    <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:DS.radiusSm,padding:"12px 14px",margin:"0 0 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <span style={{fontSize:20}}>✅</span>
+        <div>
+          <p style={{margin:"0 0 2px",fontSize:13,fontWeight:700,color:DS.green}}>Lunch approved!</p>
+          <p style={{margin:0,fontSize:11,color:DS.textSec}}>
+            Your ad hoc lunch request has been approved
+            {unseen.preferred_time?` for ${unseen.preferred_time}`:""}
+          </p>
+        </div>
+      </div>
+      <button onClick={dismiss} style={{background:"transparent",border:"none",color:DS.textMut,cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
     </div>
   );
 }
