@@ -598,7 +598,7 @@ async function loadAll() {
   const [reps,settArr,adHoc,swaps,activeBreaks,breakQueue] = await Promise.all([
     sb("rep_status?select=*&order=id"),
     sb("app_settings?id=eq.1"),
-    sb("adhoc_lunch_requests?status=in.(pending,approved)&order=created_at.desc&limit=50"),
+    sb("adhoc_lunch_requests?status=eq.pending&order=created_at.desc"),
     sb("lunch_swaps?status=in.(pending)&order=created_at.desc"),
     sb("break_log?ended_at=is.null&select=*"),
     sb(`break_queue?date=eq.${todayStr()}&status=in.(waiting,notified)&order=queued_at`),
@@ -3291,10 +3291,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
 
       <div style={{padding:"16px",maxWidth:480,margin:"0 auto"}}>
         {tab==="my"&&(
-          <>
-            <LunchApprovalBanner repInfo={repInfo} adHocRequests={adHoc}/>
-            <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
-          </>
+          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
