@@ -1324,11 +1324,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
   const excooPing = (key, text) => ping.execo(key, text);
 
   const handleAdHoc = async (req, approve) => {
-    await sbPatch("adhoc_lunch_requests",req.id,{
-      status:approve?"approved":"declined",
-      notified_at: approve ? new Date().toISOString() : null,
-      seen_by_rep: false,
-    });
+    await sbPatch("adhoc_lunch_requests",req.id,{status:approve?"approved":"declined"});
     if(approve) {
       const rep = reps.find(r=>r.id===req.rep_id);
       if(rep) {
@@ -3558,38 +3554,6 @@ function AdHocLunchModal({ onSubmit, onClose }) {
   );
 }
 
-function LunchApprovalBanner({ repInfo, adHocRequests=[] }) {
-  const [dismissed, setDismissed] = useState(false);
-
-  const unseen = (adHocRequests||[]).find(r=>
-    r.rep_id===repInfo?.id &&
-    r.status==="approved" &&
-    r.seen_by_rep===false
-  );
-
-  const dismiss = async () => {
-    if(unseen) await sbPatch("adhoc_lunch_requests",unseen.id,{seen_by_rep:true});
-    setDismissed(true);
-  };
-
-  if(!unseen||dismissed) return null;
-
-  return (
-    <div style={{background:DS.greenDim,border:`1px solid ${DS.green}40`,borderRadius:DS.radiusSm,padding:"12px 14px",margin:"0 0 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div style={{display:"flex",gap:10,alignItems:"center"}}>
-        <span style={{fontSize:20}}>✅</span>
-        <div>
-          <p style={{margin:"0 0 2px",fontSize:13,fontWeight:700,color:DS.green}}>Lunch approved!</p>
-          <p style={{margin:0,fontSize:11,color:DS.textSec}}>
-            Your ad hoc lunch request has been approved
-            {unseen.preferred_time?` for ${unseen.preferred_time}`:""}
-          </p>
-        </div>
-      </div>
-      <button onClick={dismiss} style={{background:"transparent",border:"none",color:DS.textMut,cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
-    </div>
-  );
-}
 
 function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={} }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
