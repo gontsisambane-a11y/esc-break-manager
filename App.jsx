@@ -3710,12 +3710,29 @@ function RepTeam({ reps, myId, activeBreaks }) {
     return !shiftDays.includes(todayDay);
   });
 
+  const TZ_OFFSET = {Central:0, Eastern:1, Pacific:-2, SA:-7};
+  function toCtMins(timeStr, tz) {
+    if(!timeStr) return null;
+    const [h,m] = timeStr.split(":").map(Number);
+    return ((h*60+m) + (TZ_OFFSET[tz]||0)*60 + 1440) % 1440;
+  }
+  function fmtMins(mins) {
+    if(mins===null||mins===undefined) return "";
+    const norm = ((mins%1440)+1440)%1440;
+    const h = Math.floor(norm/60), m = norm%60;
+    return `${h%12||12}${m?`:${String(m).padStart(2,"0")}`:""}${h>=12?"pm":"am"}`;
+  }
+
   const RepCard = ({rep}) => {
     const cfg=ST[rep.status]||ST.available;
     const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
     const cooldownActive=!!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
     const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
     const isMe=rep.id===myId;
+    const sched = rep.lunch_schedule?.[todayDay];
+    const startCT = toCtMins(sched?.start, rep.timezone||"Central");
+    const endCT   = toCtMins(sched?.end,   rep.timezone||"Central");
+    const shiftStr = startCT!==null&&endCT!==null ? `${fmtMins(startCT)}–${fmtMins(endCT)} CT` : "";
     return (
       <div style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
         <div style={{display:"flex",alignItems:"center",gap:9}}>
@@ -3727,6 +3744,7 @@ function RepTeam({ reps, myId, activeBreaks }) {
               <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
             </div>
             <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+              {shiftStr&&<span style={{fontSize:10,color:DS.textSec}}>🕐 {shiftStr}</span>}
               <span style={{fontSize:10,color:DS.textSec}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
               {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
               {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:DS.textMut}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
