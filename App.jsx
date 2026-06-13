@@ -3696,38 +3696,72 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
 }
 
 function RepTeam({ reps, myId, activeBreaks }) {
+  const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const todayDay = DAYS[new Date().getDay()];
+
+  const onShiftToday = reps.filter(r=>{
+    const shiftDays = r.shift_days||[];
+    if(shiftDays.length===0) return !["off","pto","sick"].includes(r.status);
+    return shiftDays.includes(todayDay);
+  });
+  const notInToday = reps.filter(r=>{
+    const shiftDays = r.shift_days||[];
+    if(shiftDays.length===0) return false;
+    return !shiftDays.includes(todayDay);
+  });
+
+  const RepCard = ({rep}) => {
+    const cfg=ST[rep.status]||ST.available;
+    const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
+    const cooldownActive=!!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
+    const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
+    const isMe=rep.id===myId;
+    return (
+      <div style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontWeight:600,fontSize:13,color:DS.textPri}}>{rep.name}{isMe?" (you)":""}</span>
+              <StatusDot status={rep.status}/>
+              <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+              <span style={{fontSize:10,color:DS.textSec}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
+              {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
+              {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:DS.textMut}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
+            </div>
+            {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
-      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:"0 0 10px",fontWeight:700}}>Team Balances</p>
-      <div style={{display:"flex",flexDirection:"column",gap:7}}>
-        {reps.map(rep=>{
-          const cfg=ST[rep.status]||ST.available;
-          const ab=activeBreaks.find(b=>b.rep_id===rep.id&&rep.status==="health");
-          const cooldownActive=!!(rep.health_time_banked>=HEALTH_MAX_SEC&&rep.last_break_returned_at&&elapsedSec(rep.last_break_returned_at)<COOLDOWN_SEC);
-          const cooldownLeft=cooldownActive?COOLDOWN_SEC-elapsedSec(rep.last_break_returned_at||new Date().toISOString()):0;
-          const isMe=rep.id===myId;
-          return (
-            <div key={rep.id} style={{background:cfg.bg,border:`1.5px solid ${cfg.border}`,borderRadius:12,padding:"10px 13px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:9}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:isMe?"#1a5c35":"#eafaf1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:isMe?"#fff":"#1a5c35",flexShrink:0}}>{rep.avatar||avatar(rep.name)}</div>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{fontWeight:600,fontSize:13,color:DS.textPri}}>{rep.name}{isMe?" (you)":""}</span>
-                    <StatusDot status={rep.status}/>
-                    <span style={{fontSize:11,color:cfg.dot}}>{cfg.label}</span>
-                  </div>
-                  <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                    <span style={{fontSize:10,color:DS.textSec}}>🌿 {rep.health_breaks_today||0}/{HEALTH_PER_DAY} breaks</span>
-                    {cooldownActive&&<span style={{fontSize:10,color:"#e07b00",fontWeight:600}}>⏳ {fmtTime(cooldownLeft)}</span>}
-                    {(rep.health_time_banked||0)>0&&!cooldownActive&&<span style={{fontSize:10,color:DS.textMut}}>Banked: {fmtDur(rep.health_time_banked)}</span>}
-                  </div>
-                  {rep.status==="health"&&ab&&<HealthTimer startedAt={ab.started_at} bankedSec={rep.health_time_banked||0}/>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:"0 0 10px",fontWeight:700}}>
+        On Shift Today — {todayDay} ({onShiftToday.length})
+      </p>
+      <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:16}}>
+        {onShiftToday.map(rep=><RepCard key={rep.id} rep={rep}/>)}
+        {onShiftToday.length===0&&<p style={{fontSize:12,color:DS.textMut,textAlign:"center",padding:"8px 0"}}>No one scheduled today</p>}
       </div>
+
+      {notInToday.length>0&&(
+        <>
+          <p style={{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:DS.textMut,margin:"0 0 8px",fontWeight:700}}>
+            Not In Today ({notInToday.length})
+          </p>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {notInToday.map(r=>(
+              <span key={r.id} style={{fontSize:11,color:DS.textMut,background:DS.bgSurf,border:`1px solid ${DS.border}`,padding:"4px 10px",borderRadius:DS.radiusSm}}>
+                {r.name}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
