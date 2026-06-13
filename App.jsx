@@ -6185,6 +6185,84 @@ function FlagModal({ currentUser, onClose }) {
   );
 }
 
+// ── TODAY'S ROSTER ───────────────────────────────────────────────────
+function TodaysRoster({ reps }) {
+  const TZ_OFFSET = {Central:0, Eastern:1, Pacific:-2, SA:-7};
+  const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const day = DAYS[new Date().getDay()];
+
+  function toCtMins(timeStr, tz) {
+    if(!timeStr) return null;
+    const [h,m] = timeStr.split(":").map(Number);
+    return ((h*60+m) + (TZ_OFFSET[tz]||0)*60 + 1440) % 1440;
+  }
+  function fmtMins(mins) {
+    if(mins===null||mins===undefined) return "";
+    const h = Math.floor(((mins%1440)+1440)%1440/60);
+    const m = ((mins%1440)+1440)%1440 % 60;
+    return `${h%12||12}${m?`:${String(m).padStart(2,"0")}`:""}${h>=12?"pm":"am"}`;
+  }
+
+  const STATUS_COLOR = {
+    available: DS.green, health: DS.accent, lunch: DS.amber,
+    admin: DS.accentHi, off: DS.textMut, pto: DS.textMut, sick: DS.red,
+  };
+  const STATUS_LABEL = {
+    available:"Available", health:"Health break", lunch:"On lunch",
+    admin:"Admin", off:"Off", pto:"PTO", sick:"Sick/Call-off",
+  };
+
+  // Build roster — all reps with their CT shift times for today
+  const roster = reps.map(r=>{
+    const sched = r.lunch_schedule?.[day];
+    const startCT = sched?.start ? toCtMins(sched.start, r.timezone||"Central") : null;
+    const endCT   = sched?.end   ? toCtMins(sched.end,   r.timezone||"Central") : null;
+    const lunchCT = sched?.time  ? toCtMins(sched.time,  r.timezone||"Central") : null;
+    return { ...r, startCT, endCT, lunchCT };
+  });
+
+  const onShift   = roster.filter(r=>!["off","pto","sick"].includes(r.status)).sort((a,b)=>(a.startCT||999)-(b.startCT||999));
+  const offToday  = roster.filter(r=>["off","pto","sick"].includes(r.status));
+
+  return (
+    <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14,marginBottom:14}}>
+      <p style={{margin:"0 0 12px",fontSize:10,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1.5}}>
+        Today's Roster — {day} · {onShift.length} on shift
+      </p>
+
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {onShift.map(r=>{
+          const color = STATUS_COLOR[r.status]||DS.textSec;
+          return (
+            <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:DS.bgSurf,borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:color,flexShrink:0}}/>
+                <div>
+                  <p style={{margin:0,fontSize:12,fontWeight:600,color:DS.textPri}}>{r.name}</p>
+                  <p style={{margin:0,fontSize:10,color:DS.textMut}}>
+                    {r.timezone||"Central"}
+                    {r.startCT!==null ? ` · ${fmtMins(r.startCT)}–${fmtMins(r.endCT)} CT` : ""}
+                    {r.lunchCT!==null ? ` · lunch ${fmtMins(r.lunchCT)}` : ""}
+                  </p>
+                </div>
+              </div>
+              <span style={{fontSize:10,fontWeight:600,color,background:`${color}15`,padding:"2px 8px",borderRadius:4}}>
+                {STATUS_LABEL[r.status]||r.status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {offToday.length>0&&(
+        <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${DS.border}`}}>
+          <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Off today: {offToday.map(r=>`${r.name} (${r.status})`).join(" · ")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TeamLeadView({ currentUser, data, reload, onLogout }) {
   const { reps, settings, adHoc, swaps, activeBreaks } = data;
   const [tab, setTab] = useState("overview");
@@ -6259,7 +6337,12 @@ function TeamLeadView({ currentUser, data, reload, onLogout }) {
       </div>
 
       <div style={{padding:"16px",maxWidth:720,margin:"0 auto"}}>
-        {tab==="overview"&&<MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={settings.peak_mode?1:2} maxOut={settings.custom_limit??Math.max(2,Math.floor(reps.filter(r=>!["off","pto","sick"].includes(r.status)).length*0.3))} reload={reload} fire={fire} settings={settings} centreOpen={true} onAdmin={onAdmin} adminLimit={settings.admin_limit??2} readOnly={true}/>}
+        {tab==="overview"&&(
+          <>
+            <TodaysRoster reps={reps}/>
+            <MgrOverview reps={reps} activeBreaks={activeBreaks} hLimit={settings.peak_mode?1:2} maxOut={settings.custom_limit??Math.max(2,Math.floor(reps.filter(r=>!["off","pto","sick"].includes(r.status)).length*0.3))} reload={reload} fire={fire} settings={settings} centreOpen={true} onAdmin={onAdmin} adminLimit={settings.admin_limit??2} readOnly={true}/>
+          </>
+        )}
         {tab==="requests"&&<MgrRequests adHoc={adHoc} swaps={swaps} reps={reps} reload={reload} fire={fire} settings={settings}/>}
         {tab==="team"&&<MgrTeam reps={reps} settings={settings} reload={reload} fire={fire} readOnly={true}/>}
       </div>
