@@ -3280,6 +3280,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
       {/* Rep Tabs */}
       <div style={{background:DS.bgCard,borderBottom:`1px solid ${DS.border}`}}>
         <div style={{display:"flex",padding:"0 16px"}}>
+          {[{k:"my",l:"My Break"},{k:"team",l:"Team"},{k:"swaps",l:`Swaps${mySwaps.length>0?` (${mySwaps.length})`:""}`},...(HUB_ENABLED?[{k:"hub",l:"Hub"}]:[])].map(t=>(
             <button key={t.k} onClick={()=>setTab(t.k)} style={{
               padding:"11px 14px",border:"none",background:"none",cursor:"pointer",
               fontSize:12,fontWeight:tab===t.k?600:400,
