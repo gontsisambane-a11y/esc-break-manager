@@ -6198,41 +6198,60 @@ function TodaysRoster({ reps }) {
   }
   function fmtMins(mins) {
     if(mins===null||mins===undefined) return "";
-    const h = Math.floor(((mins%1440)+1440)%1440/60);
-    const m = ((mins%1440)+1440)%1440 % 60;
+    const norm = ((mins%1440)+1440)%1440;
+    const h = Math.floor(norm/60), m = norm%60;
     return `${h%12||12}${m?`:${String(m).padStart(2,"0")}`:""}${h>=12?"pm":"am"}`;
   }
 
   const STATUS_COLOR = {
-    available: DS.green, health: DS.accent, lunch: DS.amber,
-    admin: DS.accentHi, off: DS.textMut, pto: DS.textMut, sick: DS.red,
+    available:DS.green, health:DS.accent, lunch:DS.amber,
+    admin:DS.accentHi, off:DS.textMut, pto:DS.textMut, sick:DS.red,
   };
   const STATUS_LABEL = {
     available:"Available", health:"Health break", lunch:"On lunch",
     admin:"Admin", off:"Off", pto:"PTO", sick:"Sick/Call-off",
   };
 
-  // Build roster — all reps with their CT shift times for today
-  const roster = reps.map(r=>{
-    const sched = r.lunch_schedule?.[day];
-    const startCT = sched?.start ? toCtMins(sched.start, r.timezone||"Central") : null;
-    const endCT   = sched?.end   ? toCtMins(sched.end,   r.timezone||"Central") : null;
-    const lunchCT = sched?.time  ? toCtMins(sched.time,  r.timezone||"Central") : null;
-    return { ...r, startCT, endCT, lunchCT };
+  // Only reps scheduled to work today based on shift_days
+  const scheduledToday = reps.filter(r=>{
+    const shiftDays = r.shift_days||[];
+    // If no shift days set, fall back to showing everyone not off
+    if(shiftDays.length===0) return !["off","pto","sick"].includes(r.status);
+    return shiftDays.includes(day);
   });
 
-  const onShift   = roster.filter(r=>!["off","pto","sick"].includes(r.status)).sort((a,b)=>(a.startCT||999)-(b.startCT||999));
-  const offToday  = roster.filter(r=>["off","pto","sick"].includes(r.status));
+  const onShift  = scheduledToday.filter(r=>!["off","pto","sick"].includes(r.status));
+  const offToday = scheduledToday.filter(r=>["off","pto","sick"].includes(r.status));
+
+  // Also show anyone currently on break who isn't scheduled (edge case)
+  const extraOnBreak = reps.filter(r=>
+    ["health","lunch","admin"].includes(r.status) &&
+    !scheduledToday.find(s=>s.id===r.id)
+  );
+
+  const displayReps = [...onShift, ...extraOnBreak].sort((a,b)=>{
+    const aStart = toCtMins(a.lunch_schedule?.[day]?.start, a.timezone||"Central");
+    const bStart = toCtMins(b.lunch_schedule?.[day]?.start, b.timezone||"Central");
+    return (aStart||999)-(bStart||999);
+  });
 
   return (
     <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14,marginBottom:14}}>
       <p style={{margin:"0 0 12px",fontSize:10,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1.5}}>
-        Today's Roster — {day} · {onShift.length} on shift
+        Today's Roster — {day} · {displayReps.length} on shift
       </p>
 
+      {displayReps.length===0&&(
+        <p style={{margin:0,fontSize:12,color:DS.textMut,textAlign:"center",padding:"8px 0"}}>No reps scheduled today</p>
+      )}
+
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        {onShift.map(r=>{
+        {displayReps.map(r=>{
           const color = STATUS_COLOR[r.status]||DS.textSec;
+          const sched = r.lunch_schedule?.[day];
+          const startCT = toCtMins(sched?.start, r.timezone||"Central");
+          const endCT   = toCtMins(sched?.end,   r.timezone||"Central");
+          const lunchCT = toCtMins(sched?.time,  r.timezone||"Central");
           return (
             <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:DS.bgSurf,borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -6241,8 +6260,8 @@ function TodaysRoster({ reps }) {
                   <p style={{margin:0,fontSize:12,fontWeight:600,color:DS.textPri}}>{r.name}</p>
                   <p style={{margin:0,fontSize:10,color:DS.textMut}}>
                     {r.timezone||"Central"}
-                    {r.startCT!==null ? ` · ${fmtMins(r.startCT)}–${fmtMins(r.endCT)} CT` : ""}
-                    {r.lunchCT!==null ? ` · lunch ${fmtMins(r.lunchCT)}` : ""}
+                    {startCT!==null&&endCT!==null ? ` · ${fmtMins(startCT)}–${fmtMins(endCT)} CT` : ""}
+                    {lunchCT!==null ? ` · lunch ${fmtMins(lunchCT)}` : ""}
                   </p>
                 </div>
               </div>
@@ -6256,7 +6275,9 @@ function TodaysRoster({ reps }) {
 
       {offToday.length>0&&(
         <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${DS.border}`}}>
-          <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Off today: {offToday.map(r=>`${r.name} (${r.status})`).join(" · ")}</p>
+          <p style={{margin:0,fontSize:10,color:DS.textMut}}>
+            Scheduled off today: {offToday.map(r=>`${r.name} (${r.status})`).join(" · ")}
+          </p>
         </div>
       )}
     </div>
