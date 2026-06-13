@@ -6293,10 +6293,18 @@ function TeamLeadView({ currentUser, data, reload, onLogout }) {
   const gStyle = buildGStyle(theme);
   const fire = (type,msg)=>setToast({type,msg,id:Date.now()});
 
-  const onHealth = reps.filter(r=>r.status==="health").length;
-  const onLunch  = reps.filter(r=>r.status==="lunch").length;
-  const onAdmin  = reps.filter(r=>r.status==="admin").length;
-  const available = reps.filter(r=>r.status==="available"&&!["off","pto","sick"].includes(r.status)).length;
+  const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const todayDay = DAYS[new Date().getDay()];
+  const scheduledToday = reps.filter(r=>{
+    const shiftDays = r.shift_days||[];
+    if(shiftDays.length===0) return !["off","pto","sick"].includes(r.status);
+    return shiftDays.includes(todayDay);
+  });
+
+  const onHealth = scheduledToday.filter(r=>r.status==="health").length;
+  const onLunch  = scheduledToday.filter(r=>r.status==="lunch").length;
+  const onAdmin  = scheduledToday.filter(r=>r.status==="admin").length;
+  const available = scheduledToday.filter(r=>r.status==="available").length;
 
   const TABS = [
     {k:"overview", l:"Overview"},
