@@ -5568,20 +5568,59 @@ function QuoteCalculator({locations, activePromos=[]}) {
 
   const buildScript = () => {
     if(!result||!loc) return "";
-    const {isBeforeBilling,groupResults,regFeeTotal,today_amount,auto_amount,currentMonthName,nextMonthName,billingDate} = result;
-    let s = `Here's the pricing breakdown for your ${numKids} child${numKids>1?"ren":""}:\n\n`;
+    const {isBeforeBilling,groupResults,regFeeTotal,today_amount,auto_amount,
+           currentMonthName,nextMonthName,billingDate,total_curr,total_next} = result;
+
+    const childWord = (n) => n===1?"child":"children";
+    let s = "";
+
+    // Per-group class breakdown
     groupResults.forEach(({g,r})=>{
-      const kidLabel = g.kids.length===1?`Child ${g.kids[0]}`:`Children ${g.kids.join(", ")}`;
-      s += `${kidLabel}: ${r.ti.label} — ${fmt(r.rate)}/class`;
-      if(r.d2) s += ` (${DAYS_SHORT[parseInt(g.day1)]}s) + ${fmt(r.rate2)}/class (${DAYS_SHORT[parseInt(r.d2)]}s)`;
-      if(r.sibMult<1) s += ` with 10% sibling discount`;
+      const kidLabel = g.kids.length===1
+        ? `your child`
+        : g.kids.length===numKids
+          ? `all ${numKids} children`
+          : `${g.kids.length} of your children`;
+      const d1l = g.day1?DAYS_SHORT[parseInt(g.day1)]:"";
+      const d2l = r.d2!==null?DAYS_SHORT[parseInt(r.d2)]:null;
+
+      s += `For ${kidLabel} in ${r.ti.label}`;
+      if(!r.isFlat&&d1l) {
+        s += ` on ${d1l}s`;
+        if(d2l) s += ` and ${d2l}s`;
+      }
+      s += `, the rate is ${fmt(r.rate)} per class`;
+      if(d2l) s += ` for ${d1l}s and ${fmt(r.rate2)} for ${d2l}s — that includes our 10% multi-day discount`;
+      if(r.sibMult<1) s += `. A 10% sibling discount also applies`;
+      s += `.\n`;
+
+      if(!r.isFlat&&r.counts) {
+        const {c1c,c2c} = r.counts;
+        s += `In ${currentMonthName} from your start date, there ${c1c===1?"is":"are"} ${c1c} ${d1l} class${c1c!==1?"es":""}`;
+        if(d2l&&c2c>0) s += ` and ${c2c} ${d2l} class${c2c!==1?"es":""}`;
+        s += ` — that comes to ${fmt(r.ch_curr)} per child`;
+        if(g.kids.length>1) s += `, ${fmt(r.total_curr)} for ${g.kids.length} children`;
+        s += `.\n`;
+      } else if(r.isFlat) {
+        s += `That's ${g.qty} session${g.qty!==1?"s":""} at ${fmt(r.rate)} each — ${fmt(r.total_curr)} total.\n`;
+      }
       s += `\n`;
     });
-    s += `\nToday I'll collect ${currentMonthName} classes — ${fmt(result.total_curr)}.`;
-    if(!isBeforeBilling) s += `\nPlus ${nextMonthName} since we're past the ${billingDate} billing date — ${fmt(result.total_next)}.`;
-    s += `\n\nRegistration fee: ${fmt(regFeeTotal)} (${Math.min(numKids,2)} child${Math.min(numKids,2)>1?"ren":""}${numKids>2?", 3rd+ free":""}).`;
-    s += `\n\nTotal due today: ${fmt(today_amount)}.`;
-    if(isBeforeBilling) s += `\n\nOn ${billingDate}, ${fmt(auto_amount)} will be automatically charged for ${nextMonthName}.`;
+
+    // Cost breakdown
+    if(isBeforeBilling) {
+      s += `Your ${currentMonthName} tuition would be ${fmt(total_curr)}, plus a one-time registration fee of ${fmt(regFeeTotal)}`;
+      if(numKids>2) s += ` — that covers two children, and the third onwards is free`;
+      s += `. So the amount due to get started today is ${fmt(today_amount)}.\n\n`;
+      s += `On ${billingDate}, ${fmt(auto_amount)} would be automatically charged for ${nextMonthName}. After that, billing runs on the 20th of each month for the following month.`;
+    } else {
+      s += `Since we're past the 20th, the amount due today covers ${currentMonthName} remaining classes (${fmt(total_curr)}) plus the full month of ${nextMonthName} (${fmt(total_next)}), `;
+      s += `along with the one-time registration fee of ${fmt(regFeeTotal)}`;
+      if(numKids>2) s += ` — two children covered, third and beyond are free`;
+      s += `. Total due today: ${fmt(today_amount)}.\n\n`;
+      s += `After that, billing runs on the 20th of each month for the following month.`;
+    }
+
     return s;
   };
 
@@ -5845,6 +5884,12 @@ function QuoteCalculator({locations, activePromos=[]}) {
               </div>
             </div>
           )}
+
+          {/* Script preview */}
+          <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"12px 14px",marginBottom:8,border:`1px solid ${DS.border}`}}>
+            <p style={{margin:"0 0 8px",fontSize:10,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>Rep Script</p>
+            <p style={{margin:0,fontSize:12,color:DS.textSec,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{buildScript()}</p>
+          </div>
 
           <button onClick={copyScript} style={{width:"100%",padding:"10px",borderRadius:DS.radiusSm,border:"none",background:copied?DS.green:DS.accent,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>
             {copied?"✓ Copied!":"📋 Copy Rep Script"}
