@@ -5304,7 +5304,6 @@ function QuoteCalculator({locations, activePromos=[]}) {
   const DAYS_SHORT  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const MONTHS      = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-  // Locations with ongoing sibling discount
   const SIB_DISCOUNT_LOCS = new Set([
     "San Carlos","San Mateo","Murrieta",
     "Fleming Island","Mandarin","Nocatee","St Augustine","St Johns Bluff",
@@ -5322,25 +5321,35 @@ function QuoteCalculator({locations, activePromos=[]}) {
   const [day2,         setDay2]         = useState("");
   const [custType,     setCustType]     = useState("lead");
   const [numKids,      setNumKids]      = useState(1);
+  // Additional lesson types per student (privates, ODL, clinic)
+  const [addons,       setAddons]       = useState([]); // [{type, qty}]
   const [promoChecked, setPromoChecked] = useState([]);
   const [copied,       setCopied]       = useState(false);
 
   const loc = locations.find(l=>l.id===locId);
+  const hasSibDiscount = loc ? SIB_DISCOUNT_LOCS.has(loc.name) : false;
 
-  const CLASS_TYPES = [
-    {key:"group_mf", label:"Group Classes (M–F)",  priceKey:"price_mf",    continuous:true},
-    {key:"group_ss", label:"Group Classes (Sa–Su)", priceKey:"price_ss",    continuous:true},
-    {key:"team_mf",  label:"Swim Team (M–F)",       priceKey:"price_st_mf", continuous:true},
-    {key:"team_ss",  label:"Swim Team (Sa–Su)",      priceKey:"price_st_ss", continuous:true},
+  const CONT_TYPES = [
+    {key:"group_mf", label:"Group (M–F)",   priceKey:"price_mf",    isCont:true,  isGroup:true},
+    {key:"group_ss", label:"Group (Sa–Su)", priceKey:"price_ss",    isCont:true,  isGroup:true},
+    {key:"team_mf",  label:"Swim Team (M–F)",priceKey:"price_st_mf",isCont:true,  isGroup:true},
+    {key:"team_ss",  label:"Swim Team (Sa–Su)",priceKey:"price_st_ss",isCont:true, isGroup:true},
   ];
 
-  const getRate = (type) => {
-    if(!loc) return 0;
-    const ct = CLASS_TYPES.find(c=>c.key===type);
-    return ct ? (parseFloat(loc[ct.priceKey])||0) : 0;
-  };
+  const ADDON_TYPES = [
+    {key:"private_30",label:"Private Lessons (30m)", priceKey:"price_priv",     perClass:true,  noDiscount:true},
+    {key:"semi",      label:"Semi-Private (30m)",     priceKey:"price_semi",     perClass:true,  noDiscount:true},
+    {key:"adaptive",  label:"Private Adaptive",       priceKey:"price_adaptive", perClass:true,  noDiscount:true},
+    {key:"private_20",label:"Private Lessons (20m)",  priceKey:"price_priv20",   perClass:true,  noDiscount:true},
+    {key:"odl_mf",    label:"ODL (M–F)",              priceKey:"price_odl",      perClass:false, noDiscount:true},
+    {key:"odl_ss",    label:"ODL (Sa–Su)",             priceKey:"price_odl_ss",   perClass:false, noDiscount:true},
+    {key:"clinic",    label:"Swim Clinic (per class)", priceKey:"price_clinic",   perClass:false, noDiscount:true},
+  ];
 
-  const hasSibDiscount = loc ? SIB_DISCOUNT_LOCS.has(loc.name) : false;
+  const getRate = (priceKey) => {
+    if(!loc) return 0;
+    return parseFloat(loc[priceKey])||0;
+  };
 
   // ── DATE HELPERS ─────────────────────────────────────────────────────
   function countDayInRange(dayOfWeek, startDate, endDate) {
@@ -5353,37 +5362,42 @@ function QuoteCalculator({locations, activePromos=[]}) {
   }
   function lastDayOfMonth(year, month) { return new Date(year, month+1, 0); }
 
-  // ── ELIGIBLE PROMOS ───────────────────────────────────────────────────
+  // ── PROMO FILTERING — picks up all live promos automatically ─────────
   const eligiblePromos = activePromos.filter(p=>{
     if(!p.discount_type && !p.discount_pct && !p.discount_fixed) return false;
-    // customer type check
+    // customer type
     let custTypes = p.customer_types;
     if(typeof custTypes==="string"){ try{custTypes=JSON.parse(custTypes);}catch{custTypes=custTypes?[custTypes]:[]; } }
     if(custTypes?.length && !custTypes.includes(custType)) return false;
     // month restriction
-    if(p.month_restriction && p.month_restriction !== "") {
-      const enrollMonth = enrollDate ? new Date(enrollDate+"T12:00:00").getMonth() : -1;
-      if(String(p.month_restriction) !== String(enrollMonth)) return false;
+    if(p.month_restriction && p.month_restriction!=="") {
+      const em = enrollDate ? new Date(enrollDate+"T12:00:00").getMonth() : -1;
+      if(String(p.month_restriction)!==String(em)) return false;
     }
-    // applies_to — only show continuous-eligible promos for continuous classes
-    if(p.applies_to && p.applies_to !== "all" && p.applies_to !== "continuous") return false;
     return true;
   });
 
-  // ── PROMO APPLICATION ─────────────────────────────────────────────────
-  // Returns discount amount for a given class amount
-  const applyPromos = (amount, classCount) => {
-    const checked = eligiblePromos.filter(p=>promoChecked.includes(p.code));
+  // Which promos apply to which lesson types
+  const promoAppliesToType = (p, isGroup, isCont, isAddon) => {
+    const at = p.applies_to||"continuous";
+    if(at==="all") return true;
+    if(at==="continuous") return isCont && !isAddon;
+    if(at==="group") return isGroup && !isAddon;
+    return false;
+  };
+
+  // Apply checked promos to an amount
+  const applyPromos = (amount, classCount, isGroup, isCont, isAddon) => {
+    const checked = eligiblePromos.filter(p=>promoChecked.includes(p.code)&&promoAppliesToType(p,isGroup,isCont,isAddon));
     let total = amount;
     checked.forEach(p=>{
-      const dtype = p.discount_type || (p.discount_fixed ? "fixed" : "pct");
+      const dtype = p.discount_type||(p.discount_fixed?"fixed":"pct");
       if(dtype==="pct") {
         if(p.one_class_only) {
-          // discount applies to first class only
-          const perClass = amount / (classCount||1);
-          total -= perClass * (p.discount_pct/100);
+          const perClass = amount/(classCount||1);
+          total -= perClass*(p.discount_pct/100);
         } else {
-          total -= total * (p.discount_pct/100);
+          total -= total*(p.discount_pct/100);
         }
       } else if(dtype==="fixed") {
         total -= p.discount_fixed;
@@ -5392,159 +5406,181 @@ function QuoteCalculator({locations, activePromos=[]}) {
     return Math.max(0, total);
   };
 
-  // ── BILLING CALCULATION ───────────────────────────────────────────────
+  // ── BILLING CALC ──────────────────────────────────────────────────────
   const calc = () => {
     if(!loc||!enrollDate||day1==="") return null;
 
-    const enroll   = new Date(enrollDate+"T12:00:00");
-    const year     = enroll.getFullYear();
-    const month    = enroll.getMonth();
-    const dayNum   = enroll.getDate();
-    const isBeforeBilling = dayNum < BILLING_DAY;
+    const enroll = new Date(enrollDate+"T12:00:00");
+    const year   = enroll.getFullYear();
+    const month  = enroll.getMonth();
+    const isBeforeBilling = enroll.getDate() < BILLING_DAY;
 
-    const baseRate = getRate(classType);
-    const d1 = day1;
-    const d2 = day2!==""&&day2!==day1 ? day2 : null;
-    // Second class day gets 10% discount
-    const rate1 = baseRate;
-    const rate2 = d2!==null ? baseRate * 0.9 : 0;
+    const contType = CONT_TYPES.find(c=>c.key===classType);
+    const baseRate = getRate(contType.priceKey);
+    const d2       = day2!==""&&day2!==day1 ? day2 : null;
+    const rate1    = baseRate;
+    const rate2    = d2!==null ? baseRate*0.9 : 0;
+    const sibMult  = hasSibDiscount ? 0.9 : 1.0;
 
-    // Sibling discount: 10% off each additional child's classes
-    const sibRate = hasSibDiscount ? 0.9 : 1.0;
+    const endCurr  = lastDayOfMonth(year, month);
+    const nextMon  = month===11?0:month+1;
+    const nextYr   = month===11?year+1:year;
+    const startNxt = new Date(nextYr,nextMon,1);
+    const endNxt   = lastDayOfMonth(nextYr,nextMon);
 
-    // Current month: enrollment date → last day of current month
-    const endCurrent = lastDayOfMonth(year, month);
-    const c1_curr = countDayInRange(d1, enroll, endCurrent);
-    const c2_curr = d2!==null ? countDayInRange(d2, enroll, endCurrent) : 0;
+    const c1c = countDayInRange(day1, enroll, endCurr);
+    const c2c = d2!==null ? countDayInRange(d2, enroll, endCurr) : 0;
+    const c1n = countDayInRange(day1, startNxt, endNxt);
+    const c2n = d2!==null ? countDayInRange(d2, startNxt, endNxt) : 0;
 
-    // Next month: full month
-    const nextMonth = month===11 ? 0 : month+1;
-    const nextYear  = month===11 ? year+1 : year;
-    const startNext = new Date(nextYear, nextMonth, 1);
-    const endNext   = lastDayOfMonth(nextYear, nextMonth);
-    const c1_next   = countDayInRange(d1, startNext, endNext);
-    const c2_next   = d2!==null ? countDayInRange(d2, startNext, endNext) : 0;
+    const contRaw = (c1,c2,r1,r2) => c1*r1 + c2*r2;
 
-    // Per-child amounts before promos
-    const rawAmount = (c1, c2, r1, r2) => c1*r1 + c2*r2;
+    // Child 1 continuous
+    const ch1_cont_c = applyPromos(contRaw(c1c,c2c,rate1,rate2), c1c+c2c, contType.isGroup, true, false);
+    const ch1_cont_n = applyPromos(contRaw(c1n,c2n,rate1,rate2), c1n+c2n, contType.isGroup, true, false);
+    const chN_cont_c = applyPromos(contRaw(c1c,c2c,rate1*sibMult,rate2*sibMult), c1c+c2c, contType.isGroup, true, false);
+    const chN_cont_n = applyPromos(contRaw(c1n,c2n,rate1*sibMult,rate2*sibMult), c1n+c2n, contType.isGroup, true, false);
 
-    // Child 1 (full rate)
-    const child1_curr_raw = rawAmount(c1_curr, c2_curr, rate1, rate2);
-    const child1_next_raw = rawAmount(c1_next, c2_next, rate1, rate2);
+    // Add-ons (ODL, private, clinic) — no discounts, no sibling discount, flat rate × qty
+    const addonLines = addons.filter(a=>a.qty>0).map(a=>{
+      const at = ADDON_TYPES.find(t=>t.key===a.type);
+      if(!at) return null;
+      const r = getRate(at.priceKey);
+      if(!r) return null;
+      // ODL = single occurrence, clinic = per class (user enters qty), privates = per class day
+      const curr = at.perClass ? c1c*r*a.qty : r*a.qty;
+      const next  = at.perClass ? c1n*r*a.qty : r*a.qty;
+      return {label:at.label, rate:r, qty:a.qty, curr, next};
+    }).filter(Boolean);
 
-    // Children 2+ (sibling discount if eligible)
-    const extraKids = Math.max(0, numKids-1);
-    const childN_curr_raw = rawAmount(c1_curr, c2_curr, rate1*sibRate, rate2*sibRate);
-    const childN_next_raw = rawAmount(c1_next, c2_next, rate1*sibRate, rate2*sibRate);
+    const addon_c = addonLines.reduce((s,a)=>s+a.curr,0);
+    const addon_n = addonLines.reduce((s,a)=>s+a.next,0);
 
-    // Apply promos to child 1
-    const totalClasses_curr = c1_curr + c2_curr;
-    const totalClasses_next = c1_next + c2_next;
-    const child1_curr = applyPromos(child1_curr_raw, totalClasses_curr);
-    const child1_next = applyPromos(child1_next_raw, totalClasses_next);
-    const childN_curr = applyPromos(childN_curr_raw, totalClasses_curr);
-    const childN_next = applyPromos(childN_next_raw, totalClasses_next);
+    const extraKids = Math.max(0,numKids-1);
+    const total_c = ch1_cont_c + extraKids*chN_cont_c + addon_c*numKids;
+    const total_n = ch1_cont_n + extraKids*chN_cont_n + addon_n*numKids;
 
-    const total_curr = child1_curr + extraKids*childN_curr;
-    const total_next = child1_next + extraKids*childN_next;
-
-    const today_amount = isBeforeBilling ? total_curr : total_curr + total_next;
-    const auto_amount  = isBeforeBilling ? total_next : 0;
+    const today_amount = isBeforeBilling ? total_c : total_c+total_n;
+    const auto_amount  = isBeforeBilling ? total_n : 0;
 
     return {
-      isBeforeBilling, d1, d2, rate1, rate2, baseRate, sibRate, hasSibDiscount, numKids, extraKids,
-      c1_curr, c2_curr, c1_next, c2_next,
-      child1_curr, childN_curr, child1_next, childN_next,
-      total_curr, total_next, today_amount, auto_amount,
-      currentMonthName: MONTHS[month],
-      nextMonthName: MONTHS[nextMonth],
-      billingDate: `${MONTHS[month]} ${BILLING_DAY}`,
+      isBeforeBilling,day1,d2,rate1,rate2,baseRate,sibMult,hasSibDiscount,numKids,extraKids,
+      c1c,c2c,c1n,c2n,
+      ch1_cont_c,chN_cont_c,ch1_cont_n,chN_cont_n,
+      addon_c,addon_n,addonLines,
+      total_c,total_n,today_amount,auto_amount,
+      currentMonthName:MONTHS[month],
+      nextMonthName:MONTHS[nextMon],
+      billingDate:`${MONTHS[month]} ${BILLING_DAY}`,
     };
   };
 
   const result = calc();
   const fmt = (n) => `$${(+n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
 
-  // ── SCRIPT ────────────────────────────────────────────────────────────
+  const toggleAddon = (key) => {
+    setAddons(a=> a.find(x=>x.type===key) ? a.filter(x=>x.type!==key) : [...a,{type:key,qty:1}]);
+  };
+  const setAddonQty = (key,qty) => setAddons(a=>a.map(x=>x.type===key?{...x,qty:parseInt(qty)||1}:x));
+
   const buildScript = () => {
     if(!result||!loc) return "";
-    const {isBeforeBilling,d1,d2,rate1,rate2,c1_curr,c2_curr,c1_next,c2_next,
-           total_curr,total_next,today_amount,auto_amount,currentMonthName,nextMonthName,billingDate,
-           numKids,extraKids,hasSibDiscount,child1_curr,childN_curr} = result;
-    const d1l = DAYS_SHORT[parseInt(d1)];
+    const {isBeforeBilling,day1,d2,rate1,rate2,c1c,c2c,c1n,c2n,
+           ch1_cont_c,chN_cont_c,ch1_cont_n,chN_cont_n,
+           addon_c,addonLines,total_c,total_n,today_amount,auto_amount,
+           currentMonthName,nextMonthName,billingDate,numKids,extraKids,hasSibDiscount} = result;
+    const d1l = DAYS_SHORT[parseInt(day1)];
     const d2l = d2!==null ? DAYS_SHORT[parseInt(d2)] : null;
 
     let s = `Our classes are ${fmt(rate1)} per lesson`;
-    if(d2l) s += ` for ${d1l}s, and ${fmt(rate2)} per lesson for ${d2l}s (10% multi-day discount)`;
+    if(d2l) s += ` for ${d1l}s, and ${fmt(rate2)} for ${d2l}s (10% multi-day discount)`;
     s += `.`;
-    if(numKids>1 && hasSibDiscount) s += ` For your ${numKids} children, a 10% sibling discount applies from the 2nd child onwards.`;
-    s += `\n\n`;
-
-    s += `Today I'll collect payment for ${currentMonthName} classes.\n`;
-    s += `That's ${c1_curr} ${d1l} class${c1_curr!==1?"es":""}`;
-    if(d2l&&c2_curr>0) s += ` and ${c2_curr} ${d2l} class${c2_curr!==1?"es":""}`;
-    if(numKids===1) s += ` — ${fmt(child1_curr)}.`;
-    else s += ` per child — ${fmt(child1_curr)} for your first child${extraKids>0?`, ${fmt(childN_curr)} each for the other${extraKids>1?" children":" child"}`:""}.`;
-    s += `\n`;
-
+    if(numKids>1&&hasSibDiscount) s += ` A 10% sibling discount applies from the 2nd child.`;
+    if(addonLines.length) s += ` Additional services: ${addonLines.map(a=>`${a.label} at ${fmt(a.rate)}`).join(", ")}.`;
+    s += `\n\nToday I'll collect ${currentMonthName} — ${c1c} ${d1l} class${c1c!==1?"es":""}`;
+    if(d2l&&c2c>0) s += ` and ${c2c} ${d2l} class${c2c!==1?"es":""}`;
+    if(numKids===1) s += ` — ${fmt(ch1_cont_c+addon_c)}.`;
+    else s += ` per child. Child 1: ${fmt(ch1_cont_c)}, each additional: ${fmt(chN_cont_c)}.`;
     if(!isBeforeBilling) {
-      s += `\nSince we're past the ${billingDate} billing date, I'll also collect ${nextMonthName} today — ${fmt(total_next)}.\n`;
-      s += `\nTotal due today: ${fmt(today_amount)}.`;
+      s += `\n\nSince we're past the ${billingDate} billing date, I'm also collecting ${nextMonthName} today — ${fmt(total_n)}.`;
+      s += `\n\nTotal due today: ${fmt(today_amount)}.`;
     } else {
-      s += `\nTotal due today: ${fmt(today_amount)}.`;
-      s += `\n\nOn ${billingDate}, ${fmt(auto_amount)} will be automatically charged for ${nextMonthName}`;
-      s += ` (${c1_next} ${d1l} class${c1_next!==1?"es":""}${d2l&&c2_next>0?` + ${c2_next} ${d2l} class${c2_next!==1?"es":""}`:""}`;
-      if(numKids>1) s += ` × ${numKids} children`;
-      s += `).`;
+      s += `\n\nTotal due today: ${fmt(today_amount)}.`;
+      s += `\n\nOn ${billingDate}, ${fmt(auto_amount)} will be automatically charged for ${nextMonthName}.`;
     }
     return s;
   };
 
   const copyScript = () => {
-    navigator.clipboard.writeText(buildScript()).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); });
+    navigator.clipboard.writeText(buildScript()).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
   };
 
-  const filteredLocs = locations.filter(l=>(l.name||"").toLowerCase().includes(locSearch.toLowerCase()) && l.price_mf);
+  const filteredLocs = locations.filter(l=>(l.name||"").toLowerCase().includes(locSearch.toLowerCase())&&l.price_mf);
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12,paddingTop:8}}>
 
-      {/* Step 1 — Location */}
+      {/* 1 — Location */}
       <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
         <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>1 · Location</p>
         <input value={locSearch} onChange={e=>{setLocSearch(e.target.value);setLocId("");}} placeholder="Search location…" style={{width:"100%",marginBottom:8}}/>
-        {(!locId)&&(
-          <div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
-            {filteredLocs.slice(0,20).map(l=>(
-              <div key={l.id} onClick={()=>{setLocId(l.id);setLocSearch(l.name||"");}} style={{padding:"7px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,color:DS.textPri}}>
-                <span style={{fontWeight:600}}>{l.name}</span>
-                {l.region&&<span style={{color:DS.textMut,fontSize:11}}> · {l.region}</span>}
-              </div>
-            ))}
+        {!locId&&filteredLocs.slice(0,15).map(l=>(
+          <div key={l.id} onClick={()=>{setLocId(l.id);setLocSearch(l.name||"");}} style={{padding:"7px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,marginBottom:4}}>
+            <span style={{fontWeight:600,color:DS.textPri}}>{l.name}</span>
+            {l.region&&<span style={{color:DS.textMut,fontSize:11}}> · {l.region}</span>}
           </div>
-        )}
-        {loc&&<p style={{margin:"6px 0 0",fontSize:11,color:DS.green}}>✓ {loc.name} · {loc.region||loc.state}</p>}
+        ))}
+        {loc&&<p style={{margin:"6px 0 0",fontSize:11,color:DS.green}}>✓ {loc.name} · {loc.region||loc.state}{hasSibDiscount?" · 🏷️ Sibling discount available":""}</p>}
       </div>
 
-      {/* Step 2 — Class Type */}
+      {/* 2 — Class Type */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>2 · Class Type</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>2 · Primary Class Type</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-            {CLASS_TYPES.filter(ct=>getRate(ct.key)>0).map(ct=>(
+            {CONT_TYPES.filter(ct=>getRate(ct.priceKey)>0).map(ct=>(
               <div key={ct.key} onClick={()=>setClassType(ct.key)} style={{padding:"9px 12px",borderRadius:DS.radiusSm,background:classType===ct.key?DS.accentDim:DS.bgSurf,border:`1px solid ${classType===ct.key?DS.accent:DS.border}`,cursor:"pointer"}}>
                 <p style={{margin:"0 0 2px",fontSize:11,color:classType===ct.key?DS.accent:DS.textSec}}>{ct.label}</p>
-                <p style={{margin:0,fontSize:15,fontWeight:700,color:classType===ct.key?DS.accent:DS.green}}>{fmt(getRate(ct.key))}<span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>/class</span></p>
+                <p style={{margin:0,fontSize:15,fontWeight:700,color:classType===ct.key?DS.accent:DS.green}}>{fmt(getRate(ct.priceKey))}<span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>/class</span></p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Step 3 — Number of kids + customer type */}
+      {/* 3 — Add-ons */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>3 · Customer & Kids</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>3 · Add-ons <span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>(optional · no discount applies)</span></p>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {ADDON_TYPES.filter(at=>getRate(at.priceKey)>0).map(at=>{
+              const selected = addons.find(a=>a.type===at.key);
+              return (
+                <div key={at.key} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:DS.radiusSm,background:selected?DS.accentDim:DS.bgSurf,border:`1px solid ${selected?DS.accent:DS.border}`,cursor:"pointer"}} onClick={()=>toggleAddon(at.key)}>
+                  <div style={{width:16,height:16,borderRadius:4,background:selected?DS.accent:DS.bgHover,border:`2px solid ${selected?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {selected&&<span style={{fontSize:9,color:"#fff"}}>✓</span>}
+                  </div>
+                  <div style={{flex:1}}>
+                    <span style={{fontSize:12,fontWeight:600,color:selected?DS.accent:DS.textPri}}>{at.label}</span>
+                    <span style={{fontSize:11,color:DS.textMut}}> · {fmt(getRate(at.priceKey))}{at.perClass?" per class":" flat"}</span>
+                  </div>
+                  {selected&&(
+                    <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:10,color:DS.textSec}}>Qty:</span>
+                      <input type="number" min={1} max={20} value={selected.qty} onChange={e=>setAddonQty(at.key,e.target.value)} style={{width:48,padding:"3px 6px",fontSize:12,textAlign:"center"}}/>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4 — Kids + customer type */}
+      {loc&&(
+        <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>4 · Customer & Children</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
               <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Customer type</p>
@@ -5558,13 +5594,11 @@ function QuoteCalculator({locations, activePromos=[]}) {
             </div>
             <div>
               <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>
-                Number of children {hasSibDiscount&&numKids>1&&<span style={{color:DS.amber,fontSize:10}}>· 10% sibling discount</span>}
+                Children {hasSibDiscount&&numKids>1&&<span style={{color:DS.amber,fontSize:10}}>· 10% sibling</span>}
               </p>
               <div style={{display:"flex",gap:6}}>
                 {[1,2,3,4].map(n=>(
-                  <div key={n} onClick={()=>setNumKids(n)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,textAlign:"center",background:numKids===n?DS.accentDim:DS.bgSurf,border:`1px solid ${numKids===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:13,fontWeight:700,color:numKids===n?DS.accent:DS.textSec}}>
-                    {n}
-                  </div>
+                  <div key={n} onClick={()=>setNumKids(n)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,textAlign:"center",background:numKids===n?DS.accentDim:DS.bgSurf,border:`1px solid ${numKids===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:13,fontWeight:700,color:numKids===n?DS.accent:DS.textSec}}>{n}</div>
                 ))}
               </div>
               {numKids>1&&!hasSibDiscount&&<p style={{margin:"4px 0 0",fontSize:10,color:DS.textMut}}>No sibling discount at this location</p>}
@@ -5573,75 +5607,68 @@ function QuoteCalculator({locations, activePromos=[]}) {
         </div>
       )}
 
-      {/* Step 4 — Enrollment Date */}
+      {/* 5 — Enrollment Date */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>4 · Enrollment Date</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>5 · Enrollment Date</p>
           <input type="date" value={enrollDate} onChange={e=>setEnrollDate(e.target.value)} style={{width:"100%"}}/>
           {enrollDate&&(()=>{
-            const d = new Date(enrollDate+"T12:00:00");
-            const isAfter = d.getDate() >= BILLING_DAY;
-            return (
-              <div style={{marginTop:8,padding:"7px 10px",borderRadius:DS.radiusSm,background:isAfter?DS.amberDim:DS.greenDim,border:`1px solid ${isAfter?DS.amber+"40":DS.green+"40"}`}}>
-                <p style={{margin:0,fontSize:11,color:isAfter?DS.amber:DS.green,fontWeight:600}}>
-                  {isAfter
-                    ? `⚡ On/after the 20th — collect ${MONTHS[d.getMonth()]} remaining + ${MONTHS[d.getMonth()===11?0:d.getMonth()+1]} today`
-                    : `✓ Before the 20th — collect ${MONTHS[d.getMonth()]} remaining today only`}
-                </p>
-              </div>
-            );
+            const d=new Date(enrollDate+"T12:00:00");
+            const after=d.getDate()>=BILLING_DAY;
+            return <div style={{marginTop:8,padding:"7px 10px",borderRadius:DS.radiusSm,background:after?DS.amberDim:DS.greenDim,border:`1px solid ${after?DS.amber+"40":DS.green+"40"}`}}>
+              <p style={{margin:0,fontSize:11,color:after?DS.amber:DS.green,fontWeight:600}}>
+                {after?`⚡ On/after 20th — collect ${MONTHS[d.getMonth()]} + ${MONTHS[d.getMonth()===11?0:d.getMonth()+1]} today`:`✓ Before 20th — collect ${MONTHS[d.getMonth()]} remaining today only`}
+              </p>
+            </div>;
           })()}
         </div>
       )}
 
-      {/* Step 5 — Class Day(s) */}
+      {/* 6 — Class Day(s) */}
       {loc&&enrollDate&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>5 · Class Day(s)</p>
-          <div style={{marginBottom:10}}>
-            <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>First class day</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>6 · Class Day(s)</p>
+          <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>First class day</p>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+            {DAYS_SHORT.map((d,i)=>(
+              <div key={i} onClick={()=>{setDay1(String(i));if(String(i)===day2)setDay2("");}} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day1===String(i)?DS.accent:DS.bgSurf,border:`1px solid ${day1===String(i)?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:day1===String(i)?"#fff":DS.textSec}}>
+                {d}
+              </div>
+            ))}
+          </div>
+          {day1!==""&&<>
+            <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Second day <span style={{color:DS.textMut,fontSize:10}}>(optional · 10% off 2nd day)</span></p>
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {DAYS_SHORT.map((d,i)=>(
-                <div key={i} onClick={()=>{setDay1(String(i));if(String(i)===day2)setDay2("");}} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day1===String(i)?DS.accent:DS.bgSurf,border:`1px solid ${day1===String(i)?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:day1===String(i)?"#fff":DS.textSec}}>
+              <div onClick={()=>setDay2("")} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day2===""?DS.bgHover:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,color:DS.textMut}}>None</div>
+              {DAYS_SHORT.map((d,i)=>String(i)!==day1&&(
+                <div key={i} onClick={()=>setDay2(String(i))} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day2===String(i)?DS.amber:DS.bgSurf,border:`1px solid ${day2===String(i)?DS.amber:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:day2===String(i)?"#fff":DS.textSec}}>
                   {d}
                 </div>
               ))}
             </div>
-          </div>
-          {day1!==""&&(
-            <div>
-              <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Second class day <span style={{color:DS.textMut,fontSize:10}}>(optional · 10% discount)</span></p>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                <div onClick={()=>setDay2("")} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day2===""?DS.bgHover:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,color:DS.textMut}}>None</div>
-                {DAYS_SHORT.map((d,i)=>String(i)!==day1&&(
-                  <div key={i} onClick={()=>setDay2(String(i))} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day2===String(i)?DS.amber:DS.bgSurf,border:`1px solid ${day2===String(i)?DS.amber:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:day2===String(i)?"#fff":DS.textSec}}>
-                    {d}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </>}
         </div>
       )}
 
-      {/* Step 6 — Promos */}
+      {/* 7 — Promos — auto-loads all active eligible promos */}
       {loc&&enrollDate&&day1!==""&&eligiblePromos.length>0&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>6 · Promotions</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>7 · Promotions</p>
           {eligiblePromos.map(p=>{
-            const dtype = p.discount_type || (p.discount_fixed?"fixed":"pct");
-            const checked = promoChecked.includes(p.code);
+            const checked=promoChecked.includes(p.code);
+            const dtype=p.discount_type||(p.discount_fixed?"fixed":"pct");
+            const appliesToLabel = p.applies_to==="group"?"Group only":p.applies_to==="continuous"?"Continuous only":"All types";
             return (
-              <div key={p.code} onClick={()=>setPromoChecked(pc=>checked?pc.filter(c=>c!==p.code):[...pc,p.code])} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 10px",borderRadius:DS.radiusSm,background:checked?DS.accentDim:DS.bgSurf,border:`1px solid ${checked?DS.accent:DS.border}`,cursor:"pointer",marginBottom:6}}>
-                <div style={{width:16,height:16,borderRadius:4,background:checked?DS.accent:DS.bgHover,border:`2px solid ${checked?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+              <div key={p.code} onClick={()=>setPromoChecked(pc=>checked?pc.filter(c=>c!==p.code):[...pc,p.code])} style={{display:"flex",gap:10,padding:"9px 10px",borderRadius:DS.radiusSm,background:checked?DS.accentDim:DS.bgSurf,border:`1px solid ${checked?DS.accent:DS.border}`,cursor:"pointer",marginBottom:6}}>
+                <div style={{width:16,height:16,borderRadius:4,background:checked?DS.accent:DS.bgHover,border:`2px solid ${checked?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                   {checked&&<span style={{fontSize:9,color:"#fff"}}>✓</span>}
                 </div>
-                <div style={{flex:1}}>
+                <div>
                   <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.textPri}}>{p.name} <span style={{color:DS.accent,fontSize:10}}>({p.code})</span></p>
                   <p style={{margin:0,fontSize:10,color:DS.textSec}}>
-                    {dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (first class only)":""}`:
-                     dtype==="fixed"?`$${p.discount_fixed} off`:`Discount`}
-                    {p.customer_types?.length?` · ${p.customer_types.join("/")} only`:""}
+                    {dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (1st class only)":""}`:
+                     dtype==="fixed"?`$${p.discount_fixed} off`:""} · {appliesToLabel}
+                    {p.customer_types?.length?` · ${Array.isArray(p.customer_types)?p.customer_types.join("/"):p.customer_types} only`:""}
                   </p>
                 </div>
               </div>
@@ -5655,60 +5682,63 @@ function QuoteCalculator({locations, activePromos=[]}) {
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.accent}40`,padding:14}}>
           <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>Quote Summary</p>
 
-          {/* Due today */}
           <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"10px 12px",marginBottom:8}}>
             <p style={{margin:"0 0 8px",fontSize:12,fontWeight:700,color:DS.textPri}}>Due today</p>
 
             {/* Current month */}
-            <div style={{marginBottom:6}}>
-              <p style={{margin:"0 0 3px",fontSize:11,color:DS.textSec,fontWeight:600}}>{result.currentMonthName} — {result.c1_curr} {DAYS_SHORT[parseInt(result.d1)]} class{result.c1_curr!==1?"es":""}
-                {result.d2!==null&&result.c2_curr>0?` + ${result.c2_curr} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2_curr!==1?"es":""}`:""}</p>
-              <div style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:11,color:DS.textMut}}>Child 1 @ {fmt(result.rate1)}{result.d2!==null?` / ${fmt(result.rate2)}`:""}</span>
-                <span style={{fontSize:11,fontWeight:600,color:DS.textPri}}>{fmt(result.child1_curr)}</span>
-              </div>
-              {result.extraKids>0&&(
-                <div style={{display:"flex",justifyContent:"space-between"}}>
-                  <span style={{fontSize:11,color:DS.textMut}}>
-                    {result.extraKids} more child{result.extraKids>1?"ren":""} {result.hasSibDiscount?"(10% sibling)":"(no sibling discount)"}
-                  </span>
-                  <span style={{fontSize:11,fontWeight:600,color:DS.textPri}}>{fmt(result.extraKids*result.childN_curr)}</span>
-                </div>
-              )}
+            <p style={{margin:"0 0 4px",fontSize:11,fontWeight:600,color:DS.textSec}}>
+              {result.currentMonthName} — {result.c1c} {DAYS_SHORT[parseInt(result.day1)]} class{result.c1c!==1?"es":""}
+              {result.d2!==null&&result.c2c>0?` + ${result.c2c} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2c!==1?"es":""}`:""}</p>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+              <span style={{fontSize:11,color:DS.textMut}}>Child 1 (continuous)</span>
+              <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(result.ch1_cont_c)}</span>
             </div>
-
-            {/* Next month if after 20th */}
-            {!result.isBeforeBilling&&result.c1_next>0&&(
-              <div style={{borderTop:`1px solid ${DS.border}`,paddingTop:6,marginBottom:6}}>
-                <p style={{margin:"0 0 3px",fontSize:11,color:DS.amber,fontWeight:600}}>{result.nextMonthName} — {result.c1_next} {DAYS_SHORT[parseInt(result.d1)]} class{result.c1_next!==1?"es":""}
-                  {result.d2!==null&&result.c2_next>0?` + ${result.c2_next} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2_next!==1?"es":""}`:""} <span style={{fontSize:10,fontWeight:400}}>(past billing date)</span></p>
-                <div style={{display:"flex",justifyContent:"space-between"}}>
-                  <span style={{fontSize:11,color:DS.textMut}}>Child 1</span>
-                  <span style={{fontSize:11,fontWeight:600,color:DS.amber}}>{fmt(result.child1_next)}</span>
-                </div>
-                {result.extraKids>0&&(
-                  <div style={{display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""}</span>
-                    <span style={{fontSize:11,fontWeight:600,color:DS.amber}}>{fmt(result.extraKids*result.childN_next)}</span>
-                  </div>
-                )}
+            {result.extraKids>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+              <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""} {result.hasSibDiscount?"(−10%)":"(no sib. disc.)"}</span>
+              <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(result.extraKids*result.chN_cont_c)}</span>
+            </div>}
+            {result.addonLines.map((a,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                <span style={{fontSize:11,color:DS.textMut}}>{a.label} × {result.numKids} child{result.numKids>1?"ren":""}</span>
+                <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(a.curr*result.numKids)}</span>
               </div>
-            )}
+            ))}
 
-            <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:`1px solid ${DS.border}`,marginTop:4}}>
+            {!result.isBeforeBilling&&result.c1n>0&&<>
+              <div style={{borderTop:`1px solid ${DS.border}`,marginTop:6,paddingTop:6}}>
+                <p style={{margin:"0 0 4px",fontSize:11,fontWeight:600,color:DS.amber}}>
+                  {result.nextMonthName} (past billing date) — {result.c1n} {DAYS_SHORT[parseInt(result.day1)]} class{result.c1n!==1?"es":""}
+                  {result.d2!==null&&result.c2n>0?` + ${result.c2n} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2n!==1?"es":""}`:""}</p>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <span style={{fontSize:11,color:DS.textMut}}>Child 1</span>
+                  <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(result.ch1_cont_n)}</span>
+                </div>
+                {result.extraKids>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""}</span>
+                  <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(result.extraKids*result.chN_cont_n)}</span>
+                </div>}
+                {result.addonLines.map((a,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                    <span style={{fontSize:11,color:DS.textMut}}>{a.label} × {result.numKids}</span>
+                    <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(a.next*result.numKids)}</span>
+                  </div>
+                ))}
+              </div>
+            </>}
+
+            <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:`1px solid ${DS.border}`,marginTop:6}}>
               <span style={{fontSize:13,fontWeight:700,color:DS.textPri}}>Total due today</span>
               <span style={{fontSize:18,fontWeight:800,color:DS.accent}}>{fmt(result.today_amount)}</span>
             </div>
           </div>
 
-          {/* Auto-billed */}
-          {result.isBeforeBilling&&result.c1_next>0&&(
+          {result.isBeforeBilling&&result.c1n>0&&(
             <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"10px 12px",marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <p style={{margin:"0 0 2px",fontSize:11,fontWeight:700,color:DS.textSec}}>Auto-billed on {result.billingDate}</p>
-                  <p style={{margin:0,fontSize:11,color:DS.textMut}}>{result.nextMonthName} · {result.c1_next} {DAYS_SHORT[parseInt(result.d1)]} class{result.c1_next!==1?"es":""}
-                    {result.d2!==null&&result.c2_next>0?` + ${result.c2_next} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2_next!==1?"es":""}`:""} × {result.numKids} child{result.numKids>1?"ren":""}</p>
+                  <p style={{margin:0,fontSize:11,color:DS.textMut}}>{result.nextMonthName} · {result.c1n} {DAYS_SHORT[parseInt(result.day1)]} class{result.c1n!==1?"es":""}
+                    {result.d2!==null&&result.c2n>0?` + ${result.c2n} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2n!==1?"es":""}`:""} × {result.numKids} child{result.numKids>1?"ren":""}</p>
                 </div>
                 <span style={{fontSize:15,fontWeight:700,color:DS.textPri}}>{fmt(result.auto_amount)}</span>
               </div>
@@ -5723,6 +5753,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
     </div>
   );
 }
+
 
 
 
