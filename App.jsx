@@ -5317,10 +5317,10 @@ function QuoteCalculator({locations, activePromos=[]}) {
   const loc = locations.find(l=>l.id===locId);
 
   const CLASS_TYPES = [
-    {key:"group_mf",  label:"Group Classes (M–F)",   priceKey:"price_group_mf",  continuous:true},
-    {key:"group_ss",  label:"Group Classes (Sa–Su)",  priceKey:"price_group_ss",  continuous:true},
-    {key:"team_mf",   label:"Swim Team (M–F)",        priceKey:"price_team_mf",   continuous:true},
-    {key:"team_ss",   label:"Swim Team (Sa–Su)",       priceKey:"price_team_ss",   continuous:true},
+    {key:"group_mf",  label:"Group Classes (M–F)",   priceKey:"price_mf",     continuous:true},
+    {key:"group_ss",  label:"Group Classes (Sa–Su)",  priceKey:"price_ss",     continuous:true},
+    {key:"team_mf",   label:"Swim Team (M–F)",        priceKey:"price_st_mf",  continuous:true},
+    {key:"team_ss",   label:"Swim Team (Sa–Su)",       priceKey:"price_st_ss",  continuous:true},
   ];
 
   const getRate = (type) => {
