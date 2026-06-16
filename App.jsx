@@ -5447,11 +5447,17 @@ function QuoteCalculator({locations, activePromos=[]}) {
   function countDayInRange(dayOfWeek, startDate, endDate) {
     if(!startDate||!endDate||startDate>endDate) return 0;
     let count=0, d=new Date(startDate.getTime());
-    while(d.getDay()!==parseInt(dayOfWeek)) d.setDate(d.getDate()+1);
+    const dow = parseInt(dayOfWeek);
+    // Advance to first occurrence — but if startDate IS already that day, start there
+    while(d.getDay()!==dow) d.setDate(d.getDate()+1);
     while(d<=endDate){count++;d.setDate(d.getDate()+7);}
     return count;
   }
-  function lastDayOfMonth(y,m){return new Date(y,m+1,0);}
+  function lastDayOfMonth(y,m){
+    const d = new Date(y,m+1,0);
+    d.setHours(23,59,59,999);
+    return d;
+  }
 
   // ── PROMOS ────────────────────────────────────────────────────────────
   const eligiblePromos = activePromos.filter(p=>{
