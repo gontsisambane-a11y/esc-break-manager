@@ -5453,10 +5453,12 @@ function QuoteCalculator({locations, activePromos=[]}) {
     const childN_next = child1_next * sibMult;
 
     const extraKids = Math.max(0,numKids-1);
+    // Reg fee: $35 for child 1, $35 for child 2, $0 for child 3+
+    const regFeeTotal = numKids===1 ? REG_FEE : numKids===2 ? REG_FEE*2 : REG_FEE*2;
     const total_curr = child1_curr + extraKids*childN_curr;
     const total_next = child1_next + extraKids*childN_next;
 
-    const today_amount = isBeforeBilling ? total_curr : total_curr+total_next;
+    const today_amount = (isBeforeBilling ? total_curr : total_curr+total_next) + regFeeTotal;
     const auto_amount  = isBeforeBilling ? total_next : 0;
 
     return {
@@ -5465,6 +5467,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
       ...calcState,
       clinicQty, classCount_curr, classCount_next,
       child1_curr,childN_curr,child1_next,childN_next,
+      regFeeTotal,
       total_curr,total_next,today_amount,auto_amount,
       currentMonthName:MONTHS[m], nextMonthName:MONTHS[nextMon],
       billingDate:`${MONTHS[m]} ${BILLING_DAY}`,
@@ -5498,7 +5501,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
     if(!isBeforeBilling) {
       s += `\n\nSince we're past the ${billingDate} billing date, I'm also collecting ${nextMonthName} today — ${fmt(total_next)}.`;
     }
-    s += `\n\nTotal due today: ${fmt(today_amount)}.`;
+    s += `\n\nTotal due today: ${fmt(today_amount)} (includes ${fmt(regFeeTotal)} registration fee).`;
     if(isBeforeBilling) s += `\n\nOn ${billingDate}, ${fmt(auto_amount)} will be automatically charged for ${nextMonthName}.`;
     return s;
   };
@@ -5704,6 +5707,14 @@ function QuoteCalculator({locations, activePromos=[]}) {
             <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:`1px solid ${DS.border}`,marginTop:6}}>
               <span style={{fontSize:13,fontWeight:700,color:DS.textPri}}>Total due today</span>
               <span style={{fontSize:18,fontWeight:800,color:DS.accent}}>{fmt(result.today_amount)}</span>
+            </div>
+            <div style={{marginTop:4,padding:"6px 8px",borderRadius:DS.radiusSm,background:DS.bgHover}}>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:10,color:DS.textMut}}>Incl. registration fee</span>
+                <span style={{fontSize:10,color:DS.textMut}}>
+                  {result.numKids===1?`$${REG_FEE} (1 child)`:result.numKids===2?`$${REG_FEE*2} (2 children)`:`$${REG_FEE*2} (3rd+ child free)`}
+                </span>
+              </div>
             </div>
           </div>
 
