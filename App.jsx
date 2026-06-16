@@ -4963,23 +4963,24 @@ function HubTeamCard({member}) {
 // ── HUB EDIT MODALS ───────────────────────────────────────────────────
 function HubPromoModal({item,onClose,onSave,onDelete}) {
   const [f,setF]=useState({
-    title:         item?.title||"",
-    code:          item?.code||"",
-    rules:         item?.rules||"",
-    expires_on:    item?.expires_on||"",
-    proactive:     item?.proactive||false,
-    // Calculator caveats
-    discount_pct:      item?.discount_pct||0,          // e.g. 40 for 40%
-    discount_fixed:    item?.discount_fixed||0,         // e.g. 50 for $50 off
-    discount_type:     item?.discount_type||"pct",      // "pct" | "fixed" | "one_class_pct"
-    applies_to:        item?.applies_to||"continuous",  // "continuous" | "group" | "all"
-    one_class_only:    item?.one_class_only||false,      // true = only 1 class/week gets disc
-    multi_class_still: item?.multi_class_still||true,   // true = other classes still get 10%
-    customer_types:    item?.customer_types||["lead","lapsed"], // who can use it
-    month_restriction: item?.month_restriction||"",     // "" = any month, or "5" = June (0-indexed)
-    requires_mention:  item?.requires_mention||false,   // true = customer must bring it up
-    show_scenarios:    item?.show_scenarios||false,      // true = show 1/2/3 day selector in calc
-    id:            item?.id,
+    title:              item?.title||"",
+    code:               item?.code||"",
+    rules:              item?.rules||"",
+    expires_on:         item?.expires_on||"",
+    proactive:          item?.proactive||false,
+    discount_pct:       item?.discount_pct||0,
+    discount_fixed:     item?.discount_fixed||0,
+    discount_type:      item?.discount_type||"pct",
+    applies_to:         item?.applies_to||"continuous",
+    one_class_only:     item?.one_class_only||false,
+    multi_class_still:  item?.multi_class_still||true,
+    customer_types:     item?.customer_types||["lead","lapsed"],
+    month_restriction:  item?.month_restriction||"",
+    requires_mention:   item?.requires_mention||false,
+    show_scenarios:     item?.show_scenarios||false,
+    location_restriction: item?.location_restriction||"",  // e.g. "Solon" — blank = all locations
+    first_month_only:   item?.first_month_only||false,     // discount applies to first month only
+    id:                 item?.id,
   });
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const toggleCustType=(t)=>set("customer_types", f.customer_types.includes(t) ? f.customer_types.filter(x=>x!==t) : [...f.customer_types,t]);
@@ -5074,6 +5075,14 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
               <input type="checkbox" id="req_mention" checked={f.requires_mention} onChange={e=>set("requires_mention",e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
               <label htmlFor="req_mention" style={{fontSize:12,cursor:"pointer"}}>Customer must mention it</label>
             </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <input type="checkbox" id="first_mo" checked={f.first_month_only} onChange={e=>set("first_month_only",e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
+              <label htmlFor="first_mo" style={{fontSize:12,cursor:"pointer"}}>First month only</label>
+            </div>
+          </div>
+          <div style={{marginTop:10}}>
+            <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>LOCATION RESTRICTION <span style={{fontWeight:400,color:DS.textMut}}>(blank = all locations)</span></label>
+            <input value={f.location_restriction} onChange={e=>set("location_restriction",e.target.value)} placeholder="e.g. Solon — leave blank for all locations" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none"}}/>
           </div>
         </div>
 
@@ -5391,27 +5400,30 @@ function QuoteCalculator({locations, activePromos=[]}) {
   // ── PROMOS ────────────────────────────────────────────────────────────
   const eligiblePromos = activePromos.filter(p=>{
     if(!p.discount_type&&!p.discount_pct&&!p.discount_fixed) return false;
-    // Only show promos that apply to selected class type
     const at = p.applies_to||"continuous";
-    if(typeInfo?.noDiscount) return false; // privates/ODL/clinic never get promos
+    if(typeInfo?.noDiscount) return false;
     if(at==="continuous"&&!isCont) return false;
     if(at==="group"&&!typeInfo?.isGroup) return false;
-    // customer type
     let ct = p.customer_types;
     if(typeof ct==="string"){try{ct=JSON.parse(ct);}catch{ct=ct?[ct]:[]; }}
     if(ct?.length&&!ct.includes(custType)) return false;
-    // month restriction
     if(p.month_restriction&&p.month_restriction!=="") {
       const em = enrollDate ? new Date(enrollDate+"T12:00:00").getMonth() : -1;
       if(String(p.month_restriction)!==String(em)) return false;
     }
+    // location restriction
+    if(p.location_restriction&&p.location_restriction.trim()!=="") {
+      if(!loc||!loc.name.toLowerCase().includes(p.location_restriction.toLowerCase())) return false;
+    }
     return true;
   });
 
-  const applyPromos = (amount, classCount) => {
+  const applyPromos = (amount, classCount, isFirstMonth=true) => {
     const checked = eligiblePromos.filter(p=>promoChecked.includes(p.code));
     let total = amount;
     checked.forEach(p=>{
+      // Skip first_month_only promos when calculating next month
+      if(p.first_month_only && !isFirstMonth) return;
       const dtype = p.discount_type||(p.discount_fixed?"fixed":"pct");
       if(dtype==="pct") {
         if(p.one_class_only) { total -= (amount/(classCount||1))*(p.discount_pct/100); }
@@ -5462,8 +5474,8 @@ function QuoteCalculator({locations, activePromos=[]}) {
     }
 
     // Apply promos (not for privates/ODL/clinic)
-    const child1_curr = typeInfo.noDiscount ? raw_curr : applyPromos(raw_curr, classCount_curr);
-    const child1_next = typeInfo.noDiscount ? raw_next : applyPromos(raw_next, classCount_next);
+    const child1_curr = typeInfo.noDiscount ? raw_curr : applyPromos(raw_curr, classCount_curr, true);
+    const child1_next = typeInfo.noDiscount ? raw_next : applyPromos(raw_next, classCount_next, false);
 
     // Sibling: only applies to continuous group classes at eligible locations
     const sibMult = (hasSibDiscount&&isCont&&typeInfo.isGroup) ? 0.9 : 1.0;
