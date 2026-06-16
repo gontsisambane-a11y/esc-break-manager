@@ -5516,7 +5516,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
       <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
         <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>1 · Location</p>
         <input value={locSearch} onChange={e=>{setLocSearch(e.target.value);setLocId("");}} placeholder="Search location…" style={{width:"100%",marginBottom:8}}/>
-        {!locId&&filteredLocs.slice(0,15).map(l=>(
+        {!locId&&[...filteredLocs].sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(l=>(
           <div key={l.id} onClick={()=>{setLocId(l.id);setLocSearch(l.name||"");}} style={{padding:"7px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,marginBottom:4}}>
             <span style={{fontWeight:600,color:DS.textPri}}>{l.name}</span>
             {l.region&&<span style={{color:DS.textMut,fontSize:11}}> · {l.region}</span>}
