@@ -5313,201 +5313,193 @@ function QuoteCalculator({locations, activePromos=[]}) {
     "Gig Harbor","Olympia","Fitchburg","West Madison",
   ]);
 
+  // All enrollable lesson types — continuous ones count by class day occurrences, others are flat/per-session
+  const ALL_TYPES = [
+    // Continuous — billed per occurrence of chosen day(s)
+    {key:"group_mf",   label:"Group Classes (M–F)",   priceKey:"price_mf",       cat:"cont",    isGroup:true,  weekend:false},
+    {key:"group_ss",   label:"Group Classes (Sa–Su)",  priceKey:"price_ss",       cat:"cont",    isGroup:true,  weekend:true},
+    {key:"team_mf",    label:"Swim Team (M–F)",        priceKey:"price_st_mf",    cat:"cont",    isGroup:false, weekend:false},
+    {key:"team_ss",    label:"Swim Team (Sa–Su)",       priceKey:"price_st_ss",    cat:"cont",    isGroup:false, weekend:true},
+    // Privates — billed per class day occurrence, no discount
+    {key:"private_30", label:"Private Lessons (30m)",  priceKey:"price_priv",     cat:"private", isGroup:false, noDiscount:true},
+    {key:"semi",       label:"Semi-Private (30m)",      priceKey:"price_semi",     cat:"private", isGroup:false, noDiscount:true},
+    {key:"adaptive",   label:"Private Adaptive",        priceKey:"price_adaptive", cat:"private", isGroup:false, noDiscount:true},
+    {key:"private_20", label:"Private Lessons (20m)",   priceKey:"price_priv20",   cat:"private", isGroup:false, noDiscount:true},
+    // ODL & Clinic — flat per enrollment, no day counting, no discount
+    {key:"odl_mf",    label:"ODL (M–F)",               priceKey:"price_odl",      cat:"odl",     isGroup:false, noDiscount:true, flat:true},
+    {key:"odl_ss",    label:"ODL (Sa–Su)",              priceKey:"price_odl_ss",   cat:"odl",     isGroup:false, noDiscount:true, flat:true},
+    {key:"clinic",    label:"Swim Clinic",              priceKey:"price_clinic",   cat:"clinic",  isGroup:false, noDiscount:true, flat:true},
+  ];
+
+  const CATS = [
+    {k:"cont",    l:"Continuous"},
+    {k:"private", l:"Private / Semi-Private"},
+    {k:"odl",     l:"ODL"},
+    {k:"clinic",  l:"Clinic"},
+  ];
+
   const [locId,        setLocId]        = useState("");
   const [locSearch,    setLocSearch]    = useState("");
-  const [classType,    setClassType]    = useState("group_mf");
+  const [selectedType, setSelectedType] = useState("group_mf");
   const [enrollDate,   setEnrollDate]   = useState("");
   const [day1,         setDay1]         = useState("");
   const [day2,         setDay2]         = useState("");
   const [custType,     setCustType]     = useState("lead");
   const [numKids,      setNumKids]      = useState(1);
-  // Additional lesson types per student (privates, ODL, clinic)
-  const [addons,       setAddons]       = useState([]); // [{type, qty}]
+  const [clinicQty,    setClinicQty]    = useState(1); // for clinic: number of classes
   const [promoChecked, setPromoChecked] = useState([]);
   const [copied,       setCopied]       = useState(false);
 
-  const loc = locations.find(l=>l.id===locId);
+  const loc      = locations.find(l=>l.id===locId);
+  const typeInfo = ALL_TYPES.find(t=>t.key===selectedType);
   const hasSibDiscount = loc ? SIB_DISCOUNT_LOCS.has(loc.name) : false;
+  const isCont    = typeInfo?.cat==="cont";
+  const isPrivate = typeInfo?.cat==="private";
+  const isFlat    = typeInfo?.flat;
+  const needsDay  = isCont||isPrivate; // ODL/clinic don't need a day picker
 
-  const CONT_TYPES = [
-    {key:"group_mf", label:"Group (M–F)",   priceKey:"price_mf",    isCont:true,  isGroup:true},
-    {key:"group_ss", label:"Group (Sa–Su)", priceKey:"price_ss",    isCont:true,  isGroup:true},
-    {key:"team_mf",  label:"Swim Team (M–F)",priceKey:"price_st_mf",isCont:true,  isGroup:true},
-    {key:"team_ss",  label:"Swim Team (Sa–Su)",priceKey:"price_st_ss",isCont:true, isGroup:true},
-  ];
+  const getRate = (priceKey) => loc ? (parseFloat(loc[priceKey])||0) : 0;
 
-  const ADDON_TYPES = [
-    {key:"private_30",label:"Private Lessons (30m)", priceKey:"price_priv",     perClass:true,  noDiscount:true},
-    {key:"semi",      label:"Semi-Private (30m)",     priceKey:"price_semi",     perClass:true,  noDiscount:true},
-    {key:"adaptive",  label:"Private Adaptive",       priceKey:"price_adaptive", perClass:true,  noDiscount:true},
-    {key:"private_20",label:"Private Lessons (20m)",  priceKey:"price_priv20",   perClass:true,  noDiscount:true},
-    {key:"odl_mf",    label:"ODL (M–F)",              priceKey:"price_odl",      perClass:false, noDiscount:true},
-    {key:"odl_ss",    label:"ODL (Sa–Su)",             priceKey:"price_odl_ss",   perClass:false, noDiscount:true},
-    {key:"clinic",    label:"Swim Clinic (per class)", priceKey:"price_clinic",   perClass:false, noDiscount:true},
-  ];
-
-  const getRate = (priceKey) => {
-    if(!loc) return 0;
-    return parseFloat(loc[priceKey])||0;
-  };
-
-  // ── DATE HELPERS ─────────────────────────────────────────────────────
+  // ── DATE HELPERS ──────────────────────────────────────────────────────
   function countDayInRange(dayOfWeek, startDate, endDate) {
     if(!startDate||!endDate||startDate>endDate) return 0;
-    let count = 0;
-    const d = new Date(startDate.getTime());
+    let count = 0, d = new Date(startDate.getTime());
     while(d.getDay() !== parseInt(dayOfWeek)) d.setDate(d.getDate()+1);
     while(d <= endDate) { count++; d.setDate(d.getDate()+7); }
     return count;
   }
-  function lastDayOfMonth(year, month) { return new Date(year, month+1, 0); }
+  function lastDayOfMonth(y,m) { return new Date(y,m+1,0); }
 
-  // ── PROMO FILTERING — picks up all live promos automatically ─────────
+  // ── PROMOS ────────────────────────────────────────────────────────────
   const eligiblePromos = activePromos.filter(p=>{
-    if(!p.discount_type && !p.discount_pct && !p.discount_fixed) return false;
+    if(!p.discount_type&&!p.discount_pct&&!p.discount_fixed) return false;
+    // Only show promos that apply to selected class type
+    const at = p.applies_to||"continuous";
+    if(typeInfo?.noDiscount) return false; // privates/ODL/clinic never get promos
+    if(at==="continuous"&&!isCont) return false;
+    if(at==="group"&&!typeInfo?.isGroup) return false;
     // customer type
-    let custTypes = p.customer_types;
-    if(typeof custTypes==="string"){ try{custTypes=JSON.parse(custTypes);}catch{custTypes=custTypes?[custTypes]:[]; } }
-    if(custTypes?.length && !custTypes.includes(custType)) return false;
+    let ct = p.customer_types;
+    if(typeof ct==="string"){try{ct=JSON.parse(ct);}catch{ct=ct?[ct]:[]; }}
+    if(ct?.length&&!ct.includes(custType)) return false;
     // month restriction
-    if(p.month_restriction && p.month_restriction!=="") {
+    if(p.month_restriction&&p.month_restriction!=="") {
       const em = enrollDate ? new Date(enrollDate+"T12:00:00").getMonth() : -1;
       if(String(p.month_restriction)!==String(em)) return false;
     }
     return true;
   });
 
-  // Which promos apply to which lesson types
-  const promoAppliesToType = (p, isGroup, isCont, isAddon) => {
-    const at = p.applies_to||"continuous";
-    if(at==="all") return true;
-    if(at==="continuous") return isCont && !isAddon;
-    if(at==="group") return isGroup && !isAddon;
-    return false;
-  };
-
-  // Apply checked promos to an amount
-  const applyPromos = (amount, classCount, isGroup, isCont, isAddon) => {
-    const checked = eligiblePromos.filter(p=>promoChecked.includes(p.code)&&promoAppliesToType(p,isGroup,isCont,isAddon));
+  const applyPromos = (amount, classCount) => {
+    const checked = eligiblePromos.filter(p=>promoChecked.includes(p.code));
     let total = amount;
     checked.forEach(p=>{
       const dtype = p.discount_type||(p.discount_fixed?"fixed":"pct");
       if(dtype==="pct") {
-        if(p.one_class_only) {
-          const perClass = amount/(classCount||1);
-          total -= perClass*(p.discount_pct/100);
-        } else {
-          total -= total*(p.discount_pct/100);
-        }
-      } else if(dtype==="fixed") {
-        total -= p.discount_fixed;
-      }
+        if(p.one_class_only) { total -= (amount/(classCount||1))*(p.discount_pct/100); }
+        else { total -= total*(p.discount_pct/100); }
+      } else if(dtype==="fixed") { total -= p.discount_fixed; }
     });
     return Math.max(0, total);
   };
 
-  // ── BILLING CALC ──────────────────────────────────────────────────────
+  // ── CALC ──────────────────────────────────────────────────────────────
   const calc = () => {
-    if(!loc||!enrollDate||day1==="") return null;
+    if(!loc||!enrollDate||!typeInfo) return null;
+    if(needsDay&&day1==="") return null;
 
     const enroll = new Date(enrollDate+"T12:00:00");
-    const year   = enroll.getFullYear();
-    const month  = enroll.getMonth();
+    const y=enroll.getFullYear(), m=enroll.getMonth();
     const isBeforeBilling = enroll.getDate() < BILLING_DAY;
+    const nextMon = m===11?0:m+1, nextYr = m===11?y+1:y;
+    const endCurr = lastDayOfMonth(y,m);
+    const startNxt= new Date(nextYr,nextMon,1);
+    const endNxt  = lastDayOfMonth(nextYr,nextMon);
 
-    const contType = CONT_TYPES.find(c=>c.key===classType);
-    const baseRate = getRate(contType.priceKey);
-    const d2       = day2!==""&&day2!==day1 ? day2 : null;
-    const rate1    = baseRate;
-    const rate2    = d2!==null ? baseRate*0.9 : 0;
-    const sibMult  = hasSibDiscount ? 0.9 : 1.0;
+    const rate = getRate(typeInfo.priceKey);
+    const d2   = day2!==""&&day2!==day1 ? day2 : null;
+    // 2nd day gets 10% off only for continuous group classes
+    const rate2 = (d2!==null&&isCont) ? rate*0.9 : rate;
 
-    const endCurr  = lastDayOfMonth(year, month);
-    const nextMon  = month===11?0:month+1;
-    const nextYr   = month===11?year+1:year;
-    const startNxt = new Date(nextYr,nextMon,1);
-    const endNxt   = lastDayOfMonth(nextYr,nextMon);
+    let raw_curr, raw_next, classCount_curr, classCount_next;
 
-    const c1c = countDayInRange(day1, enroll, endCurr);
-    const c2c = d2!==null ? countDayInRange(d2, enroll, endCurr) : 0;
-    const c1n = countDayInRange(day1, startNxt, endNxt);
-    const c2n = d2!==null ? countDayInRange(d2, startNxt, endNxt) : 0;
+    if(isFlat) {
+      // ODL/clinic: flat rate × qty
+      raw_curr = rate * clinicQty;
+      raw_next = rate * clinicQty;
+      classCount_curr = clinicQty;
+      classCount_next = clinicQty;
+    } else {
+      // Continuous or private: count day occurrences
+      const c1c = countDayInRange(day1, enroll, endCurr);
+      const c2c = d2!==null ? countDayInRange(d2, enroll, endCurr) : 0;
+      const c1n = countDayInRange(day1, startNxt, endNxt);
+      const c2n = d2!==null ? countDayInRange(d2, startNxt, endNxt) : 0;
+      raw_curr = c1c*rate + c2c*rate2;
+      raw_next = c1n*rate + c2n*rate2;
+      classCount_curr = c1c+c2c;
+      classCount_next = c1n+c2n;
+      // store for summary
+      Object.assign(calcState, {c1c,c2c,c1n,c2n});
+    }
 
-    const contRaw = (c1,c2,r1,r2) => c1*r1 + c2*r2;
+    // Apply promos (not for privates/ODL/clinic)
+    const child1_curr = typeInfo.noDiscount ? raw_curr : applyPromos(raw_curr, classCount_curr);
+    const child1_next = typeInfo.noDiscount ? raw_next : applyPromos(raw_next, classCount_next);
 
-    // Child 1 continuous
-    const ch1_cont_c = applyPromos(contRaw(c1c,c2c,rate1,rate2), c1c+c2c, contType.isGroup, true, false);
-    const ch1_cont_n = applyPromos(contRaw(c1n,c2n,rate1,rate2), c1n+c2n, contType.isGroup, true, false);
-    const chN_cont_c = applyPromos(contRaw(c1c,c2c,rate1*sibMult,rate2*sibMult), c1c+c2c, contType.isGroup, true, false);
-    const chN_cont_n = applyPromos(contRaw(c1n,c2n,rate1*sibMult,rate2*sibMult), c1n+c2n, contType.isGroup, true, false);
-
-    // Add-ons (ODL, private, clinic) — no discounts, no sibling discount, flat rate × qty
-    const addonLines = addons.filter(a=>a.qty>0).map(a=>{
-      const at = ADDON_TYPES.find(t=>t.key===a.type);
-      if(!at) return null;
-      const r = getRate(at.priceKey);
-      if(!r) return null;
-      // ODL = single occurrence, clinic = per class (user enters qty), privates = per class day
-      const curr = at.perClass ? c1c*r*a.qty : r*a.qty;
-      const next  = at.perClass ? c1n*r*a.qty : r*a.qty;
-      return {label:at.label, rate:r, qty:a.qty, curr, next};
-    }).filter(Boolean);
-
-    const addon_c = addonLines.reduce((s,a)=>s+a.curr,0);
-    const addon_n = addonLines.reduce((s,a)=>s+a.next,0);
+    // Sibling: only applies to continuous group classes at eligible locations
+    const sibMult = (hasSibDiscount&&isCont&&typeInfo.isGroup) ? 0.9 : 1.0;
+    const childN_curr = child1_curr * sibMult;
+    const childN_next = child1_next * sibMult;
 
     const extraKids = Math.max(0,numKids-1);
-    const total_c = ch1_cont_c + extraKids*chN_cont_c + addon_c*numKids;
-    const total_n = ch1_cont_n + extraKids*chN_cont_n + addon_n*numKids;
+    const total_curr = child1_curr + extraKids*childN_curr;
+    const total_next = child1_next + extraKids*childN_next;
 
-    const today_amount = isBeforeBilling ? total_c : total_c+total_n;
-    const auto_amount  = isBeforeBilling ? total_n : 0;
+    const today_amount = isBeforeBilling ? total_curr : total_curr+total_next;
+    const auto_amount  = isBeforeBilling ? total_next : 0;
 
     return {
-      isBeforeBilling,day1,d2,rate1,rate2,baseRate,sibMult,hasSibDiscount,numKids,extraKids,
-      c1c,c2c,c1n,c2n,
-      ch1_cont_c,chN_cont_c,ch1_cont_n,chN_cont_n,
-      addon_c,addon_n,addonLines,
-      total_c,total_n,today_amount,auto_amount,
-      currentMonthName:MONTHS[month],
-      nextMonthName:MONTHS[nextMon],
-      billingDate:`${MONTHS[month]} ${BILLING_DAY}`,
+      isBeforeBilling,day1,d2,rate,rate2,isCont,isFlat,isPrivate,
+      needsDay,sibMult,hasSibDiscount,numKids,extraKids,
+      ...calcState,
+      clinicQty, classCount_curr, classCount_next,
+      child1_curr,childN_curr,child1_next,childN_next,
+      total_curr,total_next,today_amount,auto_amount,
+      currentMonthName:MONTHS[m], nextMonthName:MONTHS[nextMon],
+      billingDate:`${MONTHS[m]} ${BILLING_DAY}`,
     };
   };
 
+  // mutable ref to pass day counts between closure and return
+  const calcState = {};
   const result = calc();
-  const fmt = (n) => `$${(+n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
-
-  const toggleAddon = (key) => {
-    setAddons(a=> a.find(x=>x.type===key) ? a.filter(x=>x.type!==key) : [...a,{type:key,qty:1}]);
-  };
-  const setAddonQty = (key,qty) => setAddons(a=>a.map(x=>x.type===key?{...x,qty:parseInt(qty)||1}:x));
+  const fmt = n => `$${(+n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
 
   const buildScript = () => {
     if(!result||!loc) return "";
-    const {isBeforeBilling,day1,d2,rate1,rate2,c1c,c2c,c1n,c2n,
-           ch1_cont_c,chN_cont_c,ch1_cont_n,chN_cont_n,
-           addon_c,addonLines,total_c,total_n,today_amount,auto_amount,
-           currentMonthName,nextMonthName,billingDate,numKids,extraKids,hasSibDiscount} = result;
+    const {isBeforeBilling,day1,d2,rate,rate2,c1c=0,c2c=0,c1n=0,c2n=0,
+           child1_curr,childN_curr,total_curr,total_next,today_amount,auto_amount,
+           currentMonthName,nextMonthName,billingDate,numKids,extraKids,hasSibDiscount,
+           sibMult,isCont,isFlat,clinicQty,classCount_curr} = result;
     const d1l = DAYS_SHORT[parseInt(day1)];
-    const d2l = d2!==null ? DAYS_SHORT[parseInt(d2)] : null;
+    const d2l = d2!==null?DAYS_SHORT[parseInt(d2)]:null;
 
-    let s = `Our classes are ${fmt(rate1)} per lesson`;
-    if(d2l) s += ` for ${d1l}s, and ${fmt(rate2)} for ${d2l}s (10% multi-day discount)`;
+    let s = `Our ${typeInfo?.label} classes are ${fmt(rate)} per ${isFlat?"session":"lesson"}`;
+    if(d2l&&isCont) s += ` for ${d1l}s, and ${fmt(rate2)} for ${d2l}s (10% multi-day discount)`;
     s += `.`;
-    if(numKids>1&&hasSibDiscount) s += ` A 10% sibling discount applies from the 2nd child.`;
-    if(addonLines.length) s += ` Additional services: ${addonLines.map(a=>`${a.label} at ${fmt(a.rate)}`).join(", ")}.`;
-    s += `\n\nToday I'll collect ${currentMonthName} — ${c1c} ${d1l} class${c1c!==1?"es":""}`;
-    if(d2l&&c2c>0) s += ` and ${c2c} ${d2l} class${c2c!==1?"es":""}`;
-    if(numKids===1) s += ` — ${fmt(ch1_cont_c+addon_c)}.`;
-    else s += ` per child. Child 1: ${fmt(ch1_cont_c)}, each additional: ${fmt(chN_cont_c)}.`;
+    if(numKids>1&&hasSibDiscount&&sibMult<1) s += ` A 10% sibling discount applies from the 2nd child.`;
+    s += `\n\nToday I'll collect ${currentMonthName} — `;
+    if(isFlat) s += `${clinicQty} session${clinicQty>1?"s":""} per child`;
+    else { s += `${c1c} ${d1l} class${c1c!==1?"es":""}`; if(d2l&&c2c>0) s += ` + ${c2c} ${d2l} class${c2c!==1?"es":""}`; }
+    s += ` — ${fmt(child1_curr)} per child`;
+    if(numKids>1) s += ` (${fmt(childN_curr)} each for additional children)`;
+    s += `.`;
     if(!isBeforeBilling) {
-      s += `\n\nSince we're past the ${billingDate} billing date, I'm also collecting ${nextMonthName} today — ${fmt(total_n)}.`;
-      s += `\n\nTotal due today: ${fmt(today_amount)}.`;
-    } else {
-      s += `\n\nTotal due today: ${fmt(today_amount)}.`;
-      s += `\n\nOn ${billingDate}, ${fmt(auto_amount)} will be automatically charged for ${nextMonthName}.`;
+      s += `\n\nSince we're past the ${billingDate} billing date, I'm also collecting ${nextMonthName} today — ${fmt(total_next)}.`;
     }
+    s += `\n\nTotal due today: ${fmt(today_amount)}.`;
+    if(isBeforeBilling) s += `\n\nOn ${billingDate}, ${fmt(auto_amount)} will be automatically charged for ${nextMonthName}.`;
     return s;
   };
 
@@ -5533,54 +5525,34 @@ function QuoteCalculator({locations, activePromos=[]}) {
         {loc&&<p style={{margin:"6px 0 0",fontSize:11,color:DS.green}}>✓ {loc.name} · {loc.region||loc.state}{hasSibDiscount?" · 🏷️ Sibling discount available":""}</p>}
       </div>
 
-      {/* 2 — Class Type */}
+      {/* 2 — Lesson Type */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>2 · Primary Class Type</p>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-            {CONT_TYPES.filter(ct=>getRate(ct.priceKey)>0).map(ct=>(
-              <div key={ct.key} onClick={()=>setClassType(ct.key)} style={{padding:"9px 12px",borderRadius:DS.radiusSm,background:classType===ct.key?DS.accentDim:DS.bgSurf,border:`1px solid ${classType===ct.key?DS.accent:DS.border}`,cursor:"pointer"}}>
-                <p style={{margin:"0 0 2px",fontSize:11,color:classType===ct.key?DS.accent:DS.textSec}}>{ct.label}</p>
-                <p style={{margin:0,fontSize:15,fontWeight:700,color:classType===ct.key?DS.accent:DS.green}}>{fmt(getRate(ct.priceKey))}<span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>/class</span></p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 3 — Add-ons */}
-      {loc&&(
-        <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>3 · Add-ons <span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>(optional · no discount applies)</span></p>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {ADDON_TYPES.filter(at=>getRate(at.priceKey)>0).map(at=>{
-              const selected = addons.find(a=>a.type===at.key);
-              return (
-                <div key={at.key} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:DS.radiusSm,background:selected?DS.accentDim:DS.bgSurf,border:`1px solid ${selected?DS.accent:DS.border}`,cursor:"pointer"}} onClick={()=>toggleAddon(at.key)}>
-                  <div style={{width:16,height:16,borderRadius:4,background:selected?DS.accent:DS.bgHover,border:`2px solid ${selected?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    {selected&&<span style={{fontSize:9,color:"#fff"}}>✓</span>}
-                  </div>
-                  <div style={{flex:1}}>
-                    <span style={{fontSize:12,fontWeight:600,color:selected?DS.accent:DS.textPri}}>{at.label}</span>
-                    <span style={{fontSize:11,color:DS.textMut}}> · {fmt(getRate(at.priceKey))}{at.perClass?" per class":" flat"}</span>
-                  </div>
-                  {selected&&(
-                    <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{fontSize:10,color:DS.textSec}}>Qty:</span>
-                      <input type="number" min={1} max={20} value={selected.qty} onChange={e=>setAddonQty(at.key,e.target.value)} style={{width:48,padding:"3px 6px",fontSize:12,textAlign:"center"}}/>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>2 · Lesson Type</p>
+          {CATS.map(cat=>{
+            const types = ALL_TYPES.filter(t=>t.cat===cat.k&&getRate(t.priceKey)>0);
+            if(!types.length) return null;
+            return (
+              <div key={cat.k} style={{marginBottom:10}}>
+                <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>{cat.l}</p>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {types.map(t=>(
+                    <div key={t.key} onClick={()=>{setSelectedType(t.key);setDay2("");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderRadius:DS.radiusSm,background:selectedType===t.key?DS.accentDim:DS.bgSurf,border:`1px solid ${selectedType===t.key?DS.accent:DS.border}`,cursor:"pointer"}}>
+                      <span style={{fontSize:12,fontWeight:600,color:selectedType===t.key?DS.accent:DS.textPri}}>{t.label}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:selectedType===t.key?DS.accent:DS.green}}>{fmt(getRate(t.priceKey))}<span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>{t.flat?"/session":"/class"}</span></span>
                     </div>
-                  )}
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* 4 — Kids + customer type */}
+      {/* 3 — Kids + customer type */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>4 · Customer & Children</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>3 · Customer & Children</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
               <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Customer type</p>
@@ -5594,27 +5566,36 @@ function QuoteCalculator({locations, activePromos=[]}) {
             </div>
             <div>
               <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>
-                Children {hasSibDiscount&&numKids>1&&<span style={{color:DS.amber,fontSize:10}}>· 10% sibling</span>}
+                Children {hasSibDiscount&&isCont&&typeInfo?.isGroup&&numKids>1&&<span style={{color:DS.amber,fontSize:10}}>· 10% sibling</span>}
               </p>
               <div style={{display:"flex",gap:6}}>
                 {[1,2,3,4].map(n=>(
                   <div key={n} onClick={()=>setNumKids(n)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,textAlign:"center",background:numKids===n?DS.accentDim:DS.bgSurf,border:`1px solid ${numKids===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:13,fontWeight:700,color:numKids===n?DS.accent:DS.textSec}}>{n}</div>
                 ))}
               </div>
-              {numKids>1&&!hasSibDiscount&&<p style={{margin:"4px 0 0",fontSize:10,color:DS.textMut}}>No sibling discount at this location</p>}
+              {numKids>1&&(!hasSibDiscount||!isCont||!typeInfo?.isGroup)&&<p style={{margin:"4px 0 0",fontSize:10,color:DS.textMut}}>No sibling discount for this type/location</p>}
             </div>
           </div>
+          {isFlat&&(
+            <div style={{marginTop:10}}>
+              <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Number of sessions / classes</p>
+              <div style={{display:"flex",gap:6}}>
+                {[1,2,3,4,5].map(n=>(
+                  <div key={n} onClick={()=>setClinicQty(n)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,textAlign:"center",background:clinicQty===n?DS.accentDim:DS.bgSurf,border:`1px solid ${clinicQty===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:13,fontWeight:700,color:clinicQty===n?DS.accent:DS.textSec}}>{n}</div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 5 — Enrollment Date */}
+      {/* 4 — Enrollment Date */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>5 · Enrollment Date</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>4 · Enrollment Date</p>
           <input type="date" value={enrollDate} onChange={e=>setEnrollDate(e.target.value)} style={{width:"100%"}}/>
           {enrollDate&&(()=>{
-            const d=new Date(enrollDate+"T12:00:00");
-            const after=d.getDate()>=BILLING_DAY;
+            const d=new Date(enrollDate+"T12:00:00"), after=d.getDate()>=BILLING_DAY;
             return <div style={{marginTop:8,padding:"7px 10px",borderRadius:DS.radiusSm,background:after?DS.amberDim:DS.greenDim,border:`1px solid ${after?DS.amber+"40":DS.green+"40"}`}}>
               <p style={{margin:0,fontSize:11,color:after?DS.amber:DS.green,fontWeight:600}}>
                 {after?`⚡ On/after 20th — collect ${MONTHS[d.getMonth()]} + ${MONTHS[d.getMonth()===11?0:d.getMonth()+1]} today`:`✓ Before 20th — collect ${MONTHS[d.getMonth()]} remaining today only`}
@@ -5624,20 +5605,20 @@ function QuoteCalculator({locations, activePromos=[]}) {
         </div>
       )}
 
-      {/* 6 — Class Day(s) */}
-      {loc&&enrollDate&&(
+      {/* 5 — Class Day(s) — only for continuous and private */}
+      {loc&&enrollDate&&needsDay&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>6 · Class Day(s)</p>
-          <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>First class day</p>
-          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>5 · Class Day(s)</p>
+          <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Class day</p>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:isCont&&typeInfo?.isGroup?10:0}}>
             {DAYS_SHORT.map((d,i)=>(
               <div key={i} onClick={()=>{setDay1(String(i));if(String(i)===day2)setDay2("");}} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day1===String(i)?DS.accent:DS.bgSurf,border:`1px solid ${day1===String(i)?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:day1===String(i)?"#fff":DS.textSec}}>
                 {d}
               </div>
             ))}
           </div>
-          {day1!==""&&<>
-            <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Second day <span style={{color:DS.textMut,fontSize:10}}>(optional · 10% off 2nd day)</span></p>
+          {isCont&&typeInfo?.isGroup&&day1!==""&&<>
+            <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Second day <span style={{fontSize:10,color:DS.textMut}}>(optional · 10% off)</span></p>
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
               <div onClick={()=>setDay2("")} style={{padding:"6px 10px",borderRadius:DS.radiusSm,background:day2===""?DS.bgHover:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,color:DS.textMut}}>None</div>
               {DAYS_SHORT.map((d,i)=>String(i)!==day1&&(
@@ -5650,14 +5631,13 @@ function QuoteCalculator({locations, activePromos=[]}) {
         </div>
       )}
 
-      {/* 7 — Promos — auto-loads all active eligible promos */}
-      {loc&&enrollDate&&day1!==""&&eligiblePromos.length>0&&(
+      {/* 6 — Promos (only for continuous, auto-loads from Hub) */}
+      {loc&&enrollDate&&(isCont?day1!=="":true)&&eligiblePromos.length>0&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>7 · Promotions</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>6 · Promotions</p>
           {eligiblePromos.map(p=>{
             const checked=promoChecked.includes(p.code);
             const dtype=p.discount_type||(p.discount_fixed?"fixed":"pct");
-            const appliesToLabel = p.applies_to==="group"?"Group only":p.applies_to==="continuous"?"Continuous only":"All types";
             return (
               <div key={p.code} onClick={()=>setPromoChecked(pc=>checked?pc.filter(c=>c!==p.code):[...pc,p.code])} style={{display:"flex",gap:10,padding:"9px 10px",borderRadius:DS.radiusSm,background:checked?DS.accentDim:DS.bgSurf,border:`1px solid ${checked?DS.accent:DS.border}`,cursor:"pointer",marginBottom:6}}>
                 <div style={{width:16,height:16,borderRadius:4,background:checked?DS.accent:DS.bgHover,border:`2px solid ${checked?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
@@ -5667,7 +5647,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                   <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.textPri}}>{p.name} <span style={{color:DS.accent,fontSize:10}}>({p.code})</span></p>
                   <p style={{margin:0,fontSize:10,color:DS.textSec}}>
                     {dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (1st class only)":""}`:
-                     dtype==="fixed"?`$${p.discount_fixed} off`:""} · {appliesToLabel}
+                     `$${p.discount_fixed} off`}
                     {p.customer_types?.length?` · ${Array.isArray(p.customer_types)?p.customer_types.join("/"):p.customer_types} only`:""}
                   </p>
                 </div>
@@ -5687,44 +5667,39 @@ function QuoteCalculator({locations, activePromos=[]}) {
 
             {/* Current month */}
             <p style={{margin:"0 0 4px",fontSize:11,fontWeight:600,color:DS.textSec}}>
-              {result.currentMonthName} — {result.c1c} {DAYS_SHORT[parseInt(result.day1)]} class{result.c1c!==1?"es":""}
-              {result.d2!==null&&result.c2c>0?` + ${result.c2c} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2c!==1?"es":""}`:""}</p>
+              {result.currentMonthName}
+              {!isFlat&&` — ${result.c1c||0} ${DAYS_SHORT[parseInt(result.day1)]} class${(result.c1c||0)!==1?"es":""}${result.d2!==null&&(result.c2c||0)>0?` + ${result.c2c} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2c!==1?"es":""}`:""}`}
+              {isFlat&&` — ${result.clinicQty} session${result.clinicQty!==1?"s":""}`}
+            </p>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-              <span style={{fontSize:11,color:DS.textMut}}>Child 1 (continuous)</span>
-              <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(result.ch1_cont_c)}</span>
+              <span style={{fontSize:11,color:DS.textMut}}>Child 1</span>
+              <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(result.child1_curr)}</span>
             </div>
-            {result.extraKids>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-              <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""} {result.hasSibDiscount?"(−10%)":"(no sib. disc.)"}</span>
-              <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(result.extraKids*result.chN_cont_c)}</span>
-            </div>}
-            {result.addonLines.map((a,i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                <span style={{fontSize:11,color:DS.textMut}}>{a.label} × {result.numKids} child{result.numKids>1?"ren":""}</span>
-                <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(a.curr*result.numKids)}</span>
+            {result.extraKids>0&&(
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""} {result.sibMult<1?"(−10% sibling)":"(full rate)"}</span>
+                <span style={{fontSize:11,color:DS.textPri,fontWeight:600}}>{fmt(result.extraKids*result.childN_curr)}</span>
               </div>
-            ))}
+            )}
 
-            {!result.isBeforeBilling&&result.c1n>0&&<>
+            {!result.isBeforeBilling&&result.total_next>0&&(
               <div style={{borderTop:`1px solid ${DS.border}`,marginTop:6,paddingTop:6}}>
                 <p style={{margin:"0 0 4px",fontSize:11,fontWeight:600,color:DS.amber}}>
-                  {result.nextMonthName} (past billing date) — {result.c1n} {DAYS_SHORT[parseInt(result.day1)]} class{result.c1n!==1?"es":""}
-                  {result.d2!==null&&result.c2n>0?` + ${result.c2n} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2n!==1?"es":""}`:""}</p>
+                  {result.nextMonthName} (past billing date)
+                  {!isFlat&&` — ${result.c1n||0} ${DAYS_SHORT[parseInt(result.day1)]} class${(result.c1n||0)!==1?"es":""}${result.d2!==null&&(result.c2n||0)>0?` + ${result.c2n} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2n!==1?"es":""}`:""}`}
+                </p>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
                   <span style={{fontSize:11,color:DS.textMut}}>Child 1</span>
-                  <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(result.ch1_cont_n)}</span>
+                  <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(result.child1_next)}</span>
                 </div>
-                {result.extraKids>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                  <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""}</span>
-                  <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(result.extraKids*result.chN_cont_n)}</span>
-                </div>}
-                {result.addonLines.map((a,i)=>(
-                  <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                    <span style={{fontSize:11,color:DS.textMut}}>{a.label} × {result.numKids}</span>
-                    <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(a.next*result.numKids)}</span>
+                {result.extraKids>0&&(
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                    <span style={{fontSize:11,color:DS.textMut}}>{result.extraKids} more child{result.extraKids>1?"ren":""}</span>
+                    <span style={{fontSize:11,color:DS.amber,fontWeight:600}}>{fmt(result.extraKids*result.childN_next)}</span>
                   </div>
-                ))}
+                )}
               </div>
-            </>}
+            )}
 
             <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:`1px solid ${DS.border}`,marginTop:6}}>
               <span style={{fontSize:13,fontWeight:700,color:DS.textPri}}>Total due today</span>
@@ -5732,13 +5707,14 @@ function QuoteCalculator({locations, activePromos=[]}) {
             </div>
           </div>
 
-          {result.isBeforeBilling&&result.c1n>0&&(
+          {result.isBeforeBilling&&result.auto_amount>0&&(
             <div style={{background:DS.bgSurf,borderRadius:DS.radiusSm,padding:"10px 12px",marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <p style={{margin:"0 0 2px",fontSize:11,fontWeight:700,color:DS.textSec}}>Auto-billed on {result.billingDate}</p>
-                  <p style={{margin:0,fontSize:11,color:DS.textMut}}>{result.nextMonthName} · {result.c1n} {DAYS_SHORT[parseInt(result.day1)]} class{result.c1n!==1?"es":""}
-                    {result.d2!==null&&result.c2n>0?` + ${result.c2n} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2n!==1?"es":""}`:""} × {result.numKids} child{result.numKids>1?"ren":""}</p>
+                  <p style={{margin:0,fontSize:11,color:DS.textMut}}>{result.nextMonthName}
+                    {!isFlat&&` · ${result.c1n||0} ${DAYS_SHORT[parseInt(result.day1)]} class${(result.c1n||0)!==1?"es":""}${result.d2!==null&&(result.c2n||0)>0?` + ${result.c2n} ${DAYS_SHORT[parseInt(result.d2)]} class${result.c2n!==1?"es":""}`:""}`}
+                    {` × ${result.numKids} child${result.numKids>1?"ren":""}`}</p>
                 </div>
                 <span style={{fontSize:15,fontWeight:700,color:DS.textPri}}>{fmt(result.auto_amount)}</span>
               </div>
@@ -5753,6 +5729,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
     </div>
   );
 }
+
 
 
 
