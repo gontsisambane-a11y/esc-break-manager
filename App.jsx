@@ -493,7 +493,15 @@ const todayLabel = (repTz) => {
 };
 const fmtTime = s => { if(s<=0)return"0:00"; return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; };
 const fmtDur = s => { if(!s||s<=0)return"0m"; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; };
-const elapsedSec = iso => Math.floor((Date.now()-new Date(iso).getTime())/1000);
+const elapsedSec = iso => {
+  if(!iso) return 0;
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return 0;
+  const elapsed = Math.floor((Date.now()-d.getTime())/1000);
+  // Guard against future timestamps or impossibly large values (> 8 hours = bad data)
+  if(elapsed < 0 || elapsed > 28800) return 0;
+  return elapsed;
+};
 const fmt12h = t => { if(!t)return'--'; const [h,m]=t.split(':').map(Number); return `${h%12||12}:${m.toString().padStart(2,'0')}${h>=12?'pm':'am'}`; };
 // UTC offsets in minutes for current period (May - CDT/EDT/PDT active)
 const TZ_OFFSET = { Central:-300, Eastern:-240, Pacific:-420, SA:120, GMT:0, IST:330 };
@@ -629,10 +637,21 @@ async function runDailyReset(reps, settings) {
     } catch(e) { console.warn("PTO seed error",e); }
   }
 
+  // Close ANY open break_log entries from previous days first
+  const openLogs = await sb(`break_log?ended_at=is.null&select=id,started_at`).catch(()=>[]);
+  const staleLogPatches = (openLogs||[])
+    .filter(l=>{
+      const d = new Date(l.started_at);
+      const logDay = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      return logDay < todayStr();
+    })
+    .map(l=>sb(`break_log?id=eq.${l.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:0})}));
+  if(staleLogPatches.length) await Promise.all(staleLogPatches);
+
   const patches = [];
   for(const r of reps) {
     const isNewDay = r.updated_at && businessDayStr(r.updated_at) !== today;
-    if(isNewDay && (r.health_breaks_today>0||r.health_time_banked>0)) {
+    if(isNewDay && (r.health_breaks_today>0||r.health_time_banked>0||r.health_time_today>0)) {
       patches.push(sbPatch("rep_status",r.id,{health_breaks_today:0,health_time_today:0,health_time_banked:0,last_break_returned_at:null}));
       r.health_breaks_today=0; r.health_time_today=0; r.health_time_banked=0; r.last_break_returned_at=null;
     }
@@ -645,7 +664,6 @@ async function runDailyReset(reps, settings) {
       r.status="pto"; r.ooo_note="PTO";
     }
   }
-  // Run all patches in parallel
   await Promise.all(patches);
 }
 
@@ -752,7 +770,7 @@ function LoginScreen({ onSelect, reps, users=[] }) {
   const [username,setUsername]=useState("");
   const [pinErr,setPinErr]=useState(false);
   const [search,setSearch]=useState("");
-  const filtered=reps.filter(r=>r.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered=reps.filter(r=>r.name&&r.name.toLowerCase().includes(search.toLowerCase()));
 
   const tryMgrLogin = async () => {
     const user = users.find(u=>u.username===username&&u.pin===pin&&u.role==="management");
@@ -5326,8 +5344,8 @@ function QuoteCalculator({locations, activePromos=[]}) {
     {key:"adaptive",   label:"Private Adaptive",        priceKey:"price_adaptive", cat:"private", isGroup:false, noDiscount:true},
     {key:"private_20", label:"Private Lessons (20m)",   priceKey:"price_priv20",   cat:"private", isGroup:false, noDiscount:true},
     // ODL & Clinic — flat per enrollment, no day counting, no discount
-    {key:"odl_mf",    label:"ODL (M–F)",               priceKey:"price_odl",      cat:"odl",     isGroup:false, noDiscount:true, flat:true},
-    {key:"odl_ss",    label:"ODL (Sa–Su)",              priceKey:"price_odl_ss",   cat:"odl",     isGroup:false, noDiscount:true, flat:true},
+    {key:"odl_mf",    label:"ODL (M–F)",               priceKey:"price_odl",      cat:"odl",     isGroup:false, noDiscount:true, flat:true, surcharge:5},
+    {key:"odl_ss",    label:"ODL (Sa–Su)",              priceKey:"price_odl_ss",   cat:"odl",     isGroup:false, noDiscount:true, flat:true, surcharge:5},
     {key:"clinic",    label:"Swim Clinic",              priceKey:"price_clinic",   cat:"clinic",  isGroup:false, noDiscount:true, flat:true},
   ];
 
@@ -5416,7 +5434,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
     const startNxt= new Date(nextYr,nextMon,1);
     const endNxt  = lastDayOfMonth(nextYr,nextMon);
 
-    const rate = getRate(typeInfo.priceKey);
+    const rate = getRate(typeInfo.priceKey) + (typeInfo.surcharge||0);
     const d2   = day2!==""&&day2!==day1 ? day2 : null;
     // 2nd day gets 10% off only for continuous group classes
     const rate2 = (d2!==null&&isCont) ? rate*0.9 : rate;
@@ -5541,8 +5559,11 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 <div style={{display:"flex",flexDirection:"column",gap:4}}>
                   {types.map(t=>(
                     <div key={t.key} onClick={()=>{setSelectedType(t.key);setDay2("");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderRadius:DS.radiusSm,background:selectedType===t.key?DS.accentDim:DS.bgSurf,border:`1px solid ${selectedType===t.key?DS.accent:DS.border}`,cursor:"pointer"}}>
-                      <span style={{fontSize:12,fontWeight:600,color:selectedType===t.key?DS.accent:DS.textPri}}>{t.label}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:selectedType===t.key?DS.accent:DS.green}}>{fmt(getRate(t.priceKey))}<span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>{t.flat?"/session":"/class"}</span></span>
+                      <div>
+                        <span style={{fontSize:12,fontWeight:600,color:selectedType===t.key?DS.accent:DS.textPri}}>{t.label}</span>
+                        {t.surcharge&&<span style={{fontSize:10,color:DS.amber,marginLeft:6}}>+${t.surcharge} on-demand fee</span>}
+                      </div>
+                      <span style={{fontSize:14,fontWeight:700,color:selectedType===t.key?DS.accent:DS.green}}>{fmt(getRate(t.priceKey)+(t.surcharge||0))}<span style={{fontSize:10,fontWeight:400,color:DS.textMut}}>{t.flat?"/session":"/class"}</span></span>
                     </div>
                   ))}
                 </div>
