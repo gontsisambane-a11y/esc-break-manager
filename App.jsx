@@ -5394,7 +5394,10 @@ function QuoteCalculator({locations, activePromos=[]}) {
   ]);
 
   const loc = locations.find(l=>l.id===locId);
-  const hasSibDiscount = loc ? SIB_DISCOUNT_LOCS.has(loc.name) : false;
+  // Sibling discount applies at all locations
+  // Emler: first 3 months only (billing system handles cutoff — calculator always shows it)
+  // Other brands: in perpetuity
+  const hasSibDiscount = !!loc;
   const getRate = (priceKey, surcharge=0) => loc ? (parseFloat(loc[priceKey])||0) + surcharge : 0;
   const totalAssigned = groups.reduce((s,g)=>s+g.count,0);
 
