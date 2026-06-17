@@ -5367,17 +5367,17 @@ function QuoteCalculator({locations, activePromos=[]}) {
   ]);
 
   const ALL_TYPES = [
-    {key:"group_mf",   label:"Group (M–F)",        priceKey:"price_mf",       cat:"cont",    isGroup:true,  weekend:false},
-    {key:"group_ss",   label:"Group (Sa–Su)",       priceKey:"price_ss",       cat:"cont",    isGroup:true,  weekend:true},
-    {key:"team_mf",    label:"Swim Team (M–F)",     priceKey:"price_st_mf",    cat:"cont",    isGroup:false, weekend:false},
-    {key:"team_ss",    label:"Swim Team (Sa–Su)",    priceKey:"price_st_ss",    cat:"cont",    isGroup:false, weekend:true},
-    {key:"private_30", label:"Private (30m)",        priceKey:"price_priv",     cat:"private", isGroup:false, noDiscount:true},
-    {key:"semi",       label:"Semi-Private (30m)",   priceKey:"price_semi",     cat:"private", isGroup:false, noDiscount:true},
-    {key:"adaptive",   label:"Private Adaptive",     priceKey:"price_adaptive", cat:"private", isGroup:false, noDiscount:true},
-    {key:"private_20", label:"Private (20m)",        priceKey:"price_priv20",   cat:"private", isGroup:false, noDiscount:true},
-    {key:"odl_mf",    label:"ODL (M–F)",             priceKey:"price_odl",      cat:"odl",     isGroup:false, noDiscount:true, flat:true, surcharge:5},
-    {key:"odl_ss",    label:"ODL (Sa–Su)",            priceKey:"price_odl_ss",   cat:"odl",     isGroup:false, noDiscount:true, flat:true, surcharge:5},
-    {key:"clinic",    label:"Swim Clinic",            priceKey:"price_clinic",   cat:"clinic",  isGroup:false, noDiscount:true, flat:true},
+    {key:"group_mf",   label:"Group (M–F)",        priceKey:"price_mf",       cat:"cont",    isGroup:true},
+    {key:"group_ss",   label:"Group (Sa–Su)",       priceKey:"price_ss",       cat:"cont",    isGroup:true},
+    {key:"team_mf",    label:"Swim Team (M–F)",     priceKey:"price_st_mf",    cat:"cont",    isGroup:false},
+    {key:"team_ss",    label:"Swim Team (Sa–Su)",    priceKey:"price_st_ss",    cat:"cont",    isGroup:false},
+    {key:"private_30", label:"Private (30m)",        priceKey:"price_priv",     cat:"private", noDiscount:true},
+    {key:"semi",       label:"Semi-Private (30m)",   priceKey:"price_semi",     cat:"private", noDiscount:true},
+    {key:"adaptive",   label:"Private Adaptive",     priceKey:"price_adaptive", cat:"private", noDiscount:true},
+    {key:"private_20", label:"Private (20m)",        priceKey:"price_priv20",   cat:"private", noDiscount:true},
+    {key:"odl_mf",    label:"ODL (M–F)",             priceKey:"price_odl",      cat:"odl",     noDiscount:true, flat:true, surcharge:5},
+    {key:"odl_ss",    label:"ODL (Sa–Su)",            priceKey:"price_odl_ss",   cat:"odl",     noDiscount:true, flat:true, surcharge:5},
+    {key:"clinic",    label:"Swim Clinic",            priceKey:"price_clinic",   cat:"clinic",  noDiscount:true, flat:true},
   ];
 
   const [locId,        setLocId]        = useState("");
@@ -5388,76 +5388,29 @@ function QuoteCalculator({locations, activePromos=[]}) {
   const [promoChecked, setPromoChecked] = useState([]);
   const [copied,       setCopied]       = useState(false);
 
-  // Groups: each group has { id, type, day1, day2, qty, kids[] }
-  // kids is an array of kid numbers (1-indexed), a kid can be in multiple groups
+  // Groups: each group has { id, type, day1, day2, qty (sessions for flat), count (kids in this group) }
   const [groups, setGroups] = useState([
-    {id:1, type:"group_mf", day1:"", day2:"", qty:1, kids:[1]}
+    {id:1, type:"group_mf", day1:"", day2:"", qty:1, count:1}
   ]);
 
   const loc = locations.find(l=>l.id===locId);
   const hasSibDiscount = loc ? SIB_DISCOUNT_LOCS.has(loc.name) : false;
   const getRate = (priceKey, surcharge=0) => loc ? (parseFloat(loc[priceKey])||0) + surcharge : 0;
+  const totalAssigned = groups.reduce((s,g)=>s+g.count,0);
 
-  // Sync groups when numKids changes — add new kids to first group, remove kids > n
-  const syncGroups = (n) => {
-    setNumKids(n);
-    setGroups(prev => prev.map(g=>({
-      ...g,
-      kids: [
-        ...g.kids.filter(k=>k<=n),
-        // add new kids to first group only
-      ]
-    })).map((g,i)=> i===0 ? {
-      ...g,
-      kids: [...new Set([...g.kids, ...Array.from({length:n},(_,j)=>j+1).filter(k=>k>Math.max(0,...(prev[0]?.kids||[])))])]
-    } : g));
-    // simpler: just clamp all groups
-    setGroups(prev=>{
-      const clamped = prev.map(g=>({...g, kids:g.kids.filter(k=>k<=n)}));
-      // ensure kid 1 through n exist in at least first group
-      const covered = new Set(clamped.flatMap(g=>g.kids));
-      const missing = Array.from({length:n},(_,i)=>i+1).filter(k=>!covered.has(k));
-      if(missing.length&&clamped.length) clamped[0].kids = [...clamped[0].kids, ...missing];
-      return clamped;
-    });
-  };
-
-  const addGroup = () => {
-    setGroups(prev=>[...prev, {id:Date.now(),type:"group_mf",day1:"",day2:"",qty:1,kids:[1]}]);
-  };
-
-  const removeGroup = (id) => {
-    if(groups.length<=1) return;
-    setGroups(prev=>prev.filter(g=>g.id!==id));
-  };
-
-  const updateGroup = (id, field, val) => {
-    setGroups(prev=>prev.map(g=>g.id===id?{...g,[field]:val}:g));
-  };
-
-  const toggleKidInGroup = (groupId, kid) => {
-    setGroups(prev=>prev.map(g=>{
-      if(g.id!==groupId) return g;
-      const has = g.kids.includes(kid);
-      return {...g, kids: has ? g.kids.filter(k=>k!==kid) : [...g.kids, kid].sort((a,b)=>a-b)};
-    }));
-  };
+  const updateGroup = (id, field, val) => setGroups(prev=>prev.map(g=>g.id===id?{...g,[field]:val}:g));
+  const addGroup    = () => setGroups(prev=>[...prev, {id:Date.now(),type:"group_mf",day1:"",day2:"",qty:1,count:1}]);
+  const removeGroup = (id) => { if(groups.length>1) setGroups(prev=>prev.filter(g=>g.id!==id)); };
 
   // ── DATE HELPERS ──────────────────────────────────────────────────────
   function countDayInRange(dayOfWeek, startDate, endDate) {
     if(!startDate||!endDate||startDate>endDate) return 0;
     let count=0, d=new Date(startDate.getTime());
-    const dow = parseInt(dayOfWeek);
-    // Advance to first occurrence — but if startDate IS already that day, start there
-    while(d.getDay()!==dow) d.setDate(d.getDate()+1);
+    while(d.getDay()!==parseInt(dayOfWeek)) d.setDate(d.getDate()+1);
     while(d<=endDate){count++;d.setDate(d.getDate()+7);}
     return count;
   }
-  function lastDayOfMonth(y,m){
-    const d = new Date(y,m+1,0);
-    d.setHours(23,59,59,999);
-    return d;
-  }
+  function lastDayOfMonth(y,m){ const d=new Date(y,m+1,0); d.setHours(23,59,59,999); return d; }
 
   // ── PROMOS ────────────────────────────────────────────────────────────
   const eligiblePromos = activePromos.filter(p=>{
@@ -5493,7 +5446,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
   };
 
   // ── CALC ──────────────────────────────────────────────────────────────
-  const calcGroup = (g, isBeforeBilling, enroll, endCurr, startNxt, endNxt) => {
+  const calcGroup = (g, enroll, endCurr, startNxt, endNxt) => {
     const ti = ALL_TYPES.find(t=>t.key===g.type);
     if(!ti) return null;
     const rate = getRate(ti.priceKey, ti.surcharge||0);
@@ -5501,45 +5454,42 @@ function QuoteCalculator({locations, activePromos=[]}) {
     const isFlat = !!ti.flat;
     const d2 = g.day2&&g.day2!==g.day1?g.day2:null;
     const rate2 = d2&&isCont&&ti.isGroup ? rate*0.9 : rate;
-    const kidCount = Math.max(1, g.kids.length);
-    // Sibling discount: if any kid in this group is child 2+, apply discount
-    // Use smallest kid index as reference — if >1, they're all siblings
-    const minKid = Math.min(...g.kids);
-    const sibMult = (hasSibDiscount&&isCont&&ti.isGroup&&minKid>1) ? 0.9 : 1.0;
+    // Sibling discount: apply to all kids in this group if sibling discount eligible
+    // and this isn't the first group (first group = first kid)
+    const groupIdx = groups.findIndex(x=>x.id===g.id);
+    const isFirstGroup = groupIdx===0;
+    const sibMult = (hasSibDiscount&&isCont&&ti.isGroup&&!isFirstGroup) ? 0.9 : 1.0;
 
-    let raw_curr, raw_next, cc_curr, cc_next, counts={};
+    let raw_curr, raw_next, cc_curr=0, cc_next=0, counts={};
     if(isFlat){
       raw_curr = rate * g.qty;
       raw_next = raw_curr;
       cc_curr = g.qty; cc_next = g.qty;
     } else {
-      const c1c = g.day1?countDayInRange(g.day1,enroll,endCurr):0;
-      const c2c = d2?countDayInRange(d2,enroll,endCurr):0;
-      const c1n = g.day1?countDayInRange(g.day1,startNxt,endNxt):0;
-      const c2n = d2?countDayInRange(d2,startNxt,endNxt):0;
-      raw_curr = c1c*rate + c2c*rate2;
-      raw_next = c1n*rate + c2n*rate2;
-      cc_curr = c1c+c2c; cc_next = c1n+c2n;
-      counts = {c1c,c2c,c1n,c2n};
+      if(!g.day1) return null;
+      const c1c=countDayInRange(g.day1,enroll,endCurr);
+      const c2c=d2?countDayInRange(d2,enroll,endCurr):0;
+      const c1n=countDayInRange(g.day1,startNxt,endNxt);
+      const c2n=d2?countDayInRange(d2,startNxt,endNxt):0;
+      raw_curr=c1c*rate+c2c*rate2;
+      raw_next=c1n*rate+c2n*rate2;
+      cc_curr=c1c+c2c; cc_next=c1n+c2n;
+      counts={c1c,c2c,c1n,c2n};
     }
 
-    const ch_curr = ti.noDiscount ? raw_curr*sibMult : applyPromos(raw_curr*sibMult, cc_curr, true, isCont, ti.isGroup);
-    const ch_next = ti.noDiscount ? raw_next*sibMult : applyPromos(raw_next*sibMult, cc_next, false, isCont, ti.isGroup);
+    const perKid_curr = ti.noDiscount ? raw_curr*sibMult : applyPromos(raw_curr*sibMult, cc_curr, true, isCont, !!ti.isGroup);
+    const perKid_next = ti.noDiscount ? raw_next*sibMult : applyPromos(raw_next*sibMult, cc_next, false, isCont, !!ti.isGroup);
 
-    return {ti, rate, rate2, d2, kidCount, sibMult, isFlat,
-            ch_curr, ch_next,
-            total_curr: ch_curr*kidCount,
-            total_next: ch_next*kidCount,
+    return {ti, rate, rate2, d2, sibMult, isFlat,
+            perKid_curr, perKid_next,
+            total_curr: perKid_curr * g.count,
+            total_next: perKid_next * g.count,
             counts};
   };
 
   const calc = () => {
     if(!loc||!enrollDate) return null;
-    // All groups need day1 set (unless flat)
-    const incomplete = groups.some(g=>{
-      const ti=ALL_TYPES.find(t=>t.key===g.type);
-      return !ti?.flat&&!g.day1;
-    });
+    const incomplete = groups.some(g=>{ const ti=ALL_TYPES.find(t=>t.key===g.type); return !ti?.flat&&!g.day1; });
     if(incomplete) return null;
 
     const enroll=new Date(enrollDate+"T12:00:00");
@@ -5550,14 +5500,12 @@ function QuoteCalculator({locations, activePromos=[]}) {
     const startNxt=new Date(nextYr,nextMon,1);
     const endNxt=lastDayOfMonth(nextYr,nextMon);
 
-    const groupResults = groups.map(g=>({g, r:calcGroup(g,isBeforeBilling,enroll,endCurr,startNxt,endNxt)})).filter(x=>x.r);
-
-    // Reg fee: $35 first 2 kids, $0 for 3+
-    const regFeeTotal = Math.min(numKids,2)*REG_FEE;
-    const total_curr = groupResults.reduce((s,x)=>s+x.r.total_curr,0);
-    const total_next = groupResults.reduce((s,x)=>s+x.r.total_next,0);
-    const today_amount = (isBeforeBilling?total_curr:total_curr+total_next)+regFeeTotal;
-    const auto_amount  = isBeforeBilling?total_next:0;
+    const groupResults=groups.map(g=>({g,r:calcGroup(g,enroll,endCurr,startNxt,endNxt)})).filter(x=>x.r);
+    const regFeeTotal=Math.min(numKids,2)*REG_FEE;
+    const total_curr=groupResults.reduce((s,x)=>s+x.r.total_curr,0);
+    const total_next=groupResults.reduce((s,x)=>s+x.r.total_next,0);
+    const today_amount=(isBeforeBilling?total_curr:total_curr+total_next)+regFeeTotal;
+    const auto_amount=isBeforeBilling?total_next:0;
 
     return {isBeforeBilling,groupResults,regFeeTotal,total_curr,total_next,today_amount,auto_amount,
             currentMonthName:MONTHS[m],nextMonthName:MONTHS[nextMon],billingDate:`${MONTHS[m]} ${BILLING_DAY}`};
@@ -5570,57 +5518,45 @@ function QuoteCalculator({locations, activePromos=[]}) {
     if(!result||!loc) return "";
     const {isBeforeBilling,groupResults,regFeeTotal,today_amount,auto_amount,
            currentMonthName,nextMonthName,billingDate,total_curr,total_next} = result;
-
-    const childWord = (n) => n===1?"child":"children";
     let s = "";
 
-    // Per-group class breakdown
     groupResults.forEach(({g,r})=>{
-      const kidLabel = g.kids.length===1
-        ? `your child`
-        : g.kids.length===numKids
-          ? `all ${numKids} children`
-          : `${g.kids.length} of your children`;
       const d1l = g.day1?DAYS_SHORT[parseInt(g.day1)]:"";
       const d2l = r.d2!==null?DAYS_SHORT[parseInt(r.d2)]:null;
+      const kw = g.count===1?"child":`${g.count} children`;
 
-      s += `For ${kidLabel} in ${r.ti.label}`;
-      if(!r.isFlat&&d1l) {
-        s += ` on ${d1l}s`;
-        if(d2l) s += ` and ${d2l}s`;
-      }
+      s += `For ${kw} in ${r.ti.label}`;
+      if(!r.isFlat&&d1l){ s+=` on ${d1l}s`; if(d2l) s+=` and ${d2l}s`; }
       s += `, the rate is ${fmt(r.rate)} per class`;
       if(d2l) s += ` for ${d1l}s and ${fmt(r.rate2)} for ${d2l}s — that includes our 10% multi-day discount`;
       if(r.sibMult<1) s += `. A 10% sibling discount also applies`;
       s += `.\n`;
 
-      if(!r.isFlat&&r.counts) {
-        const {c1c,c2c} = r.counts;
+      if(!r.isFlat&&r.counts){
+        const {c1c,c2c}=r.counts;
         s += `In ${currentMonthName} from your start date, there ${c1c===1?"is":"are"} ${c1c} ${d1l} class${c1c!==1?"es":""}`;
-        if(d2l&&c2c>0) s += ` and ${c2c} ${d2l} class${c2c!==1?"es":""}`;
-        s += ` — that comes to ${fmt(r.ch_curr)} per child`;
-        if(g.kids.length>1) s += `, ${fmt(r.total_curr)} for ${g.kids.length} children`;
+        if(d2l&&c2c>0) s+=` and ${c2c} ${d2l} class${c2c!==1?"es":""}`;
+        s += ` — ${fmt(r.perKid_curr)} per child`;
+        if(g.count>1) s+=`, ${fmt(r.total_curr)} for ${g.count} children`;
         s += `.\n`;
-      } else if(r.isFlat) {
-        s += `That's ${g.qty} session${g.qty!==1?"s":""} at ${fmt(r.rate)} each — ${fmt(r.total_curr)} total.\n`;
+      } else if(r.isFlat){
+        s+=`That's ${g.qty} session${g.qty!==1?"s":""} at ${fmt(r.rate)} each — ${fmt(r.total_curr)} total.\n`;
       }
-      s += `\n`;
+      s+=`\n`;
     });
 
-    // Cost breakdown
-    if(isBeforeBilling) {
-      s += `Your ${currentMonthName} tuition would be ${fmt(total_curr)}, plus a one-time registration fee of ${fmt(regFeeTotal)}`;
-      if(numKids>2) s += ` — that covers two children, and the third onwards is free`;
-      s += `. So the amount due to get started today is ${fmt(today_amount)}.\n\n`;
-      s += `On ${billingDate}, ${fmt(auto_amount)} would be automatically charged for ${nextMonthName}. After that, billing runs on the 20th of each month for the following month.`;
+    if(isBeforeBilling){
+      s+=`Your ${currentMonthName} tuition comes to ${fmt(total_curr)}, plus a one-time registration fee of ${fmt(regFeeTotal)}`;
+      if(numKids>2) s+=` — that covers two children, and the third onwards is free`;
+      s+=`. So the amount due today would be ${fmt(today_amount)}.\n\n`;
+      s+=`On ${billingDate}, ${fmt(auto_amount)} would be automatically charged for ${nextMonthName}. After that, billing runs on the 20th of each month for the following month.`;
     } else {
-      s += `Since we're past the 20th, the amount due today covers ${currentMonthName} remaining classes (${fmt(total_curr)}) plus the full month of ${nextMonthName} (${fmt(total_next)}), `;
-      s += `along with the one-time registration fee of ${fmt(regFeeTotal)}`;
-      if(numKids>2) s += ` — two children covered, third and beyond are free`;
-      s += `. Total due today: ${fmt(today_amount)}.\n\n`;
-      s += `After that, billing runs on the 20th of each month for the following month.`;
+      s+=`Since we're past the 20th, today covers ${currentMonthName} remaining classes (${fmt(total_curr)}) plus the full month of ${nextMonthName} (${fmt(total_next)}), `;
+      s+=`plus the one-time registration fee of ${fmt(regFeeTotal)}`;
+      if(numKids>2) s+=` — two children covered, third and beyond are free`;
+      s+=`. Total due today: ${fmt(today_amount)}.\n\n`;
+      s+=`After that, billing runs on the 20th of each month for the following month.`;
     }
-
     return s;
   };
 
@@ -5635,9 +5571,9 @@ function QuoteCalculator({locations, activePromos=[]}) {
         <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>1 · Location</p>
         <input value={locSearch} onChange={e=>{setLocSearch(e.target.value);setLocId("");}} placeholder="Search location…" style={{width:"100%",marginBottom:8}}/>
         {!locId&&(
-          <div style={{maxHeight:200,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+          <div style={{maxHeight:200,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
             {filteredLocs.map(l=>(
-              <div key={l.id} onClick={()=>{setLocId(l.id);setLocSearch(l.name||"");}} style={{padding:"7px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12,marginBottom:2}}>
+              <div key={l.id} onClick={()=>{setLocId(l.id);setLocSearch(l.name||"");}} style={{padding:"7px 10px",borderRadius:DS.radiusSm,background:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:12}}>
                 <span style={{fontWeight:600,color:DS.textPri}}>{l.name}</span>
                 {l.region&&<span style={{color:DS.textMut,fontSize:11}}> · {l.region}</span>}
               </div>
@@ -5647,46 +5583,42 @@ function QuoteCalculator({locations, activePromos=[]}) {
         {loc&&<p style={{margin:"4px 0 0",fontSize:11,color:DS.green}}>✓ {loc.name} · {loc.region||loc.state}{hasSibDiscount?" · 🏷️ Sibling discount available":""}</p>}
       </div>
 
-      {/* 2 — Customer + Number of kids */}
+      {/* 2 — Customer + kids */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
           <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>2 · Customer & Children</p>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
             <div>
               <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Customer type</p>
               <div style={{display:"flex",gap:6}}>
                 {[{k:"lead",l:"New"},{k:"lapsed",l:"Lapsed"}].map(c=>(
-                  <div key={c.k} onClick={()=>setCustType(c.k)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,textAlign:"center",background:custType===c.k?DS.accentDim:DS.bgSurf,border:`1px solid ${custType===c.k?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:custType===c.k?DS.accent:DS.textSec}}>
-                    {c.l}
-                  </div>
+                  <div key={c.k} onClick={()=>setCustType(c.k)} style={{flex:1,padding:"7px",borderRadius:DS.radiusSm,textAlign:"center",background:custType===c.k?DS.accentDim:DS.bgSurf,border:`1px solid ${custType===c.k?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:600,color:custType===c.k?DS.accent:DS.textSec}}>{c.l}</div>
                 ))}
               </div>
             </div>
             <div>
-              <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Number of children</p>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              <p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>Total children</p>
+              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                 {[1,2,3,4,5,6,7,8,9,10].map(n=>(
-                  <div key={n} onClick={()=>syncGroups(n)} style={{width:34,height:34,borderRadius:DS.radiusSm,display:"flex",alignItems:"center",justifyContent:"center",background:numKids===n?DS.accent:DS.bgSurf,border:`1px solid ${numKids===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:13,fontWeight:700,color:numKids===n?"#fff":DS.textSec}}>{n}</div>
+                  <div key={n} onClick={()=>setNumKids(n)} style={{width:32,height:32,borderRadius:DS.radiusSm,display:"flex",alignItems:"center",justifyContent:"center",background:numKids===n?DS.accent:DS.bgSurf,border:`1px solid ${numKids===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:13,fontWeight:700,color:numKids===n?"#fff":DS.textSec}}>{n}</div>
                 ))}
               </div>
             </div>
           </div>
-          <p style={{margin:0,fontSize:10,color:DS.textMut}}>
-            Registration fee: {fmt(Math.min(numKids,2)*REG_FEE)} ({numKids===1?"1 child":"2 children max · 3rd+ free"})
-          </p>
+          <p style={{margin:0,fontSize:10,color:DS.textMut}}>Registration fee: {fmt(Math.min(numKids,2)*REG_FEE)} {numKids>2?"(2 children max — 3rd+ free)":""}</p>
         </div>
       )}
 
       {/* 3 — Enrollment Date */}
       {loc&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>3 · Enrollment Date</p>
+          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>3 · Start Date</p>
           <input type="date" value={enrollDate} onChange={e=>setEnrollDate(e.target.value)} style={{width:"100%"}}/>
           {enrollDate&&(()=>{
             const d=new Date(enrollDate+"T12:00:00"),after=d.getDate()>=BILLING_DAY;
             return <div style={{marginTop:8,padding:"7px 10px",borderRadius:DS.radiusSm,background:after?DS.amberDim:DS.greenDim,border:`1px solid ${after?DS.amber+"40":DS.green+"40"}`}}>
               <p style={{margin:0,fontSize:11,color:after?DS.amber:DS.green,fontWeight:600}}>
-                {after?`⚡ On/after 20th — collect ${MONTHS[new Date(enrollDate+"T12:00:00").getMonth()]} + ${MONTHS[new Date(enrollDate+"T12:00:00").getMonth()===11?0:new Date(enrollDate+"T12:00:00").getMonth()+1]} today`:`✓ Before 20th — collect ${MONTHS[new Date(enrollDate+"T12:00:00").getMonth()]} remaining today only`}
+                {after?`⚡ On/after 20th — collect ${MONTHS[d.getMonth()]} + ${MONTHS[d.getMonth()===11?0:d.getMonth()+1]} today`:`✓ Before 20th — collect ${MONTHS[d.getMonth()]} remaining today only`}
               </p>
             </div>;
           })()}
@@ -5697,60 +5629,51 @@ function QuoteCalculator({locations, activePromos=[]}) {
       {loc&&enrollDate&&(
         <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>4 · Lesson Types per Group</p>
-            {groups[groups.length-1]?.kidEnd<numKids&&(
-              <button onClick={addGroup} style={{padding:"5px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.accent}`,background:DS.accentDim,color:DS.accent,cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add Group</button>
-            )}
+            <div>
+              <p style={{margin:0,fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>4 · Lesson Groups</p>
+              <p style={{margin:"3px 0 0",fontSize:10,color:totalAssigned!==numKids?DS.amber:DS.textMut}}>
+                {totalAssigned} of {numKids} child{numKids>1?"ren":""} assigned{totalAssigned!==numKids?` — ${Math.abs(numKids-totalAssigned)} ${totalAssigned<numKids?"unassigned":"over"}`:` ✓`}
+              </p>
+            </div>
+            <button onClick={addGroup} style={{padding:"5px 12px",borderRadius:DS.radiusSm,border:`1px solid ${DS.accent}`,background:DS.accentDim,color:DS.accent,cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add Group</button>
           </div>
 
           {groups.map((g,gi)=>{
             const ti=ALL_TYPES.find(t=>t.key===g.type);
             const isCont=ti?.cat==="cont";
             const isFlat=!!ti?.flat;
-            const rate=getRate(ti?.priceKey||"", ti?.surcharge||0);
-            const covered = groups.filter(x=>x.id!==g.id).reduce((s,x)=>s+(x.kidEnd-x.kidStart+1),0);
-            const remaining = numKids-covered;
 
             return (
               <div key={g.id} style={{background:DS.bgSurf,borderRadius:DS.radiusSm,border:`1px solid ${DS.border}`,padding:12,marginBottom:8}}>
-                {/* Kid selector header */}
+
+                {/* Header: group label + kid count + remove */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                    <span style={{fontSize:11,color:DS.textSec,fontWeight:600}}>Kids in this group:</span>
-                    {Array.from({length:numKids},(_,i)=>i+1).map(n=>(
-                      <div key={n} onClick={()=>toggleKidInGroup(g.id,n)}
-                        style={{width:26,height:26,borderRadius:DS.radiusSm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,cursor:"pointer",
-                          background:g.kids.includes(n)?DS.accent:DS.bgHover,
-                          color:g.kids.includes(n)?"#fff":DS.textMut,
-                          border:`1px solid ${g.kids.includes(n)?DS.accent:DS.border}`}}>
-                        {n}
-                      </div>
-                    ))}
-                    {g.kids.length>0&&<span style={{fontSize:10,color:DS.textMut}}>({g.kids.length} kid{g.kids.length>1?"s":""})</span>}
+                  <span style={{fontSize:12,fontWeight:700,color:DS.accent}}>Group {gi+1}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:DS.textSec}}>Kids:</span>
+                    <div style={{display:"flex",gap:4}}>
+                      {[1,2,3,4,5,6,7,8,9,10].slice(0,Math.max(numKids,1)).map(n=>(
+                        <div key={n} onClick={()=>updateGroup(g.id,"count",n)} style={{width:26,height:26,borderRadius:DS.radiusSm,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,cursor:"pointer",background:g.count===n?DS.accent:DS.bgHover,color:g.count===n?"#fff":DS.textMut,border:`1px solid ${g.count===n?DS.accent:DS.border}`}}>{n}</div>
+                      ))}
+                    </div>
+                    {groups.length>1&&<button onClick={()=>removeGroup(g.id)} style={{background:"none",border:"none",color:DS.textMut,cursor:"pointer",fontSize:18,padding:"0 4px",lineHeight:1}}>×</button>}
                   </div>
-                  {groups.length>1&&<button onClick={()=>removeGroup(g.id)} style={{background:"none",border:"none",color:DS.textMut,cursor:"pointer",fontSize:18,padding:"0 4px",lineHeight:1}}>×</button>}
                 </div>
 
                 {/* Lesson type */}
-                <div style={{marginBottom:8}}>
-                  <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Lesson type</p>
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {["cont","private","odl","clinic"].map(cat=>{
-                      const types=ALL_TYPES.filter(t=>t.cat===cat&&getRate(t.priceKey)>0);
-                      if(!types.length) return null;
-                      return types.map(t=>(
-                        <div key={t.key} onClick={()=>{updateGroup(g.id,"type",t.key);updateGroup(g.id,"day2","");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:DS.radiusSm,background:g.type===t.key?DS.accentDim:DS.bg,border:`1px solid ${g.type===t.key?DS.accent:DS.border}`,cursor:"pointer"}}>
-                          <span style={{fontSize:11,fontWeight:600,color:g.type===t.key?DS.accent:DS.textSec}}>{t.label}</span>
-                          <span style={{fontSize:12,fontWeight:700,color:g.type===t.key?DS.accent:DS.green}}>{fmt(getRate(t.priceKey,t.surcharge||0))}<span style={{fontSize:9,fontWeight:400,color:DS.textMut}}>{t.flat?"/session":"/class"}</span></span>
-                        </div>
-                      ));
-                    })}
-                  </div>
+                <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Lesson type</p>
+                <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:10}}>
+                  {ALL_TYPES.filter(t=>getRate(t.priceKey)>0).map(t=>(
+                    <div key={t.key} onClick={()=>{updateGroup(g.id,"type",t.key);updateGroup(g.id,"day2","");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:DS.radiusSm,background:g.type===t.key?DS.accentDim:DS.bg,border:`1px solid ${g.type===t.key?DS.accent:DS.border}`,cursor:"pointer"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:g.type===t.key?DS.accent:DS.textSec}}>{t.label}</span>
+                      <span style={{fontSize:12,fontWeight:700,color:g.type===t.key?DS.accent:DS.green}}>{fmt(getRate(t.priceKey,t.surcharge||0))}<span style={{fontSize:9,fontWeight:400,color:DS.textMut}}>{t.flat?"/session":"/class"}</span></span>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Day picker */}
                 {!isFlat&&(
-                  <div>
+                  <>
                     <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Class day</p>
                     <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:isCont&&ti?.isGroup?8:0}}>
                       {DAYS_SHORT.map((d,i)=>(
@@ -5758,37 +5681,29 @@ function QuoteCalculator({locations, activePromos=[]}) {
                       ))}
                     </div>
                     {isCont&&ti?.isGroup&&g.day1!==""&&(
-                      <div>
-                        <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>2nd day <span style={{color:DS.amber}}>−10%</span> (optional)</p>
+                      <>
+                        <p style={{margin:"6px 0 6px",fontSize:10,color:DS.textMut}}>2nd day <span style={{color:DS.amber}}>−10%</span> (optional)</p>
                         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                           <div onClick={()=>updateGroup(g.id,"day2","")} style={{padding:"5px 9px",borderRadius:DS.radiusSm,background:g.day2===""?DS.bgHover:DS.bgSurf,border:`1px solid ${DS.border}`,cursor:"pointer",fontSize:11,color:DS.textMut}}>None</div>
                           {DAYS_SHORT.map((d,i)=>String(i)!==g.day1&&(
                             <div key={i} onClick={()=>updateGroup(g.id,"day2",String(i))} style={{padding:"5px 9px",borderRadius:DS.radiusSm,background:g.day2===String(i)?DS.amber:DS.bgHover,border:`1px solid ${g.day2===String(i)?DS.amber:DS.border}`,cursor:"pointer",fontSize:11,fontWeight:600,color:g.day2===String(i)?"#fff":DS.textSec}}>{d}</div>
                           ))}
                         </div>
-                      </div>
+                      </>
                     )}
-                    {isFlat&&(
-                      <div>
-                        <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Sessions</p>
-                        <div style={{display:"flex",gap:4}}>
-                          {[1,2,3,4,5].map(n=>(
-                            <div key={n} onClick={()=>updateGroup(g.id,"qty",n)} style={{width:32,height:32,borderRadius:DS.radiusSm,display:"flex",alignItems:"center",justifyContent:"center",background:g.qty===n?DS.accentDim:DS.bgHover,border:`1px solid ${g.qty===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:700,color:g.qty===n?DS.accent:DS.textSec}}>{n}</div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  </>
                 )}
+
+                {/* Session qty for flat types */}
                 {isFlat&&(
-                  <div>
+                  <>
                     <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Sessions</p>
                     <div style={{display:"flex",gap:4}}>
                       {[1,2,3,4,5].map(n=>(
                         <div key={n} onClick={()=>updateGroup(g.id,"qty",n)} style={{width:32,height:32,borderRadius:DS.radiusSm,display:"flex",alignItems:"center",justifyContent:"center",background:g.qty===n?DS.accentDim:DS.bgHover,border:`1px solid ${g.qty===n?DS.accent:DS.border}`,cursor:"pointer",fontSize:12,fontWeight:700,color:g.qty===n?DS.accent:DS.textSec}}>{n}</div>
                       ))}
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             );
@@ -5809,12 +5724,9 @@ function QuoteCalculator({locations, activePromos=[]}) {
                   {checked&&<span style={{fontSize:9,color:"#fff"}}>✓</span>}
                 </div>
                 <div>
-                  <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.textPri}}>{p.title} {p.requires_mention&&<span style={{fontSize:9,color:DS.amber}}>· customer must mention</span>}</p>
-                  <p style={{margin:0,fontSize:10,color:DS.textSec}}>
-                    {dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (1st class only)":""}${p.first_month_only?" (1st month only)":""}`:
-                     `$${p.discount_fixed} off`}
-                    {p.location_restriction?` · ${p.location_restriction} only`:""}
-                  </p>
+                  <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.textPri}}>{p.title}{p.requires_mention&&<span style={{fontSize:9,color:DS.amber}}> · customer must mention</span>}</p>
+                  <p style={{margin:0,fontSize:10,color:DS.textSec}}>{dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (1st class only)":""}${p.first_month_only?" (1st month only)":""}`:
+                   `$${p.discount_fixed} off`}{p.location_restriction?` · ${p.location_restriction} only`:""}</p>
                 </div>
               </div>
             );
@@ -5833,37 +5745,37 @@ function QuoteCalculator({locations, activePromos=[]}) {
             {result.groupResults.map(({g,r},i)=>(
               <div key={g.id} style={{marginBottom:8,paddingBottom:8,borderBottom:i<result.groupResults.length-1?`1px solid ${DS.border}`:"none"}}>
                 <p style={{margin:"0 0 3px",fontSize:11,fontWeight:600,color:DS.textSec}}>
-                  {g.kids.length===1?`Child ${g.kids[0]}`:`Children ${g.kids.join(", ")}`} · {r.ti.label}
+                  Group {groups.findIndex(x=>x.id===g.id)+1} · {g.count} child{g.count>1?"ren":""} · {r.ti.label}
                   {r.sibMult<1&&<span style={{color:DS.amber,fontSize:10}}> · −10% sibling</span>}
                 </p>
                 {!r.isFlat&&r.counts.c1c>0&&(
-                  <div style={{fontSize:11,color:DS.textMut}}>
+                  <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>
                     {r.counts.c1c} {DAYS_SHORT[parseInt(g.day1)]} class{r.counts.c1c!==1?"es":""}
                     {r.d2&&r.counts.c2c>0?` + ${r.counts.c2c} ${DAYS_SHORT[parseInt(r.d2)]} class${r.counts.c2c!==1?"es":""}`:""} @ {fmt(r.rate)}{r.d2?` / ${fmt(r.rate2)}`:""}
-                  </div>
+                  </p>
                 )}
-                <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
-                  <span style={{fontSize:11,color:DS.textMut}}>{fmt(r.ch_curr)} × {r.kidCount} child{r.kidCount>1?"ren":""}</span>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:11,color:DS.textMut}}>{fmt(r.perKid_curr)} × {g.count} child{g.count>1?"ren":""}</span>
                   <span style={{fontSize:11,fontWeight:700,color:DS.textPri}}>{fmt(r.total_curr)}</span>
                 </div>
               </div>
             ))}
 
             {!result.isBeforeBilling&&result.total_next>0&&(
-              <div style={{borderTop:`1px solid ${DS.amber}40`,paddingTop:8,marginTop:4}}>
+              <div style={{borderTop:`1px solid ${DS.amber}40`,paddingTop:8,marginTop:4,marginBottom:8}}>
                 <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:DS.amber}}>{result.nextMonthName} (past billing date)</p>
                 {result.groupResults.map(({g,r})=>(
                   <div key={g.id} style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={{fontSize:11,color:DS.textMut}}>{g.kids.length===1?`Child ${g.kids[0]}`:`Children ${g.kids.join(", ")}`} · {r.ti.label}</span>
+                    <span style={{fontSize:11,color:DS.textMut}}>Group {groups.findIndex(x=>x.id===g.id)+1} · {g.count} child{g.count>1?"ren":""}</span>
                     <span style={{fontSize:11,fontWeight:600,color:DS.amber}}>{fmt(r.total_next)}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            <div style={{borderTop:`1px solid ${DS.border}`,paddingTop:8,marginTop:8}}>
+            <div style={{borderTop:`1px solid ${DS.border}`,paddingTop:8,marginTop:4}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:11,color:DS.textMut}}>Registration fee ({Math.min(numKids,2)} child{Math.min(numKids,2)>1?"ren":""}{numKids>2?", 3rd+ free":""})</span>
+                <span style={{fontSize:11,color:DS.textMut}}>Registration fee ({Math.min(numKids,2)} child{Math.min(numKids,2)>1?"ren":""}{numKids>2?" · 3rd+ free":""})</span>
                 <span style={{fontSize:11,color:DS.textMut}}>{fmt(result.regFeeTotal)}</span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between"}}>
@@ -5878,7 +5790,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <p style={{margin:"0 0 2px",fontSize:11,fontWeight:700,color:DS.textSec}}>Auto-billed on {result.billingDate}</p>
-                  <p style={{margin:0,fontSize:11,color:DS.textMut}}>{result.nextMonthName} · all {numKids} child{numKids>1?"ren":""}</p>
+                  <p style={{margin:0,fontSize:11,color:DS.textMut}}>{result.nextMonthName} · {numKids} child{numKids>1?"ren":""}</p>
                 </div>
                 <span style={{fontSize:15,fontWeight:700,color:DS.textPri}}>{fmt(result.auto_amount)}</span>
               </div>
@@ -5899,6 +5811,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
     </div>
   );
 }
+
 
 
 
