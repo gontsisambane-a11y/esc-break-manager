@@ -5457,8 +5457,20 @@ function QuoteCalculator({locations, activePromos=[]}) {
     // Sibling discount: apply to all kids in this group if sibling discount eligible
     // and this isn't the first group (first group = first kid)
     const groupIdx = groups.findIndex(x=>x.id===g.id);
-    const isFirstGroup = groupIdx===0;
-    const sibMult = (hasSibDiscount&&isCont&&ti.isGroup&&!isFirstGroup) ? 0.9 : 1.0;
+    const kidsBeforeThisGroup = groups.slice(0, groupIdx).reduce((s,x)=>s+x.count, 0);
+    // If all kids in this group are child 2+, full sibling rate applies to all
+    // If this is group 1 with multiple kids, child 1 pays full, rest pay sibling rate
+    const allSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup>0;
+    const partialSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup===0&&g.count>1;
+    // For partial sib: 1 kid at full rate + (count-1) kids at 90%
+    // We store sibMult for display, but use weighted rate for calc
+    const sibMult = allSib ? 0.9 : 1.0;
+    const effectiveKidRate_curr = partialSib
+      ? (raw_curr + (g.count-1)*raw_curr*0.9) / g.count  // weighted average per kid
+      : raw_curr * sibMult;
+    const effectiveKidRate_next = partialSib
+      ? (raw_next + (g.count-1)*raw_next*0.9) / g.count
+      : raw_next * sibMult;
 
     let raw_curr, raw_next, cc_curr=0, cc_next=0, counts={};
     if(isFlat){
@@ -5477,10 +5489,10 @@ function QuoteCalculator({locations, activePromos=[]}) {
       counts={c1c,c2c,c1n,c2n};
     }
 
-    const perKid_curr = ti.noDiscount ? raw_curr*sibMult : applyPromos(raw_curr*sibMult, cc_curr, true, isCont, !!ti.isGroup);
-    const perKid_next = ti.noDiscount ? raw_next*sibMult : applyPromos(raw_next*sibMult, cc_next, false, isCont, !!ti.isGroup);
+    const perKid_curr = ti.noDiscount ? raw_curr*sibMult : applyPromos(effectiveKidRate_curr, cc_curr, true, isCont, !!ti.isGroup);
+    const perKid_next = ti.noDiscount ? raw_next*sibMult : applyPromos(effectiveKidRate_next, cc_next, false, isCont, !!ti.isGroup);
 
-    return {ti, rate, rate2, d2, sibMult, isFlat,
+    return {ti, rate, rate2, d2, sibMult, partialSib, isFlat,
             perKid_curr, perKid_next,
             total_curr: perKid_curr * g.count,
             total_next: perKid_next * g.count,
@@ -5747,6 +5759,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 <p style={{margin:"0 0 3px",fontSize:11,fontWeight:600,color:DS.textSec}}>
                   Group {groups.findIndex(x=>x.id===g.id)+1} · {g.count} child{g.count>1?"ren":""} · {r.ti.label}
                   {r.sibMult<1&&<span style={{color:DS.amber,fontSize:10}}> · −10% sibling</span>}
+                  {r.partialSib&&<span style={{color:DS.amber,fontSize:10}}> · −10% sibling (child 2+)</span>}
                 </p>
                 {!r.isFlat&&r.counts.c1c>0&&(
                   <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>
