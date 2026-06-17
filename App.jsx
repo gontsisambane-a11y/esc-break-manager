@@ -5757,19 +5757,51 @@ function QuoteCalculator({locations, activePromos=[]}) {
               <div key={g.id} style={{marginBottom:8,paddingBottom:8,borderBottom:i<result.groupResults.length-1?`1px solid ${DS.border}`:"none"}}>
                 <p style={{margin:"0 0 3px",fontSize:11,fontWeight:600,color:DS.textSec}}>
                   Group {groups.findIndex(x=>x.id===g.id)+1} · {g.count} child{g.count>1?"ren":""} · {r.ti.label}
-                  {r.sibMult<1&&<span style={{color:DS.amber,fontSize:10}}> · −10% sibling</span>}
-                  {r.partialSib&&<span style={{color:DS.amber,fontSize:10}}> · −10% sibling (child 2+)</span>}
                 </p>
                 {!r.isFlat&&r.counts.c1c>0&&(
-                  <p style={{margin:"0 0 2px",fontSize:10,color:DS.textMut}}>
+                  <p style={{margin:"0 0 4px",fontSize:10,color:DS.textMut}}>
                     {r.counts.c1c} {DAYS_SHORT[parseInt(g.day1)]} class{r.counts.c1c!==1?"es":""}
                     {r.d2&&r.counts.c2c>0?` + ${r.counts.c2c} ${DAYS_SHORT[parseInt(r.d2)]} class${r.counts.c2c!==1?"es":""}`:""} @ {fmt(r.rate)}{r.d2?` / ${fmt(r.rate2)}`:""}
                   </p>
                 )}
-                <div style={{display:"flex",justifyContent:"space-between"}}>
-                  <span style={{fontSize:11,color:DS.textMut}}>{fmt(r.perKid_curr)} × {g.count} child{g.count>1?"ren":""}</span>
-                  <span style={{fontSize:11,fontWeight:700,color:DS.textPri}}>{fmt(r.total_curr)}</span>
-                </div>
+                {/* Per-child breakdown showing sibling discount */}
+                {g.count===1&&(
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontSize:11,color:DS.textMut}}>Child 1 (full rate)</span>
+                    <span style={{fontSize:11,fontWeight:700,color:DS.textPri}}>{fmt(r.total_curr)}</span>
+                  </div>
+                )}
+                {g.count>1&&(()=>{
+                  const groupIdx = groups.findIndex(x=>x.id===g.id);
+                  const kidsBefore = groups.slice(0,groupIdx).reduce((s,x)=>s+x.count,0);
+                  const fullKids = kidsBefore===0 ? 1 : 0; // only first kid in first group pays full
+                  const sibKids = g.count - fullKids;
+                  const fullRaw = r.isFlat ? r.rate*g.qty : (() => { const c=r.counts; return c.c1c*r.rate+(c.c2c||0)*(r.rate2||r.rate); })();
+                  const sibRaw = fullRaw * 0.9;
+                  return (
+                    <>
+                      {fullKids>0&&(
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:11,color:DS.textMut}}>Child 1 — full rate</span>
+                          <span style={{fontSize:11,color:DS.textPri}}>{fmt(fullRaw)}</span>
+                        </div>
+                      )}
+                      {sibKids>0&&(
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:11,color:DS.amber}}>
+                            {fullKids>0?`Child${sibKids>1?"ren":""} 2${sibKids>1?`–${g.count}`:""}`:
+                             `${g.count} children`} — 10% sibling discount
+                          </span>
+                          <span style={{fontSize:11,color:DS.amber}}>{fmt(sibRaw)} × {sibKids}</span>
+                        </div>
+                      )}
+                      <div style={{display:"flex",justifyContent:"space-between",paddingTop:4,borderTop:`1px solid ${DS.border}`,marginTop:2}}>
+                        <span style={{fontSize:11,fontWeight:600,color:DS.textSec}}>Group total</span>
+                        <span style={{fontSize:11,fontWeight:700,color:DS.textPri}}>{fmt(r.total_curr)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             ))}
 
