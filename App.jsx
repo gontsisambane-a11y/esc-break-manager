@@ -5454,23 +5454,6 @@ function QuoteCalculator({locations, activePromos=[]}) {
     const isFlat = !!ti.flat;
     const d2 = g.day2&&g.day2!==g.day1?g.day2:null;
     const rate2 = d2&&isCont&&ti.isGroup ? rate*0.9 : rate;
-    // Sibling discount: apply to all kids in this group if sibling discount eligible
-    // and this isn't the first group (first group = first kid)
-    const groupIdx = groups.findIndex(x=>x.id===g.id);
-    const kidsBeforeThisGroup = groups.slice(0, groupIdx).reduce((s,x)=>s+x.count, 0);
-    // If all kids in this group are child 2+, full sibling rate applies to all
-    // If this is group 1 with multiple kids, child 1 pays full, rest pay sibling rate
-    const allSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup>0;
-    const partialSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup===0&&g.count>1;
-    // For partial sib: 1 kid at full rate + (count-1) kids at 90%
-    // We store sibMult for display, but use weighted rate for calc
-    const sibMult = allSib ? 0.9 : 1.0;
-    const effectiveKidRate_curr = partialSib
-      ? (raw_curr + (g.count-1)*raw_curr*0.9) / g.count  // weighted average per kid
-      : raw_curr * sibMult;
-    const effectiveKidRate_next = partialSib
-      ? (raw_next + (g.count-1)*raw_next*0.9) / g.count
-      : raw_next * sibMult;
 
     let raw_curr, raw_next, cc_curr=0, cc_next=0, counts={};
     if(isFlat){
@@ -5488,6 +5471,19 @@ function QuoteCalculator({locations, activePromos=[]}) {
       cc_curr=c1c+c2c; cc_next=c1n+c2n;
       counts={c1c,c2c,c1n,c2n};
     }
+
+    // Sibling discount — calculated after raw values are set
+    const groupIdx = groups.findIndex(x=>x.id===g.id);
+    const kidsBeforeThisGroup = groups.slice(0, groupIdx).reduce((s,x)=>s+x.count, 0);
+    const allSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup>0;
+    const partialSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup===0&&g.count>1;
+    const sibMult = allSib ? 0.9 : 1.0;
+    const effectiveKidRate_curr = partialSib
+      ? (raw_curr + (g.count-1)*raw_curr*0.9) / g.count
+      : raw_curr * sibMult;
+    const effectiveKidRate_next = partialSib
+      ? (raw_next + (g.count-1)*raw_next*0.9) / g.count
+      : raw_next * sibMult;
 
     const perKid_curr = ti.noDiscount ? raw_curr*sibMult : applyPromos(effectiveKidRate_curr, cc_curr, true, isCont, !!ti.isGroup);
     const perKid_next = ti.noDiscount ? raw_next*sibMult : applyPromos(effectiveKidRate_next, cc_next, false, isCont, !!ti.isGroup);
@@ -5676,7 +5672,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 <p style={{margin:"0 0 6px",fontSize:10,color:DS.textMut}}>Lesson type</p>
                 <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:10}}>
                   {ALL_TYPES.filter(t=>getRate(t.priceKey)>0).map(t=>(
-                    <div key={t.key} onClick={()=>{updateGroup(g.id,"type",t.key);updateGroup(g.id,"day2","");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:DS.radiusSm,background:g.type===t.key?DS.accentDim:DS.bg,border:`1px solid ${g.type===t.key?DS.accent:DS.border}`,cursor:"pointer"}}>
+                    <div key={t.key} onClick={()=>{updateGroup(g.id,"type",t.key);updateGroup(g.id,"day2","");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:DS.radiusSm,background:g.type===t.key?DS.accentDim:DS.bgSurf,border:`1px solid ${g.type===t.key?DS.accent:DS.border}`,cursor:"pointer"}}>
                       <span style={{fontSize:11,fontWeight:600,color:g.type===t.key?DS.accent:DS.textSec}}>{t.label}</span>
                       <span style={{fontSize:12,fontWeight:700,color:g.type===t.key?DS.accent:DS.green}}>{fmt(getRate(t.priceKey,t.surcharge||0))}<span style={{fontSize:9,fontWeight:400,color:DS.textMut}}>{t.flat?"/session":"/class"}</span></span>
                     </div>
