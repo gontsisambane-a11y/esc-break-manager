@@ -4211,6 +4211,19 @@ function HubView({ isManager }) {
       else fire("error", d.error||"Sync failed");
     } catch(e){ fire("error","Sync failed — check Edge Function is deployed"); }
   };
+  const syncClosuresFromSheet=async()=>{
+    fire("info","Syncing closures from Google Form sheet…");
+    try {
+      const r = await fetch(`${SB_URL}/functions/v1/sync-closures`,{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${SB_KEY}`,"Content-Type":"application/json"},
+        body:"{}",
+      });
+      const d = await r.json();
+      if(d.ok) { fire("approved",`Closures synced — ${d.upserted} closure${d.upserted!==1?"s":""} updated`); reload(); }
+      else fire("error", d.error||"Closure sync failed");
+    } catch(e){ fire("error","Closure sync failed — check Edge Function is deployed"); }
+  };
   const syncPromosFromSheet=async()=>{
     fire("info","Syncing promos from Google Sheet…");
     try {
@@ -4305,7 +4318,14 @@ function HubView({ isManager }) {
                 <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.red,letterSpacing:1,textTransform:"uppercase"}}>🚫 Active Closures</p>
                 {closures.map((c,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<closures.length-1?6:0}}>
-                    <div><p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p><p style={{margin:0,fontSize:11,color:DS.red}}>{c.start_date} → {c.end_date} · {c.reason}</p></div>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p>
+                        {c.closure_type&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:"#f5b7b1",color:"#c0392b",fontWeight:700}}>{c.closure_type}</span>}
+                        {c.classes_affected>0&&<span style={{fontSize:9,color:DS.textMut}}>{c.classes_affected} classes</span>}
+                      </div>
+                      <p style={{margin:0,fontSize:11,color:DS.red}}>{c.start_date} → {c.end_date} · {c.reason}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -4470,14 +4490,21 @@ function HubView({ isManager }) {
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <p style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:DS.red,margin:0,fontWeight:700}}>Active Closures ({closures.length})</p>
-              <button onClick={()=>setEditModal({type:"closure",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Log Closure</button>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={syncClosuresFromSheet} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #c0392b",background:DS.redDim,color:"#c0392b",cursor:"pointer",fontSize:12,fontWeight:600}}>🔄 Sync from Form</button>
+                <button onClick={()=>setEditModal({type:"closure",item:null})} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#c0392b",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Log Closure</button>
+              </div>
             </div>
             {closures.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:DS.textMut}}><p style={{fontSize:22,margin:"0 0 6px"}}>✅</p><p style={{fontSize:13,color:DS.textMut}}>No active closures</p></div>}
             {closures.map((c,i)=>(
               <div key={i} style={{background:DS.redDim,border:"1.5px solid #f5b7b1",borderRadius:12,padding:"12px 14px",marginBottom:7,display:"flex",alignItems:"flex-start",gap:10}}>
                 <span style={{fontSize:18}}>🚫</span>
                 <div style={{flex:1}}>
-                  <p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:1}}>
+                    <p style={{margin:0,fontWeight:600,fontSize:13,color:DS.textPri}}>{c.location_name}</p>
+                    {c.closure_type&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:c.closure_type==="Full"?"#f5b7b1":"#fde8d8",color:c.closure_type==="Full"?"#c0392b":"#e67e22",fontWeight:700}}>{c.closure_type}</span>}
+                    {c.classes_affected>0&&<span style={{fontSize:9,color:DS.textMut}}>{c.classes_affected} classes</span>}
+                  </div>
                   <p style={{margin:"2px 0",fontSize:11,color:DS.red}}>{c.start_date} → {c.end_date}</p>
                   <p style={{margin:0,fontSize:11,color:DS.textSec}}>{c.reason}</p>
                 </div>
