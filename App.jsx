@@ -4812,8 +4812,14 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
   const hasClosure=closures&&closures.length>0;
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const hours = loc.hours || {};
-  const instructors = loc.instructors || [];
-  const snInstructors = instructors.filter(i=>i.sn==='Y');
+  // Normalize instructors — support both short keys (sn/lang/desc) and full keys (special_needs/languages/description)
+  const instructors = (loc.instructors || []).map(i=>({
+    ...i,
+    sn: i.sn || i.special_needs,
+    lang: i.lang || i.languages,
+    desc: i.desc || i.description,
+  }));
+  const snInstructors = instructors.filter(i=>i.sn==='Y'||i.sn==='y');
   const langInstructors = instructors.filter(i=>i.lang&&i.lang.toLowerCase()!=='english'&&i.lang.toLowerCase()!=='english ');
   return (
     <div style={{background:DS.bgCard,borderRadius:12,border:`1px solid ${hasClosure?DS.red+"40":DS.border}`,marginBottom:8,overflow:"hidden"}}>
@@ -4834,7 +4840,8 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
             </div>
             <p style={{margin:"0 0 4px",fontSize:11,color:DS.textMut}}>📍 {loc.addr}</p>
             {loc.direct_phone&&<p style={{margin:"0 0 4px",fontSize:12,color:DS.textPri,fontWeight:500}}>📞 {loc.direct_phone}</p>}
-            {loc.gm_name&&<p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>👤 GM: {loc.gm_name}</p>}
+            {loc.gm_name&&<p style={{margin:"0 0 2px",fontSize:11,color:DS.textSec}}>👤 GM: {loc.gm_name}</p>}
+            {loc.om_name&&<p style={{margin:"0 0 6px",fontSize:11,color:DS.textSec}}>👤 OM: {loc.om_name}</p>}
             {pricing&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
                 <span style={{fontSize:11,background:DS.accentDim,color:DS.accent,padding:"2px 8px",borderRadius:6,fontWeight:600}}>M–F ${pricing.mf}</span>
@@ -4871,12 +4878,14 @@ function HubLocCard({loc,closures,isManager,onEdit}) {
             <div style={{marginBottom:12}}>
               <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:DS.accent,textTransform:"uppercase",letterSpacing:.5}}>🕐 Location Hours</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 10px"}}>
-                {days.map(d=>(
+                {days.map(d=>{
+                  const val = hours[d]||hours[d.toLowerCase()]||'—';
+                  return (
                   <div key={d} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0",borderBottom:"1px solid #f0f0f0"}}>
                     <span style={{color:DS.textSec,fontWeight:500}}>{d.slice(0,3)}</span>
-                    <span style={{color:hours[d]==='CLOSED'?"#e74c3c":"#1a1a1a",fontWeight:hours[d]==='CLOSED'?600:400}}>{hours[d]||'—'}</span>
+                    <span style={{color:val.toUpperCase()==='CLOSED'?"#e74c3c":"#1a1a1a",fontWeight:val.toUpperCase()==='CLOSED'?600:400}}>{val}</span>
                   </div>
-                ))}
+                );})}
               </div>
             </div>
           )}
