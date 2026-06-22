@@ -4211,6 +4211,19 @@ function HubView({ isManager }) {
       else fire("error", d.error||"Sync failed");
     } catch(e){ fire("error","Sync failed — check Edge Function is deployed"); }
   };
+  const syncPromosFromSheet=async()=>{
+    fire("info","Syncing promos from Google Sheet…");
+    try {
+      const r = await fetch(`${SB_URL}/functions/v1/sync-promos`,{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${SB_KEY}`,"Content-Type":"application/json"},
+        body:"{}",
+      });
+      const d = await r.json();
+      if(d.ok) { fire("approved",`Promos synced — ${d.upserted} active promos updated`); reload(); }
+      else fire("error", d.error||"Promo sync failed");
+    } catch(e){ fire("error","Promo sync failed — check Edge Function is deployed"); }
+  };
   const saveEvent=async(f)=>{ if(f.id)await sbPatch("hub_events",f.id,{name:f.name,event_date:f.event_date,note:f.note}); else await sbPost("hub_events",{name:f.name,event_date:f.event_date,note:f.note||""}); fire("approved","Event saved"); setEditModal(null); reload(); };
   const deleteEvent=async(id)=>{ await sbDel("hub_events",id); fire("info","Event removed"); reload(); };
   const saveAlert=async(f)=>{
@@ -4445,6 +4458,7 @@ function HubView({ isManager }) {
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{background:DS.amberDim,border:"1.5px solid #f0c080",borderRadius:9,padding:"8px 12px",flex:1,marginRight:10}}><p style={{margin:0,fontSize:11,color:DS.amber,fontWeight:600}}>⚡ Check expiry dates before applying any promo</p></div>
+              <button onClick={syncPromosFromSheet} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${DS.accent}`,background:DS.accentDim,color:DS.accent,cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",marginRight:6}}>🔄 Sync from Sheet</button>
               <button onClick={()=>setEditModal({type:"promo",item:null})} style={{padding:"8px 14px",borderRadius:8,border:"none",background:DS.accent,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Add Promo</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:10}}>
