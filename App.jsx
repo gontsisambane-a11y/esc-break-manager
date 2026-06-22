@@ -5557,23 +5557,29 @@ function QuoteCalculator({locations, activePromos=[]}) {
       counts={c1c,c2c,c1n,c2n};
     }
 
-    // Sibling discount — calculated after raw values are set
+    // Sibling & multi-class discounts — auto-applied (ICP mirrors these)
     const groupIdx = groups.findIndex(x=>x.id===g.id);
     const kidsBeforeThisGroup = groups.slice(0, groupIdx).reduce((s,x)=>s+x.count, 0);
     const allSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup>0;
     const partialSib = hasSibDiscount&&isCont&&ti.isGroup&&kidsBeforeThisGroup===0&&g.count>1;
     const sibMult = allSib ? 0.9 : 1.0;
+
+    // Multi-class: 10% off if student already has a continuous class earlier in the quote
+    const contGroupsBefore = groups.slice(0, groupIdx).filter(x=>ALL_TYPES.find(t=>t.key===x.type)?.cat==="cont").length;
+    const multiClassDisc = isCont && !ti.noDiscount && contGroupsBefore > 0;
+    const multiMult = multiClassDisc ? 0.9 : 1.0;
+
     const effectiveKidRate_curr = partialSib
-      ? (raw_curr + (g.count-1)*raw_curr*0.9) / g.count
-      : raw_curr * sibMult;
+      ? (raw_curr + (g.count-1)*raw_curr*0.9) / g.count * multiMult
+      : raw_curr * sibMult * multiMult;
     const effectiveKidRate_next = partialSib
-      ? (raw_next + (g.count-1)*raw_next*0.9) / g.count
-      : raw_next * sibMult;
+      ? (raw_next + (g.count-1)*raw_next*0.9) / g.count * multiMult
+      : raw_next * sibMult * multiMult;
 
     const perKid_curr = ti.noDiscount ? raw_curr*sibMult : applyPromos(effectiveKidRate_curr, cc_curr, true, isCont, !!ti.isGroup);
     const perKid_next = ti.noDiscount ? raw_next*sibMult : applyPromos(effectiveKidRate_next, cc_next, false, isCont, !!ti.isGroup);
 
-    return {ti, rate, rate2, d2, sibMult, partialSib, isFlat,
+    return {ti, rate, rate2, d2, sibMult, partialSib, multiClassDisc, isFlat,
             perKid_curr, perKid_next,
             total_curr: perKid_curr * g.count,
             total_next: perKid_next * g.count,
@@ -5623,6 +5629,7 @@ function QuoteCalculator({locations, activePromos=[]}) {
       s += `, the rate is ${fmt(r.rate)} per class`;
       if(d2l) s += ` for ${d1l}s and ${fmt(r.rate2)} for ${d2l}s — that includes our 10% multi-day discount`;
       if(r.sibMult<1) s += `. A 10% sibling discount also applies`;
+      if(r.multiClassDisc) s += `. A 10% multi-class discount applies (ICP auto)`;
       s += `.\n`;
 
       if(!r.isFlat&&r.counts){
@@ -5804,28 +5811,62 @@ function QuoteCalculator({locations, activePromos=[]}) {
         </div>
       )}
 
-      {/* 5 — Promos */}
-      {loc&&enrollDate&&eligiblePromos.length>0&&(
-        <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
-          <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>5 · Promotions</p>
-          {eligiblePromos.map(p=>{
-            const checked=promoChecked.includes(p.code);
-            const dtype=p.discount_type||(p.discount_fixed?"fixed":"pct");
-            return (
-              <div key={p.code} onClick={()=>setPromoChecked(pc=>checked?pc.filter(c=>c!==p.code):[...pc,p.code])} style={{display:"flex",gap:10,padding:"9px 10px",borderRadius:DS.radiusSm,background:checked?DS.accentDim:DS.bgSurf,border:`1px solid ${checked?DS.accent:DS.border}`,cursor:"pointer",marginBottom:6}}>
-                <div style={{width:16,height:16,borderRadius:4,background:checked?DS.accent:DS.bgHover,border:`2px solid ${checked?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                  {checked&&<span style={{fontSize:9,color:"#fff"}}>✓</span>}
-                </div>
+      {/* 5 — Promotions */}
+      {loc&&enrollDate&&(()=>{
+        const sibActive = hasSibDiscount && groups.some((g,gi)=>{
+          const ti=ALL_TYPES.find(t=>t.key===g.type);
+          const kidsBefore=groups.slice(0,gi).reduce((s,x)=>s+x.count,0);
+          return ti?.cat==="cont"&&ti?.isGroup&&(kidsBefore>0||(kidsBefore===0&&g.count>1));
+        });
+        const multiActive = groups.some((g,gi)=>{
+          const ti=ALL_TYPES.find(t=>t.key===g.type);
+          const contBefore=groups.slice(0,gi).filter(x=>ALL_TYPES.find(t=>t.key===x.type)?.cat==="cont").length;
+          return ti?.cat==="cont"&&!ti?.noDiscount&&contBefore>0;
+        });
+        const manualPromos = eligiblePromos.filter(p=>p.discount_pct||p.discount_fixed);
+        if(!sibActive&&!multiActive&&manualPromos.length===0) return null;
+        return (
+          <div style={{background:DS.bgCard,borderRadius:DS.radius,border:`1px solid ${DS.border}`,padding:14}}>
+            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:DS.textMut,textTransform:"uppercase",letterSpacing:1}}>5 · Promotions</p>
+            {/* Auto-applied ICP discounts */}
+            {sibActive&&(
+              <div style={{display:"flex",gap:10,padding:"8px 10px",borderRadius:DS.radiusSm,background:DS.greenDim,border:`1px solid ${DS.green}40`,marginBottom:6,alignItems:"center"}}>
+                <span style={{fontSize:13,color:DS.green}}>✓</span>
                 <div>
-                  <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.textPri}}>{p.title}{p.requires_mention&&<span style={{fontSize:9,color:DS.amber}}> · customer must mention</span>}</p>
-                  <p style={{margin:0,fontSize:10,color:DS.textSec}}>{dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (1st class only)":""}${p.first_month_only?" (1st month only)":""}`:
-                   `$${p.discount_fixed} off`}{p.location_restriction?` · ${p.location_restriction} only`:""}</p>
+                  <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.green}}>Sibling Discount — 10% off <span style={{fontSize:10,fontWeight:400,color:DS.textSec,background:DS.bgSurf,padding:"1px 6px",borderRadius:4,marginLeft:4}}>ICP auto-applies</span></p>
+                  <p style={{margin:0,fontSize:10,color:DS.textSec}}>10% off tuition for 2nd+ child. Emler: first 3 months only. Others: ongoing.</p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
+            {multiActive&&(
+              <div style={{display:"flex",gap:10,padding:"8px 10px",borderRadius:DS.radiusSm,background:DS.greenDim,border:`1px solid ${DS.green}40`,marginBottom:6,alignItems:"center"}}>
+                <span style={{fontSize:13,color:DS.green}}>✓</span>
+                <div>
+                  <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.green}}>Multi-Class Discount — 10% off 2nd class <span style={{fontSize:10,fontWeight:400,color:DS.textSec,background:DS.bgSurf,padding:"1px 6px",borderRadius:4,marginLeft:4}}>ICP auto-applies</span></p>
+                  <p style={{margin:0,fontSize:10,color:DS.textSec}}>10% off a student's 2nd (and 3rd/4th) continuous class. ODLs don't count.</p>
+                </div>
+              </div>
+            )}
+            {/* Manual promo codes */}
+            {manualPromos.map(p=>{
+              const checked=promoChecked.includes(p.code);
+              const dtype=p.discount_type||(p.discount_fixed?"fixed":"pct");
+              return (
+                <div key={p.code} onClick={()=>setPromoChecked(pc=>checked?pc.filter(c=>c!==p.code):[...pc,p.code])} style={{display:"flex",gap:10,padding:"9px 10px",borderRadius:DS.radiusSm,background:checked?DS.accentDim:DS.bgSurf,border:`1px solid ${checked?DS.accent:DS.border}`,cursor:"pointer",marginBottom:6}}>
+                  <div style={{width:16,height:16,borderRadius:4,background:checked?DS.accent:DS.bgHover,border:`2px solid ${checked?DS.accent:DS.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                    {checked&&<span style={{fontSize:9,color:"#fff"}}>✓</span>}
+                  </div>
+                  <div>
+                    <p style={{margin:"0 0 1px",fontSize:12,fontWeight:600,color:DS.textPri}}>{p.title}{p.requires_mention&&<span style={{fontSize:9,color:DS.amber}}> · customer must mention</span>}</p>
+                    <p style={{margin:0,fontSize:10,color:DS.textSec}}>{dtype==="pct"?`${p.discount_pct}% off${p.one_class_only?" (1st class only)":""}${p.first_month_only?" (1st month only)":""}`:
+                     `$${p.discount_fixed} off`}{p.location_restriction?` · ${p.location_restriction} only`:""}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Result */}
       {result&&(
@@ -5849,8 +5890,8 @@ function QuoteCalculator({locations, activePromos=[]}) {
                 {/* Per-child breakdown showing sibling discount */}
                 {g.count===1&&(
                   <div style={{display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:11,color:DS.textMut}}>Child 1 (full rate)</span>
-                    <span style={{fontSize:11,fontWeight:700,color:DS.textPri}}>{fmt(r.total_curr)}</span>
+                    <span style={{fontSize:11,color:DS.textMut}}>Child 1{r.multiClassDisc?" — 10% multi-class discount":""}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:r.multiClassDisc?DS.green:DS.textPri}}>{fmt(r.total_curr)}</span>
                   </div>
                 )}
                 {g.count>1&&(()=>{
