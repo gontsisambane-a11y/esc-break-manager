@@ -4198,6 +4198,19 @@ function HubView({ isManager }) {
     ping.main("hub_location",`📍 *Location updated in the Hub:* ${f.name} — details have changed. Check the Hub for the latest info.`);
     fire("approved","Location updated"); setEditModal(null); reload();
   };
+  const syncFromSheet=async()=>{
+    fire("info","Syncing from Google Sheet…");
+    try {
+      const r = await fetch(`${SB_URL}/functions/v1/sync-locations`,{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${SB_KEY}`,"Content-Type":"application/json"},
+        body:"{}",
+      });
+      const d = await r.json();
+      if(d.ok) { fire("approved",`Sheet sync complete — ${d.updated} locations updated`); reload(); }
+      else fire("error", d.error||"Sync failed");
+    } catch(e){ fire("error","Sync failed — check Edge Function is deployed"); }
+  };
   const saveEvent=async(f)=>{ if(f.id)await sbPatch("hub_events",f.id,{name:f.name,event_date:f.event_date,note:f.note}); else await sbPost("hub_events",{name:f.name,event_date:f.event_date,note:f.note||""}); fire("approved","Event saved"); setEditModal(null); reload(); };
   const deleteEvent=async(id)=>{ await sbDel("hub_events",id); fire("info","Event removed"); reload(); };
   const saveAlert=async(f)=>{
@@ -4377,7 +4390,10 @@ function HubView({ isManager }) {
                 <span style={{fontSize:11,color:sheetSynced?DS.approved:DS.textMut,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
                   {sheetSynced ? "✓ Synced from Google Sheet" : (SHEET_SYNC_URL ? "⚠ Sheet sync unavailable — showing Supabase data" : "📋 Supabase data (sheet sync not configured)")}
                 </span>
-                {isManager&&<button onClick={()=>{setLoading(true);reload();}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgCard,cursor:"pointer",color:DS.textMut}}>↻ Refresh</button>}
+                {isManager&&<div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>{setLoading(true);reload();}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgCard,cursor:"pointer",color:DS.textMut}}>↻ Refresh</button>
+                  <button onClick={syncFromSheet} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${DS.accent}`,background:DS.accentDim,cursor:"pointer",color:DS.accent,fontWeight:600}}>🔄 Sync from Sheet</button>
+                </div>}
               </div>
   <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <div style={{position:"relative",flex:1}}>
