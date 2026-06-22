@@ -33,8 +33,10 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SPREADSHEET_ID = "1xAb9r3YmSdx1CfsrXLlJKVIsRhZwz2jWjZ2W90XzWBI";
-const OVERVIEW_GID   = 73304273;
+const SPREADSHEET_ID         = "1xAb9r3YmSdx1CfsrXLlJKVIsRhZwz2jWjZ2W90XzWBI";
+const OVERVIEW_GID           = 73304273;
+const PRICING_SPREADSHEET_ID = "17GOI0AlTlNKtfoGzTsJoA3xQwGSQaAn8DjaMwmb0AQc";
+const PRICING_GID            = 372903215;
 
 // Fields we explicitly NEVER store (safety net against accidental password sync)
 const BLOCKED_FIELD_PATTERNS = [/password/i, /passcode/i, /secret/i, /credential/i];
@@ -76,6 +78,27 @@ Deno.serve(async (req) => {
       })
       .filter(Boolean);
 
+    // Parse pricing sheet
+    const pricingSpreadsheet = await fetchSpreadsheet(accessToken, PRICING_SPREADSHEET_ID);
+    const pricingSheet = (pricingSpreadsheet.sheets || []).find(
+      (s: any) => s.properties.sheetId === PRICING_GID
+    );
+    const pricingMap = parsePricingSheet(pricingSheet);
+
+    // Merge pricing into records
+    for (const rec of records) {
+      const key = rec.name.toLowerCase().trim();
+      const pricing = pricingMap[key];
+      if (pricing) Object.assign(rec, pricing);
+    }
+    // Also upsert pricing-only records for locations not in info sheet
+    const infoNames = new Set(records.map((r: any) => r.name.toLowerCase().trim()));
+    for (const [key, pricing] of Object.entries(pricingMap)) {
+      if (!infoNames.has(key)) {
+        records.push({ name: (pricing as any)._name, ...(pricing as any) });
+      }
+    }
+
     // Upsert into hub_locations
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -84,6 +107,8 @@ Deno.serve(async (req) => {
 
     let updated = 0;
     for (const record of records) {
+      // Remove internal helper field
+      delete record._name;
       const { error } = await supabase
         .from("hub_locations")
         .upsert(record, { onConflict: "name" });
@@ -279,6 +304,54 @@ function buildRecord(entry: { name: string; region: string }, tabData: Record<st
     if (tabData[k] !== undefined) rec[k] = tabData[k];
   }
   return rec;
+}
+
+// ── Pricing sheet parser ──────────────────────────────────────────────
+
+function parsePricingSheet(sheet: any): Record<string, Record<string, any>> {
+  if (!sheet) return {};
+  const rows: string[][] = sheet.data?.[0]?.rowData?.map(
+    (r: any) => r.values?.map((c: any) => c.formattedValue || "") || []
+  ) || [];
+
+  // Find header row (contains "Group Classes" or "Private Lessons")
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    if (rows[i].some((c) => /group class/i.test(c) || /private lesson/i.test(c))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return {};
+
+  const map: Record<string, Record<string, any>> = {};
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const name = row[1]?.trim();
+    if (!name || name.toLowerCase() === "location") continue;
+    const toNum = (v: string) => { const n = parseFloat(v.replace(/[^0-9.]/g, "")); return isNaN(n) ? null : n; };
+    const pricing: Record<string, any> = {
+      _name: name,
+      brand: row[0]?.trim() || null,
+      price_mf:       toNum(row[3]),
+      price_ss:       toNum(row[4]),
+      price_st_mf:    toNum(row[5]),
+      price_st_ss:    toNum(row[6]),
+      price_priv:     toNum(row[7]),
+      price_semi:     toNum(row[8]),
+      price_adaptive: toNum(row[9]),
+      price_priv20:   toNum(row[10]),
+      price_odl:      toNum(row[11]),
+      price_clinic:   toNum(row[12]),
+    };
+    // Remove all-null pricing rows
+    const hasPrice = Object.entries(pricing).some(([k, v]) => k.startsWith("price_") && v !== null);
+    if (!hasPrice) continue;
+    map[name.toLowerCase().trim()] = pricing;
+    // Also index alternate name: "West Frisco" → also store under "frisco west"
+    if (name.toLowerCase() === "west frisco") map["frisco west"] = pricing;
+  }
+  return map;
 }
 
 // ── Crypto utilities ──────────────────────────────────────────────────
