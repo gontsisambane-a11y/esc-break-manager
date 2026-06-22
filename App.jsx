@@ -368,6 +368,9 @@ const SB_KEY      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const MANAGER_PIN = "2024";
 const GCHAT_WEBHOOK = "https://chat.googleapis.com/v1/spaces/AAQAlhZ78sc/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=unQNBzB1gxvogk1UoVUAsTW83LoDxosTGVQfz_3b8Ss";
 const HUB_ENABLED = true;
+// Google Apps Script web app URL that serves the authoritative location list from the sheet.
+// Deploy the Apps Script (see instructions in the codebase), then paste the URL here.
+const SHEET_SYNC_URL = "";
 
 const gchatPing = (text) => fetch(GCHAT_WEBHOOK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}).catch(e=>console.warn("GChat ping failed",e));
 
@@ -3964,7 +3967,7 @@ function RepSwaps({ myRep, reps, swaps, reload, fire, repInfo }) {
 // ── HUB SUPABASE ─────────────────────────────────────────────────────
 async function loadHubData() {
   const today = todayStr();
-  const [promos,closures,docs,locations,events,alerts] = await Promise.all([
+  const [promos,closures,docs,sbLocations,events,alerts] = await Promise.all([
     sb("hub_promos?active=eq.true&order=created_at").catch(()=>[]),
     sb(`hub_closures?end_date=gte.${today}&order=start_date`).catch(()=>[]),
     sb("hub_docs?order=sort_order,created_at").catch(()=>[]),
@@ -3972,10 +3975,44 @@ async function loadHubData() {
     sb("hub_events?order=created_at").catch(()=>[]),
     sb("hub_alerts?active=eq.true&order=sort_order").catch(()=>[]),
   ]);
+
+  let locations = sbLocations.length>0 ? sbLocations : HUB_LOCATIONS_FALLBACK;
+  let sheetSynced = false;
+
+  // Pull authoritative location list from Google Sheet via Apps Script
+  if (SHEET_SYNC_URL) {
+    try {
+      const r = await fetch(SHEET_SYNC_URL, {redirect:"follow"});
+      if (r.ok) {
+        const data = await r.json();
+        const sheetList = Array.isArray(data) ? data : data.locations;
+        if (Array.isArray(sheetList) && sheetList.length > 0) {
+          // Build lookup of Supabase locations by normalized name
+          const sbByName = {};
+          locations.forEach(l => { sbByName[l.name.toLowerCase().trim()] = l; });
+          // Map sheet entries: use Supabase record if matched, otherwise stub
+          locations = sheetList.map(sl => {
+            const key = sl.name.toLowerCase().trim();
+            const sb = sbByName[key] || {};
+            return {
+              ...sb,
+              name: sl.name,
+              region: sl.region,
+              ...(sl.addr && {addr: sl.addr}),
+              ...(sl.zip && {zip: sl.zip}),
+              ...(sl.direct_phone && {direct_phone: sl.direct_phone}),
+            };
+          });
+          sheetSynced = true;
+        }
+      }
+    } catch(e) { console.warn("Sheet sync failed:", e); }
+  }
+
   return {
     promos: promos.filter(p=>!p.expires_on||p.expires_on>=today),
-    closures, docs, alerts,
-    locations: locations.length>0?locations:HUB_LOCATIONS_FALLBACK,
+    closures, docs, alerts, sheetSynced,
+    locations,
     events: events.length>0?events:HUB_EVENTS_FALLBACK,
   };
 }
@@ -4121,7 +4158,7 @@ function HubView({ isManager }) {
   useEffect(()=>{ reload(); },[]);
 
   const term = q.toLowerCase().trim();
-  const {promos,closures,docs,locations,events,alerts=[]} = hubData;
+  const {promos,closures,docs,locations,events,alerts=[],sheetSynced=false} = hubData;
 
   const matchLoc    = locations.filter(l=>!term||(l.name+l.region+l.ext+l.addr).toLowerCase().includes(term));
   const matchPromo  = promos.filter(p=>!term||(p.title+p.code+p.rules).toLowerCase().includes(term));
@@ -4336,6 +4373,12 @@ function HubView({ isManager }) {
         {tab==="locations"&&(
           <div>
             <div style={{position:"sticky",top:0,zIndex:10,paddingBottom:10,paddingTop:4,background:DS.bg}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:11,color:sheetSynced?DS.approved:DS.textMut,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                  {sheetSynced ? "✓ Synced from Google Sheet" : (SHEET_SYNC_URL ? "⚠ Sheet sync unavailable — showing Supabase data" : "📋 Supabase data (sheet sync not configured)")}
+                </span>
+                {isManager&&<button onClick={()=>{setLoading(true);reload();}} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${DS.border}`,background:DS.bgCard,cursor:"pointer",color:DS.textMut}}>↻ Refresh</button>}
+              </div>
   <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <div style={{position:"relative",flex:1}}>
                   <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by name, region, or extension…"
