@@ -210,11 +210,11 @@ function BreakRecommendation({ repName, reps, settings, onAdmin, onLunch, onHeal
     const totalCount = reps.filter(r=>(r.rep_stage||"active")!=="not_started").length;
     const hour = new Date().getHours();
     const ctHour = ((hour*60 - 300) % 1440) / 60;
-    const isPeak = ctHour>=14&&ctHour<17;
+    const isPeak = ctHour>=9&&ctHour<19;
 
     const paid_disps = ["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"];
 
-    callClaude(`Rep: ${repName}. Team available: ${activeCount}/${totalCount}. Current CT hour: ${ctHour.toFixed(0)}. Peak window (3-5pm CT): ${isPeak}. On health: ${onHealth}. On lunch: ${onLunch}. On admin: ${onAdmin}. Can take health break: ${canTakeHealth}. On cooldown: ${cooldownActive}. Can take admin: ${canTakeAdmin}. Peak mode: ${settings.peak_mode}.
+    callClaude(`Rep: ${repName}. Team available: ${activeCount}/${totalCount}. Current CT hour: ${ctHour.toFixed(0)}. Peak window (9am-7pm CT): ${isPeak}. On health: ${onHealth}. On lunch: ${onLunch}. On admin: ${onAdmin}. Can take health break: ${canTakeHealth}. On cooldown: ${cooldownActive}. Can take admin: ${canTakeAdmin}. Peak mode: ${settings.peak_mode}.
 
 Give a one-sentence recommendation: is now a good time to take a break, do admin, or stay on the phones? Consider team coverage and call volume timing.`)
       .then(text=>{ setInsight(text); sessionStorage.setItem(key,text); setLoading(false); })
@@ -277,9 +277,9 @@ function AdHocDecisionSupport({ req, reps, settings }) {
     const totalActive = reps.filter(r=>(r.rep_stage||"active")!=="not_started").length;
     const prefTime = req.preferred_time ? `Preferred CT: ${req.preferred_time} ${req.rep_timezone}` : "No preferred time given";
     const ctHour = new Date().getHours() - 5;
-    const isPeak = ctHour>=14&&ctHour<17;
+    const isPeak = ctHour>=9&&ctHour<19;
 
-    callClaude(`Manager is deciding whether to approve an ad hoc lunch for ${req.rep_name}. ${prefTime}. Current time CT: ~${ctHour}:00. Peak window (3-5pm CT): ${isPeak}. Currently on lunch: ${onLunchNow}. Available agents: ${activeCount}/${totalActive}. Peak mode: ${settings.peak_mode}. Note from rep: "${req.note||"none"}".
+    callClaude(`Manager is deciding whether to approve an ad hoc lunch for ${req.rep_name}. ${prefTime}. Current time CT: ~${ctHour}:00. Peak window (9am-7pm CT): ${isPeak}. Currently on lunch: ${onLunchNow}. Available agents: ${activeCount}/${totalActive}. Peak mode: ${settings.peak_mode}. Note from rep: "${req.note||"none"}".
 
 One sentence: should the manager approve now, delay, or decline? Consider call volume risk and coverage.`)
       .then(text=>{ setInsight(text); setLoading(false); })
@@ -404,12 +404,12 @@ function makePinger(notifPrefs={}, execoWebhook=null){
   };
 }
 // ── CALL VOLUME INTELLIGENCE ─────────────────────────────────────────
-// Derived from 125,241 calls Jan 2024–Jun 2026
-const CALL_VOL_WEEKDAY = {7:0.4,8:3.7,9:6.5,10:9.6,11:10.3,12:10.0,13:9.2,14:9.4,15:11.1,16:11.1,17:8.8,18:5.6,19:2.6};
-const CALL_VOL_WEEKEND = {7:0.5,8:8.5,9:10.2,10:12.1,11:13.0,12:12.4,13:11.8,14:10.5,15:8.2,16:4.1,17:2.1,18:1.2};
-const PEAK_WD = new Set([10,11,12,13,14,15,16,17]);
-const PEAK_WE = new Set([8,9,10,11,12,13,14]);
-const HIGH_WD = new Set([9,18]);
+// Derived from 135,064 calls Jan 2024–Jun 2026
+const CALL_VOL_WEEKDAY = {7:0.3,8:2.5,9:6.1,10:8.1,11:9.1,12:9.3,13:9.3,14:9.8,15:12.0,16:12.6,17:10.2,18:6.7,19:3.2};
+const CALL_VOL_WEEKEND = {7:0.9,8:8.5,9:14.2,10:16.7,11:16.9,12:14.3,13:10.0,14:7.4,15:5.3,16:2.4,17:1.6,18:0.8};
+const PEAK_WD = new Set([9,10,11,12,13,14,15,16,17,18]);
+const PEAK_WE = new Set([8,9,10,11,12,13,14,15]);
+const HIGH_WD = new Set([8,19]);
 
 function getCallRisk() {
   const ct = new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"}));
