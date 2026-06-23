@@ -644,7 +644,7 @@ async function loadAll() {
     stuckReps.forEach(r=>{ r.status="available"; r.health_breaks_today=0; r.health_time_today=0; r.health_time_banked=0; });
   }
 
-  return { reps, settings, adHoc, swaps, activeBreaks:activeBreaks.filter(b=>reps.find(r=>r.id===b.rep_id&&["health","lunch"].includes(r.status))), breakQueue:breakQueue||[] };
+  return { reps, settings, adHoc, swaps, activeBreaks:activeBreaks.filter(b=>reps.find(r=>r.id===b.rep_id&&["health","lunch","admin"].includes(r.status))), breakQueue:breakQueue||[] };
 }
 
 // Daily reset — runs once on app load only, not on every poll
@@ -3261,7 +3261,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
         updates.health_time_banked = newBanked;
       }
     }
-    if(ab) await sb(`break_log?id=eq.${ab.id}`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
+    await sb(`break_log?rep_id=eq.${repInfo.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:durSec})});
     await sbPatch("rep_status",repInfo.id,updates);
     fire("approved",myRep.status==="admin"?"Admin time done — welcome back! 🗂️":"Welcome back! You're on duty 🎉");
     await processQueue();
