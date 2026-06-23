@@ -1379,6 +1379,7 @@ function MgrRequests({ adHoc, swaps, reps, reload, fire, settings={} }) {
       const rep = reps.find(r=>r.id===req.rep_id);
       if(rep) {
         await sbPatch("rep_status",rep.id,{status:"lunch",updated_at:new Date().toISOString()});
+        await sb(`break_log?rep_id=eq.${rep.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:0})}).catch(()=>{});
         await sbPost("break_log",{rep_id:rep.id,rep_name:rep.name,break_type:"lunch"});
       }
       const ctTime = req.preferred_time ? toMgrTz(req.preferred_time, req.rep_timezone||"Central") : "now";
@@ -3186,6 +3187,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     if(!myQueueEntry) return;
     await sbPatch("break_queue",myQueueEntry.id,{status:"accepted"});
     const updates = {status:"health",updated_at:new Date().toISOString()};
+    await sb(`break_log?rep_id=eq.${repInfo.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:0})}).catch(()=>{});
     await sbPatch("rep_status",repInfo.id,updates);
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:"health"});
     fire("approved","Enjoy your health break 🌿");
@@ -3236,6 +3238,8 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     const bankedReset = type==="health" && myRep.health_time_banked>=HEALTH_MAX_SEC && !cooldownActive;
     const updates = {status:type,updated_at:new Date().toISOString()};
     if(bankedReset) updates.health_time_banked = 0; // start fresh cycle after cooldown expired
+    // Close any orphaned open break_log entries before starting a new one
+    await sb(`break_log?rep_id=eq.${repInfo.id}&ended_at=is.null`,{method:"PATCH",body:JSON.stringify({ended_at:new Date().toISOString(),duration_seconds:0})}).catch(()=>{});
     await sbPatch("rep_status",repInfo.id,updates);
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:type});
     fire("approved",`Enjoy your ${type==="lunch"?"lunch 🥗":type==="admin"?"admin time 🗂️":"health break 🌿"}!`);
