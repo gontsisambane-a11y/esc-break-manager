@@ -198,11 +198,15 @@ function ctDaysAgo(n) {
 function BreakRecommendation({ repName, reps, settings, onAdmin, onLunch, onHealth, canTakeAdmin, canTakeHealth, cooldownActive }) {
   const [insight, setInsight] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [refreshCooldown, setRefreshCooldown] = useState(false);
+
+  const cacheKey = () => `break_rec_${repName}_${new Date().toISOString().slice(0,13)}`;
 
   useEffect(()=>{
     if(!repName) return;
-    const key = `break_rec_${repName}_${new Date().toISOString().slice(0,13)}`;
-    const cached = sessionStorage.getItem(key);
+    const key = cacheKey();
+    const cached = refreshCount===0 ? sessionStorage.getItem(key) : null;
     if(cached){ setInsight(cached); return; }
 
     setLoading(true);
@@ -212,22 +216,29 @@ function BreakRecommendation({ repName, reps, settings, onAdmin, onLunch, onHeal
     const ctHour = ((hour*60 - 300) % 1440) / 60;
     const isPeak = ctHour>=9&&ctHour<19;
 
-    const paid_disps = ["Registered","Registered: Eval/L1O","Registered: Eval/WBO","Outbound - Registered"];
-
     callClaude(`Rep: ${repName}. Team available: ${activeCount}/${totalCount}. Current CT hour: ${ctHour.toFixed(0)}. Peak window (9am-7pm CT): ${isPeak}. On health: ${onHealth}. On lunch: ${onLunch}. On admin: ${onAdmin}. Can take health break: ${canTakeHealth}. On cooldown: ${cooldownActive}. Can take admin: ${canTakeAdmin}. Peak mode: ${settings.peak_mode}.
 
 Give a one-sentence recommendation: is now a good time to take a break, do admin, or stay on the phones? Consider team coverage and call volume timing.`)
       .then(text=>{ setInsight(text); sessionStorage.setItem(key,text); setLoading(false); })
       .catch(()=>setLoading(false));
-  },[repName]);
+  },[repName, refreshCount]);
+
+  const handleRefresh = () => {
+    if(refreshCooldown||loading) return;
+    sessionStorage.removeItem(cacheKey());
+    setRefreshCount(c=>c+1);
+    setRefreshCooldown(true);
+    setTimeout(()=>setRefreshCooldown(false), 30000);
+  };
 
   if(!insight&&!loading) return null;
   return (
     <div style={{background:DS.accentDim,border:`1px solid ${DS.borderHi}`,borderRadius:DS.radiusSm,padding:"8px 12px",marginTop:10,display:"flex",gap:8,alignItems:"flex-start"}}>
       <span style={{fontSize:12,color:DS.accent,flexShrink:0,marginTop:1}}>AI</span>
-      <p style={{margin:0,fontSize:11,color:DS.textPri,lineHeight:1.5}}>
+      <p style={{margin:0,fontSize:11,color:DS.textPri,lineHeight:1.5,flex:1}}>
         {loading?"Analysing team coverage…":insight}
       </p>
+      {!loading&&<button onClick={handleRefresh} title={refreshCooldown?"Refresh available in 30s":"Refresh recommendation"} style={{flexShrink:0,background:"none",border:"none",cursor:refreshCooldown?"not-allowed":"pointer",color:refreshCooldown?DS.textMut:DS.accent,fontSize:13,padding:"0 2px",lineHeight:1,marginTop:1,opacity:refreshCooldown?0.4:1}}>↻</button>}
     </div>
   );
 }
@@ -3137,6 +3148,25 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const [theme] = useTheme();
   const gStyle = buildGStyle(theme);
 
+  // Detect adhoc lunch approval/decline and notify rep
+  const prevAdHocRef = useRef(null);
+  const prevStatusRef = useRef(null);
+  useEffect(()=>{
+    const myPending = adHoc.filter(a=>a.rep_id===repInfo.id&&a.status==="pending");
+    const myRep = reps.find(r=>r.id===repInfo.id);
+    const curStatus = myRep?.status;
+    if(prevAdHocRef.current!==null){
+      const hadPending = prevAdHocRef.current > 0;
+      const nowNoPending = myPending.length === 0;
+      if(hadPending && nowNoPending && prevStatusRef.current==="available"){
+        if(curStatus==="lunch") fire("approved","Your ad hoc lunch was approved! Enjoy your break 🍽️");
+        else fire("info","Your ad hoc lunch request was declined.");
+      }
+    }
+    prevAdHocRef.current = myPending.length;
+    prevStatusRef.current = curStatus;
+  },[adHoc, reps]);
+
   const myRep = reps.find(r=>r.id===repInfo.id)||{...repInfo,status:"available",health_breaks_today:0,health_time_banked:0};
   const mySwaps = swaps.filter(s=>s.target_id===repInfo.id&&s.status==="pending");
   const onLunch  = reps.filter(r=>r.status==="lunch").length;
@@ -3161,16 +3191,27 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   const onAdmin       = reps.filter(r=>r.status==="admin").length;
   const canTakeAdmin  = !!settings.admin_mode && onAdmin<adminLimit && myRep.status==="available";
 
-  // Queue helpers
-  const myQueueEntry = breakQueue.find(q=>q.rep_id===repInfo.id);
-  const queuePosition = myQueueEntry?.status==="waiting" ? breakQueue.filter(q=>q.status==="waiting"&&q.queued_at<=myQueueEntry.queued_at).length : 0;
+  // Split queue by break type
+  const healthQueue = breakQueue.filter(q=>!q.break_type||q.break_type==="health");
+  const lunchQueue  = breakQueue.filter(q=>q.break_type==="lunch");
+
+  // Health queue helpers
+  const myQueueEntry = healthQueue.find(q=>q.rep_id===repInfo.id);
+  const queuePosition = myQueueEntry?.status==="waiting" ? healthQueue.filter(q=>q.status==="waiting"&&q.queued_at<=myQueueEntry.queued_at).length : 0;
   const isNotified = myQueueEntry?.status==="notified";
   const notifiedSecsAgo = isNotified ? elapsedSec(myQueueEntry.notified_at) : 0;
   const acceptSecsLeft = isNotified ? Math.max(0, QUEUE_ACCEPT_SEC - notifiedSecsAgo) : 0;
 
+  // Lunch queue helpers
+  const myLunchQueueEntry = lunchQueue.find(q=>q.rep_id===repInfo.id);
+  const lunchQueuePosition = myLunchQueueEntry?.status==="waiting" ? lunchQueue.filter(q=>q.status==="waiting"&&q.queued_at<=myLunchQueueEntry.queued_at).length : 0;
+  const isLunchNotified = myLunchQueueEntry?.status==="notified";
+  const lunchNotifiedSecsAgo = isLunchNotified ? elapsedSec(myLunchQueueEntry.notified_at) : 0;
+  const lunchAcceptSecsLeft = isLunchNotified ? Math.max(0, QUEUE_ACCEPT_SEC - lunchNotifiedSecsAgo) : 0;
+
   const joinQueue = async () => {
     if(myQueueEntry) return;
-    await sbPost("break_queue",{rep_id:repInfo.id,rep_name:repInfo.name,status:"waiting",date:todayStr()});
+    await sbPost("break_queue",{rep_id:repInfo.id,rep_name:repInfo.name,status:"waiting",date:todayStr(),break_type:"health"});
     fire("info","You're in the queue! We'll alert you when a slot opens 🌿");
     reload();
   };
@@ -3182,22 +3223,42 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     reload();
   };
 
+  const leaveLunchQueue = async () => {
+    if(!myLunchQueueEntry) return;
+    await sbPatch("break_queue",myLunchQueueEntry.id,{status:"cancelled"});
+    fire("info","Removed from lunch queue");
+    reload();
+  };
+
   const acceptQueuedBreak = async () => {
     if(!myQueueEntry) return;
     await sbPatch("break_queue",myQueueEntry.id,{status:"accepted"});
-    const updates = {status:"health",updated_at:new Date().toISOString()};
-    await sbPatch("rep_status",repInfo.id,updates);
+    await sbPatch("rep_status",repInfo.id,{status:"health",updated_at:new Date().toISOString()});
     await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:"health"});
     fire("approved","Enjoy your health break 🌿");
     reload();
   };
 
+  const acceptQueuedLunch = async () => {
+    if(!myLunchQueueEntry) return;
+    await sbPatch("break_queue",myLunchQueueEntry.id,{status:"accepted"});
+    await sbPatch("rep_status",repInfo.id,{status:"lunch",updated_at:new Date().toISOString()});
+    await sbPost("break_log",{rep_id:repInfo.id,rep_name:repInfo.name,break_type:"lunch"});
+    fire("approved","Enjoy your lunch! 🍽️");
+    reload();
+  };
+
   const processQueue = async () => {
-    // expire any notifications older than QUEUE_ACCEPT_SEC
-    const expired = breakQueue.filter(q=>q.status==="notified"&&elapsedSec(q.notified_at)>=QUEUE_ACCEPT_SEC);
+    const expired = healthQueue.filter(q=>q.status==="notified"&&elapsedSec(q.notified_at)>=QUEUE_ACCEPT_SEC);
     for(const e of expired) await sbPatch("break_queue",e.id,{status:"expired"});
-    // notify the next waiting rep
-    const waiting = breakQueue.filter(q=>q.status==="waiting").sort((a,b)=>new Date(a.queued_at)-new Date(b.queued_at));
+    const waiting = healthQueue.filter(q=>q.status==="waiting").sort((a,b)=>new Date(a.queued_at)-new Date(b.queued_at));
+    if(waiting.length>0) await sbPatch("break_queue",waiting[0].id,{status:"notified",notified_at:new Date().toISOString()});
+  };
+
+  const processLunchQueue = async () => {
+    const expired = lunchQueue.filter(q=>q.status==="notified"&&elapsedSec(q.notified_at)>=QUEUE_ACCEPT_SEC);
+    for(const e of expired) await sbPatch("break_queue",e.id,{status:"expired"});
+    const waiting = lunchQueue.filter(q=>q.status==="waiting").sort((a,b)=>new Date(a.queued_at)-new Date(b.queued_at));
     if(waiting.length>0) await sbPatch("break_queue",waiting[0].id,{status:"notified",notified_at:new Date().toISOString()});
   };
 
@@ -3222,10 +3283,18 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
   
     }
     if(type==="lunch"){
-      if(lunchLeft<=0){fire("declined","Lunch slots full");return;}
       if(!inLunchWindow(myRep)){
+        // Outside scheduled window → ad hoc request
         await sbPost("adhoc_lunch_requests",{rep_id:repInfo.id,rep_name:repInfo.name,requested_time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})});
         fire("info","Outside your lunch window — ad hoc request sent to manager 📩");
+        reload(); return;
+      }
+      if(lunchLeft<=0){
+        // Scheduled but slots full → auto-queue, no manager needed
+        if(!myLunchQueueEntry){
+          await sbPost("break_queue",{rep_id:repInfo.id,rep_name:repInfo.name,status:"waiting",date:todayStr(),break_type:"lunch"});
+          fire("info","Lunch slots full — you're in the queue! We'll notify you when a slot opens 🍽️");
+        }
         reload(); return;
       }
     }
@@ -3261,6 +3330,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
     await sbPatch("rep_status",repInfo.id,updates);
     fire("approved",myRep.status==="admin"?"Admin time done — welcome back! 🗂️":"Welcome back! You're on duty 🎉");
     await processQueue();
+    await processLunchQueue();
     reload();
   };
 
@@ -3316,7 +3386,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
           ))}
         </div>
 
-        {settings.peak_mode&&<div style={{marginTop:10,background:DS.redDim,border:`1px solid ${DS.red}30`,borderRadius:DS.radiusSm,padding:"6px 12px",fontSize:11,color:DS.red,fontWeight:600}}>⚡ Peak mode — health breaks limited to 1 at a time</div>}
+        {(()=>{const risk=getCallRisk();return(<div style={{marginTop:10,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}><span style={{fontSize:10,fontWeight:600,color:risk.color,background:risk.color+"18",border:`1px solid ${risk.color}30`,borderRadius:99,padding:"3px 9px"}}>{risk.label} ({risk.pct}%)</span>{settings.peak_mode&&<span style={{fontSize:10,fontWeight:600,color:DS.red,background:DS.redDim,border:`1px solid ${DS.red}30`,borderRadius:99,padding:"3px 9px"}}>⚡ Peak mode — 1 health slot</span>}</div>);})()}
         <div style={{marginTop:10}}><RepKPI repName={repInfo.name}/></div>
         <BreakRecommendation repName={repInfo.name} reps={reps} settings={settings} onAdmin={onAdmin} onLunch={onLunch} onHealth={onHealth} canTakeAdmin={canTakeAdmin} canTakeHealth={canTakeHealth} cooldownActive={cooldownActive}/>
       </div>
@@ -3338,7 +3408,7 @@ function RepView({ repInfo, data, reload, onLogout, centreOpen }) {
 
       <div style={{padding:"16px",maxWidth:480,margin:"0 auto"}}>
         {tab==="my"&&(
-          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={breakQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings}/>
+          <RepMyBreak myRep={myRep} myAB={myAB} canTakeHealth={canTakeHealth} canTakeLunch={canTakeLunch} canTakeAdmin={canTakeAdmin} cooldownActive={cooldownActive} cooldownLeft={cooldownLeft} breaksLeft={breaksLeft} startBreak={startBreak} returnFromBreak={returnFromBreak} requestAdHocLunch={requestAdHocLunch} repInfo={repInfo} breakQueue={healthQueue} myQueueEntry={myQueueEntry} queuePosition={queuePosition} isNotified={isNotified} acceptSecsLeft={acceptSecsLeft} joinQueue={joinQueue} leaveQueue={leaveQueue} acceptQueuedBreak={acceptQueuedBreak} settings={settings} myLunchQueueEntry={myLunchQueueEntry} lunchQueuePosition={lunchQueuePosition} isLunchNotified={isLunchNotified} lunchAcceptSecsLeft={lunchAcceptSecsLeft} leaveLunchQueue={leaveLunchQueue} acceptQueuedLunch={acceptQueuedLunch}/>
         )}
         {tab==="team"&&<RepTeam reps={reps} myId={repInfo.id} activeBreaks={activeBreaks}/>}
         {tab==="swaps"&&<RepSwaps myRep={myRep} reps={reps} swaps={swaps} reload={reload} fire={fire} repInfo={repInfo}/>}
@@ -3604,7 +3674,7 @@ function AdHocLunchModal({ onSubmit, onClose }) {
 }
 
 
-function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={} }) {
+function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=false, cooldownActive, cooldownLeft, breaksLeft, startBreak, returnFromBreak, requestAdHocLunch, repInfo, breakQueue=[], myQueueEntry, queuePosition=0, isNotified=false, acceptSecsLeft=0, joinQueue, leaveQueue, acceptQueuedBreak, settings={}, myLunchQueueEntry, lunchQueuePosition=0, isLunchNotified=false, lunchAcceptSecsLeft=0, leaveLunchQueue, acceptQueuedLunch }) {
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [showAdHocModal, setShowAdHocModal] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -3637,16 +3707,16 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             {[
               {key:"health",icon:"🌿",label:"Health Break",dur:"10 min",avail:canTakeHealth,reason:!canTakeHealth?(cooldownActive?`Cooldown: ${fmtTime(cooldownLeft)}`:(myQueueEntry?"In queue":"Slots full")):null,queueable:!canTakeHealth&&breaksLeft>0&&!cooldownActive&&!myQueueEntry},
-              {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?"Slots full":null},
+              {key:"lunch",icon:"🥗",label:"Lunch Break",dur:"Per schedule",avail:canTakeLunch,reason:!canTakeLunch?(myLunchQueueEntry?"In lunch queue":"Slots full"):null,queueable:!canTakeLunch&&!myLunchQueueEntry},
               {key:"admin",icon:"🗂️",label:"Admin Time",dur:"30 min",avail:canTakeAdmin,reason:!canTakeAdmin?"Slots full":null},
             ].map(o=>(
-              <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:`1px solid ${o.avail?DS.border:DS.border}`,borderRadius:DS.radius,padding:"12px 14px",cursor:o.avail?"pointer":"default",background:o.avail?DS.bgSurf:DS.bg,opacity:o.avail?1:0.5}}>
+              <div key={o.key} onClick={()=>{if(o.avail){startBreak(o.key);setShowBreakModal(false);}else if(o.queueable){startBreak(o.key);setShowBreakModal(false);}else if(!o.avail&&o.key==="health"&&o.queueable){joinQueue();setShowBreakModal(false);}}} style={{border:`1px solid ${o.avail?DS.border:DS.border}`,borderRadius:DS.radius,padding:"12px 14px",cursor:(o.avail||o.queueable)?"pointer":"default",background:o.avail?DS.bgSurf:DS.bg,opacity:o.avail||o.queueable?1:0.5}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:24}}>{o.icon}</span>
                   <div style={{flex:1}}>
-                    <p style={{margin:0,fontWeight:600,fontSize:14,color:o.avail?DS.textPri:DS.textMut}}>{o.label}</p>
+                    <p style={{margin:0,fontWeight:600,fontSize:14,color:(o.avail||o.queueable)?DS.textPri:DS.textMut}}>{o.label}</p>
                     <p style={{margin:0,fontSize:11,color:DS.textSec}}>{o.dur}</p>
-                    {o.reason&&<p style={{margin:"2px 0 0",fontSize:11,color:DS.red}}>{o.reason}</p>}
+                    {o.reason&&<p style={{margin:"2px 0 0",fontSize:11,color:o.reason.includes("queue")?DS.amber:DS.red}}>{o.reason}</p>}
                   </div>
                   {o.avail&&<span style={{fontSize:12,color:DS.accent}}>→</span>}
                   {!o.avail&&o.queueable&&<span style={{fontSize:10,background:DS.accentDim,color:DS.accent,padding:"3px 7px",borderRadius:DS.radiusSm,fontWeight:600}}>Queue</span>}
@@ -3727,6 +3797,23 @@ function RepMyBreak({ myRep, myAB, canTakeHealth, canTakeLunch, canTakeAdmin=fal
                 )}
                 {breakQueue.filter(q=>q.status==="waiting").length>0&&!myQueueEntry&&(
                   <p style={{margin:"8px 0 0",fontSize:11,color:DS.textMut,textAlign:"center"}}>{breakQueue.filter(q=>q.status==="waiting").length} rep{breakQueue.filter(q=>q.status==="waiting").length>1?"s are":" is"} in the health break queue</p>
+                )}
+                {myLunchQueueEntry?.status==="waiting"&&(
+                  <div style={{background:"#fff8ee",border:"1.5px solid #f0c080",borderRadius:12,padding:"12px 13px",marginTop:10,display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:20}}>🥗</span>
+                    <div style={{flex:1}}>
+                      <p style={{margin:0,fontWeight:700,fontSize:13,color:"#b85c00"}}>#{lunchQueuePosition} in lunch queue</p>
+                      <p style={{margin:"2px 0 0",fontSize:11,color:"#7a3d00"}}>{lunchQueuePosition===1?"You're up next — a slot is almost free!":"Waiting for a lunch slot to open"}</p>
+                    </div>
+                    <button onClick={leaveLunchQueue} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid #f0c080",background:"#fff",cursor:"pointer",fontSize:11,color:"#b85c00",fontWeight:600}}>Leave</button>
+                  </div>
+                )}
+                {isLunchNotified&&(
+                  <div style={{background:"#7a3d00",borderRadius:12,padding:"12px 13px",marginTop:10}}>
+                    <p style={{margin:"0 0 4px",fontSize:13,fontWeight:700,color:"#fff"}}>🍽️ Lunch slot is ready!</p>
+                    <p style={{margin:"0 0 10px",fontSize:11,color:"rgba(255,255,255,.75)"}}>Accept within {fmtTime(lunchAcceptSecsLeft)} or it passes to the next rep</p>
+                    <button onClick={acceptQueuedLunch} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"#fff",color:"#7a3d00",cursor:"pointer",fontSize:13,fontWeight:800}}>Accept Lunch ✅</button>
+                  </div>
                 )}
               </>
             )}
