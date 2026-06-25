@@ -4140,6 +4140,7 @@ function HubView({ isManager }) {
       applies_to:f.applies_to||"continuous",one_class_only:f.one_class_only||false,multi_class_still:f.multi_class_still!==false,
       customer_types:f.customer_types||["lead","lapsed"],month_restriction:f.month_restriction||null,
       requires_mention:f.requires_mention||false,show_scenarios:f.show_scenarios||false,
+      location_restriction:f.location_restriction||[],first_month_only:f.first_month_only||false,
     };
     if(f.id) await sbPatch("hub_promos",f.id,payload); else await sbPost("hub_promos",payload);
     if(isNew) ping.main("hub_promo",`🎯 *New promo added to the Hub!* "${f.title}"${f.code?` — Code: \`${f.code}\``:""}. Check the Hub for details and talk track.`);
@@ -4890,6 +4891,7 @@ function HubPromoCard({promo,isManager,onEdit}) {
             {promo.proactive&&<span style={{fontSize:9,background:DS.greenDim,color:DS.green,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Offer proactively</span>}
             {!promo.proactive&&<span style={{fontSize:9,background:DS.redDim,color:DS.red,padding:"2px 6px",borderRadius:4,fontWeight:700}}>Customer mentions only</span>}
             {promo.expires_on&&<span style={{fontSize:9,background:isExpiring?"#fde8e8":"#fff3cd",color:isExpiring?"#c0392b":"#856404",padding:"2px 6px",borderRadius:4,fontWeight:700}}>Exp: {promo.expires_on}</span>}
+            {(promo.location_restriction?.length>0)&&<span style={{fontSize:9,background:"#eef2ff",color:"#4338ca",padding:"2px 6px",borderRadius:4,fontWeight:700}}>{promo.location_restriction.length} location{promo.location_restriction.length!==1?"s":""}</span>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span style={{fontSize:14,fontWeight:800,color:DS.accent,background:DS.accentDim,padding:"4px 12px",borderRadius:8,letterSpacing:.5}}>{promo.code}</span>
@@ -4903,6 +4905,16 @@ function HubPromoCard({promo,isManager,onEdit}) {
       </div>
       {expanded&&(
         <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f5f5f5"}}>
+          {(promo.location_restriction?.length>0)&&(
+            <div style={{marginBottom:8}}>
+              <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:DS.textSec,letterSpacing:.5,textTransform:"uppercase"}}>Locations</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {promo.location_restriction.map((loc,i)=>(
+                  <span key={i} style={{fontSize:11,background:"#eef2ff",color:"#4338ca",padding:"2px 8px",borderRadius:5,fontWeight:600}}>{loc}</span>
+                ))}
+              </div>
+            </div>
+          )}
           <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:DS.textSec,letterSpacing:.5,textTransform:"uppercase"}}>Full Rules</p>
           <p style={{margin:0,fontSize:12,color:DS.textSec,lineHeight:1.7,whiteSpace:"pre-line"}}>{promo.rules}</p>
         </div>
@@ -5004,8 +5016,8 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
     month_restriction:  item?.month_restriction||"",
     requires_mention:   item?.requires_mention||false,
     show_scenarios:     item?.show_scenarios||false,
-    location_restriction: item?.location_restriction||"",  // e.g. "Solon" — blank = all locations
-    first_month_only:   item?.first_month_only||false,     // discount applies to first month only
+    location_restriction: item?.location_restriction||[],  // text[] — empty = all locations
+    first_month_only:   item?.first_month_only||false,
     id:                 item?.id,
   });
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
@@ -5107,8 +5119,28 @@ function HubPromoModal({item,onClose,onSave,onDelete}) {
             </div>
           </div>
           <div style={{marginTop:10}}>
-            <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>LOCATION RESTRICTION <span style={{fontWeight:400,color:DS.textMut}}>(blank = all locations)</span></label>
-            <input value={f.location_restriction} onChange={e=>set("location_restriction",e.target.value)} placeholder="e.g. Solon — leave blank for all locations" style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${DS.border}`,fontSize:12,outline:"none"}}/>
+            <label style={{fontSize:11,color:DS.textSec,fontWeight:600,display:"block",marginBottom:3}}>LOCATION RESTRICTION <span style={{fontWeight:400,color:DS.textMut}}>(leave empty = all locations)</span></label>
+            <div style={{border:`1px solid ${DS.border}`,borderRadius:9,padding:"6px 8px",minHeight:40,display:"flex",flexWrap:"wrap",gap:5,alignItems:"center",background:DS.bgCard}}>
+              {(f.location_restriction||[]).map((loc,i)=>(
+                <span key={i} style={{display:"inline-flex",alignItems:"center",gap:3,background:DS.accentDim,color:DS.accent,borderRadius:6,padding:"2px 8px",fontSize:12,fontWeight:600}}>
+                  {loc}
+                  <button onClick={()=>set("location_restriction",(f.location_restriction||[]).filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:DS.accent,fontSize:14,lineHeight:1,padding:"0 0 0 2px",opacity:.7}}>×</button>
+                </span>
+              ))}
+              <input
+                placeholder={(f.location_restriction||[]).length===0?"e.g. Solon — press Enter to add":"Add location…"}
+                onKeyDown={e=>{
+                  if((e.key==="Enter"||e.key===",")&&e.target.value.trim()){
+                    e.preventDefault();
+                    const val=e.target.value.trim().replace(/,$/,"");
+                    if(val&&!(f.location_restriction||[]).includes(val)) set("location_restriction",[...(f.location_restriction||[]),val]);
+                    e.target.value="";
+                  }
+                }}
+                style={{border:"none",outline:"none",fontSize:12,flex:1,minWidth:140,padding:"2px 4px",background:"transparent"}}
+              />
+            </div>
+            <p style={{margin:"3px 0 0",fontSize:10,color:DS.textMut}}>Press Enter after each location name</p>
           </div>
         </div>
 
