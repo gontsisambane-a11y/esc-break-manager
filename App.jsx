@@ -5425,8 +5425,8 @@ function QuoteCalculator({locations, activePromos=[]}) {
       const em=enrollDate?new Date(enrollDate+"T12:00:00").getMonth():-1;
       if(String(p.month_restriction)!==String(em)) return false;
     }
-    if(p.location_restriction&&p.location_restriction.trim()){
-      if(!loc||!loc.name.toLowerCase().includes(p.location_restriction.toLowerCase())) return false;
+    if(p.location_restriction&&String(p.location_restriction).trim()){
+      if(!loc||!loc.name.toLowerCase().includes(String(p.location_restriction).toLowerCase())) return false;
     }
     return true;
   });
